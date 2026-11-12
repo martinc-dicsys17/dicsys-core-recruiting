@@ -80,7 +80,32 @@ DERIVAS_DE_LAS_BASES_VIEJAS = (
 
 
 # Tablas que nacieron con una revisión después de la adopción: ninguna base de antes de Alembic las tuvo
-NACIDAS_CON_ALEMBIC = {"auth_refresh_tokens"}  # 0005
+NACIDAS_CON_ALEMBIC = {
+    "auth_refresh_tokens",  # 0005
+    # 0006: módulo Recruiting
+    "recruiting_candidatos",
+    "recruiting_candidatos_duplicados",
+    "recruiting_ciudades",
+    "recruiting_config",
+    "recruiting_etapa_archivos",
+    "recruiting_etapas",
+    "recruiting_gestionBusqueda",
+    "recruiting_habilidades",
+    "recruiting_historial_cargas_cv",
+    "recruiting_historial_cargas_cv_archivos",
+    "recruiting_historial_pipeline",
+    "recruiting_lideres",
+    "recruiting_motivos_descarte",
+    "recruiting_motivos_descarte_etapas",
+    "recruiting_niveles_seniority",
+    "recruiting_oportunidades",
+    "recruiting_perfiles_puesto",
+    "recruiting_postulaciones",
+    "recruiting_provincias",
+    "recruiting_reclutadores",
+    "recruiting_skills",
+    "recruiting_transiciones_estado",
+}
 
 
 def _base_de_antes_de_alembic(conexion, aplicadas=MIGRACIONES_AD_HOC) -> None:
