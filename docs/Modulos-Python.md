@@ -20,6 +20,8 @@
 | Pillow, pypdf, PyMuPDF | Imágenes y PDF |
 | openpyxl | Excel |
 | google-cloud-storage | Storage de datos críticos |
+| python-docx, rarfile | Carga de CV de Recruiting: texto de `.docx` y comprimidos `.rar` (la imagen suma `unrar-free`) |
+| rapidocr, onnxruntime | OCR de las páginas escaneadas de un CV en PDF (modelo PP-OCRv6 descargado al construir la imagen; ver `docs/modulos/recruiting.md`) |
 | pyotp, qrcode[pil] | 2FA (TOTP) |
 | google-genai | LLM (Gemini) |
 

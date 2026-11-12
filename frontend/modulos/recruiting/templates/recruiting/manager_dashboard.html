@@ -5,7 +5,8 @@
 {#
   Manager Dashboard (migrado del módulo original, solo administradores). Los datos salen de
   GET /api/v1/recruiting/manager-dashboard a través del proxy de esta pantalla. Los nombres de candidatos y búsquedas
-  eran enlaces a Candidatos y Búsquedas: hasta que esas pantallas se migren se muestran como texto.
+  eran enlaces a Candidatos y Búsquedas. Los candidatos ya enlazan a su ficha; las búsquedas se muestran como texto
+  hasta que se migre esa pantalla.
 #}
 
 {% block content %}
@@ -278,7 +279,7 @@
                         <tbody>
                             <template x-for="s in estancadosVisibles()" :key="s.candidato_id + s.oportunidad_id">
                                 <tr class="border-t border-dark-50">
-                                    <td class="py-2 px-3 whitespace-nowrap"><span x-text="s.candidato"></span></td>
+                                    <td class="py-2 px-3 whitespace-nowrap"><a :href="'{{ url_for('recruiting.candidatos') }}/' + s.candidato_id" class="text-primary-700 hover:underline" x-text="s.candidato"></a></td>
                                     <td class="pr-2"><span x-text="s.busqueda"></span></td>
                                     <td class="pr-2 whitespace-nowrap" x-text="s.externo"></td><td class="pr-2 whitespace-nowrap" x-text="s.etapa_actual"></td><td class="pr-4 font-semibold text-right" x-text="s.dias_sin_movimiento"></td>
                                 </tr>
@@ -387,7 +388,7 @@
                     <div class="overflow-auto max-h-64 border border-dark-100 rounded-xl" x-show="estancadosDe(detalle.usuario_id).length > 0">
                         <table class="w-full text-[15px] min-w-[600px]"><thead class="bg-dark-50 sticky top-0"><tr class="text-left text-sm text-dark-500"><th class="py-2 px-3 font-semibold">Candidato</th><th class="font-semibold">Búsqueda</th><th class="font-semibold">Etapa actual</th><th class="pr-4 font-semibold text-right">Días</th></tr></thead>
                             <tbody><template x-for="s in estancadosDe(detalle.usuario_id)" :key="s.candidato_id + s.oportunidad_id">
-                                <tr class="border-t border-dark-50"><td class="py-2 px-3" x-text="s.candidato"></td><td class="pr-2" x-text="s.busqueda"></td><td class="pr-2" x-text="s.etapa_actual"></td><td class="pr-4 font-semibold text-right" x-text="s.dias_sin_movimiento"></td></tr>
+                                <tr class="border-t border-dark-50"><td class="py-2 px-3"><a :href="'{{ url_for('recruiting.candidatos') }}/' + s.candidato_id" class="text-primary-700 hover:underline" x-text="s.candidato"></a></td><td class="pr-2" x-text="s.busqueda"></td><td class="pr-2" x-text="s.etapa_actual"></td><td class="pr-4 font-semibold text-right" x-text="s.dias_sin_movimiento"></td></tr>
                             </template></tbody></table>
                     </div>
                 </div>

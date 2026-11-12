@@ -1,0 +1,1549 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Candidatos — Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<style>
+    /* Bloqueo de scroll horizontal del fondo: activo solo mientras el modal de Carga Masiva esta abierto */
+    html.bloqueo-scroll-horizontal, body.bloqueo-scroll-horizontal { overflow-x: hidden !important; overscroll-behavior-x: none; }
+    body.bloqueo-scroll-horizontal .overflow-x-auto,
+    body.bloqueo-scroll-horizontal .overflow-x-scroll { overflow-x: hidden !important; }
+    .barra-progreso-fill { transition: width 0.4s ease-out; }
+    @media (prefers-reduced-motion: reduce) { .barra-progreso-fill { transition: none; } }
+</style>
+<div class="animate-fade-in" x-data="candidatosComponent()"
+     {% if puede_cargar_cv_general %}x-init="if (new URLSearchParams(window.location.search).get('accion') === 'cargar-cv') abrirCargaIndividual()"{% endif %}>
+
+    <!-- Header con acciones principales -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div class="flex items-center gap-3">
+            <h1 class="text-3xl font-bold text-dark-900">Candidatos</h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            {% if puede_cargar_cv_general %}
+            <!-- Cargar CV Individual -->
+            <button type="button"
+                    @click="abrirCargaIndividual()"
+                    title="Subí un CV para crear un candidato."
+                    class="group inline-flex items-center gap-2.5 px-3.5 py-2 bg-white border border-dark-200 hover:border-primary-400 hover:bg-primary-50/30 text-dark-700 rounded-xl shadow-soft transition-all duration-150 cursor-pointer text-left">
+                <div class="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center flex-shrink-0 group-hover:bg-primary-100 transition-colors">
+                    <i data-lucide="file-up" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <span class="block text-xs font-bold text-dark-800 leading-tight">Cargar CV Individual</span>
+                    <span class="block text-[11px] font-normal text-dark-400 leading-tight mt-0.5">Subí un CV para crear un candidato.</span>
+                </div>
+            </button>
+
+            <!-- Cargar CVs Masivos -->
+            <button type="button"
+                    @click="abrirCargaMasiva()"
+                    title="Subí múltiples CVs para procesarlos en lote."
+                    class="group inline-flex items-center gap-2.5 px-3.5 py-2 bg-white border border-dark-200 hover:border-primary-400 hover:bg-primary-50/30 text-dark-700 rounded-xl shadow-soft transition-all duration-150 cursor-pointer text-left">
+                <div class="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center flex-shrink-0 group-hover:bg-primary-100 transition-colors">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <span class="block text-xs font-bold text-dark-800 leading-tight">Cargar CVs Masivos</span>
+                    <span class="block text-[11px] font-normal text-dark-400 leading-tight mt-0.5">Subí múltiples CVs para procesarlos en lote.</span>
+                </div>
+            </button>
+            {% endif %}
+
+            <!-- Nuevo Candidato -->
+            <a href="{{ url_for('recruiting.nuevo_candidato') }}"
+               class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-soft transition-colors cursor-pointer text-sm self-stretch justify-center">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Nuevo Candidato</span>
+            </a>
+        </div>
+    </div>
+
+    {% if puede_cargar_cv_general %}
+    <!-- Modal comparacion de CV: candidato existente (mismo email) con un CV distinto -->
+    <div x-show="modalComparacionAbierto" x-cloak
+         x-effect="document.body.classList.toggle('overflow-hidden', !!modalComparacionAbierto)"
+         @keydown.escape.window="modalComparacionAbierto && conservarCvActual()"
+         class="fixed inset-0 z-[60] overflow-hidden overscroll-contain"
+         aria-labelledby="modal-comparar-cv-title" role="dialog" aria-modal="true">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-xs"></div>
+        <div class="flex h-full items-center justify-center p-4 text-center">
+            <div class="relative flex flex-col overflow-hidden overscroll-contain h-[95vh] max-h-[95vh] rounded-2xl bg-white text-left shadow-2xl w-full max-w-7xl p-6 border border-dark-100">
+                <div class="flex flex-shrink-0 items-center gap-3 pb-4 border-b border-dark-100 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <i data-lucide="files" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-dark-900" id="modal-comparar-cv-title">El candidato ya existe con otro CV</h3>
+                        <p class="text-xs text-dark-500">Elegi con cual CV te queres quedar.</p>
+                    </div>
+                    <button type="button" @click="cerrarComparacionCv()" :disabled="actualizandoCv" title="Cerrar" aria-label="Cerrar comparacion de CV"
+                            class="ml-auto self-start text-dark-400 hover:text-dark-600 p-1.5 rounded-lg hover:bg-dark-50 transition-colors cursor-pointer disabled:opacity-60">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1 gap-4 text-xs flex-1 min-h-0 overflow-hidden">
+                    <template x-for="col in [['CV actual', 'actual'], ['CV nuevo', 'nuevo']]" :key="col[1]">
+                        <div class="min-w-0 min-h-0 flex flex-col">
+                            <div class="flex flex-shrink-0 items-center justify-between gap-2 mb-2">
+                                <h4 class="text-sm font-bold text-dark-900" x-text="col[0]"></h4>
+                                <a x-show="visorCv && visorCv[col[1]].url" :href="visorCv && visorCv[col[1]].url" target="_blank" rel="noopener"
+                                   class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white border-2 border-primary-500 text-primary-700 hover:bg-primary-50 font-semibold rounded-lg shadow-sm text-sm cursor-pointer transition-colors">
+                                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                                    <span>VER CV</span>
+                                </a>
+                            </div>
+                            <template x-if="visorCv && visorCv[col[1]].url">
+                                <iframe :src="visorCv[col[1]].url + '#view=FitH&navpanes=0&pagemode=none'" :title="col[0]" class="w-full flex-1 min-h-0 rounded-xl border border-dark-100 bg-dark-50"></iframe>
+                            </template>
+                            <template x-if="visorCv && !visorCv[col[1]].url && visorCv[col[1]].cargando">
+                                <div class="w-full rounded-xl border border-dashed border-dark-200 bg-dark-50 flex flex-col items-center justify-center gap-2 text-dark-500 text-center p-4 flex-1 min-h-0" role="status">
+                                    <div class="w-6 h-6 rounded-full border-2 border-dark-200 border-t-primary-600 animate-spin"></div>
+                                    <span>Generando vista previa...</span>
+                                </div>
+                            </template>
+                            <template x-if="visorCv && !visorCv[col[1]].url && !visorCv[col[1]].cargando">
+                                <div class="w-full rounded-xl border border-dashed border-dark-200 bg-dark-50 flex flex-col items-center justify-center gap-2 text-dark-500 text-center p-4 flex-1 min-h-0">
+                                    <i data-lucide="file-x" class="w-6 h-6"></i>
+                                    <span>Vista previa no disponible para este archivo.</span>
+                                    <a x-show="visorCv[col[1]].descarga" :href="visorCv[col[1]].descarga" :download="visorCv[col[1]].nombre" target="_blank" class="text-primary-600 font-semibold hover:underline" x-text="'Descargar ' + (visorCv[col[1]].nombre || 'archivo')"></a>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex flex-shrink-0 justify-end gap-3 mt-5">
+                    <button type="button" @click="conservarCvActual()" :disabled="actualizandoCv"
+                            class="px-4 py-2.5 bg-white border border-dark-200 hover:border-primary-400 text-dark-700 font-semibold rounded-xl text-sm cursor-pointer">
+                        Conservar actual
+                    </button>
+                    <button type="button" @click="actualizarConCvNuevo()" :disabled="actualizandoCv"
+                            class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-semibold rounded-xl text-sm cursor-pointer">
+                        <span x-text="actualizandoCv ? 'Actualizando...' : 'Actualizar con el nuevo'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Modal para Carga Individual de CV con extracción automática -->
+    <div x-show="modalCargaIndividualAbierto"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-title" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-xs transition-opacity"
+             @click="cerrarCargaIndividual()"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all w-full max-w-lg p-6 border border-dark-100"
+                 @click.away="cerrarCargaIndividual()">
+                
+                <div class="flex items-center justify-between pb-3 border-b border-dark-100 mb-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                            <i data-lucide="file-up" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-dark-900">Carga Individual de CV</h3>
+                            <p class="text-xs text-dark-400">Extracción inteligente de datos y alta automática</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="cerrarCargaIndividual()" class="text-dark-400 hover:text-dark-600 p-1.5 rounded-lg hover:bg-dark-50 transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <div x-show="errorCarga" x-cloak role="alert" class="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 flex-shrink-0"></i>
+                    <span x-text="errorCarga" class="flex-1"></span>
+                    <button type="button" @click="errorCarga = ''" title="Cerrar aviso" aria-label="Cerrar aviso"
+                            class="text-red-400 hover:text-red-600 p-1 rounded-lg hover:bg-red-100 transition-colors flex-shrink-0">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <!-- Zona Drag and Drop -->
+                <div class="border-2 border-dashed rounded-2xl p-6 text-center transition-colors cursor-pointer"
+                     :class="arrastrandoIndividual ? 'border-primary-500 bg-primary-50/30' : 'border-dark-200 hover:border-primary-400 bg-dark-50/40'"
+                     @dragover.prevent="arrastrandoIndividual = true"
+                     @dragleave.prevent="arrastrandoIndividual = false"
+                     @drop.prevent="soltarArchivoIndividual($event)"
+                     @click="$refs.fileInputIndividual.click()">
+                    
+                    <input type="file" 
+                           x-ref="fileInputIndividual" 
+                           @change="seleccionarArchivoIndividual($event)" 
+                           accept=".pdf,.doc,.docx" 
+                           class="hidden">
+
+                    <template x-if="!archivoIndividual">
+                        <div class="space-y-2">
+                            <div class="w-12 h-12 mx-auto rounded-2xl bg-white border border-dark-100 shadow-soft flex items-center justify-center text-primary-600">
+                                <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                            </div>
+                            <div class="text-xs text-dark-600">
+                                <span class="font-bold text-primary-600 hover:underline">Hacé click para buscar</span> o arrastrá el CV acá
+                            </div>
+                            <p class="text-[11px] text-dark-400">Archivos PDF, DOC o DOCX (hasta 5 MB)</p>
+                        </div>
+                    </template>
+
+                    <template x-if="archivoIndividual">
+                        <div class="flex items-center justify-between p-3 bg-white rounded-xl border border-dark-200 text-left">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="file-check" class="w-4 h-4"></i>
+                                </div>
+                                <div class="truncate">
+                                    <p class="text-xs font-semibold text-dark-800 truncate" x-text="archivoIndividual.name"></p>
+                                    <p class="text-[10px] text-dark-400" x-text="archivoTamanoTexto"></p>
+                                </div>
+                            </div>
+                            <button type="button" 
+                                    @click.stop="quitarArchivoIndividual()" 
+                                    class="p-1 text-dark-400 hover:text-red-600 rounded-lg hover:bg-dark-50 transition-colors">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Info de Extracción -->
+                <div class="mt-4 p-3 bg-primary-50/50 rounded-xl border border-primary-100/60 text-[11.5px] text-primary-800 flex items-start gap-2">
+                    <i data-lucide="sparkles" class="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0"></i>
+                    <span>El sistema analizará el archivo para identificar nombre, apellido, email, teléfono, seniority, puesto y habilidades, creando el candidato y vinculando su CV en la base de talentos.</span>
+                </div>
+
+                <div class="mt-6 flex items-center justify-end gap-3">
+                    <button type="button" 
+                            @click="cerrarCargaIndividual()" 
+                            :disabled="procesandoCarga"
+                            class="px-4 py-2 text-xs font-semibold text-dark-600 hover:text-dark-800 bg-white border border-dark-200 rounded-xl transition-colors cursor-pointer">
+                        Cancelar
+                    </button>
+                    <button type="button" 
+                            @click="subirYProcesarCV()" 
+                            :disabled="!archivoIndividual || procesandoCarga"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="procesandoCarga" class="animate-spin inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full"></span>
+                        <span x-show="!procesandoCarga" class="inline-flex"><i data-lucide="cpu" class="w-4 h-4"></i></span>
+                        <span x-text="procesandoCarga ? 'Extrayendo y creando...' : 'Procesar y Guardar'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Carga Masiva de CVs (.zip / .rar) -->
+    <div x-show="modalCargaMasivaAbierto"
+         x-cloak
+         data-testid="modal-carga-masiva"
+         x-effect="bloquearScrollHorizontal(modalCargaMasivaAbierto)"
+         class="fixed inset-0 z-50 overflow-y-auto overflow-x-hidden overscroll-contain"
+         aria-labelledby="modal-title-masiva" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-xs transition-opacity"
+             @click="cerrarCargaMasiva()"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all w-full max-w-xl p-6 border border-dark-100"
+                 @click.away="cerrarCargaMasiva()">
+                
+                <div class="flex items-center justify-between pb-3 border-b border-dark-100 mb-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                            <i data-lucide="folder-archive" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-bold text-dark-900">Carga Masiva de CVs</h3>
+                            <p class="text-xs text-dark-400">Procesamiento por lote de CVs individuales o paquetes comprimidos (.ZIP o .RAR)</p>
+                        </div>
+                    </div>
+                    <button type="button" @click="cerrarCargaMasiva()" :disabled="procesandoCargaMasiva" class="text-dark-400 hover:text-dark-600 p-1.5 rounded-lg hover:bg-dark-50 transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Alerta de Error -->
+                <div x-show="errorCargaMasiva" x-cloak class="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 flex-shrink-0"></i>
+                    <span x-text="errorCargaMasiva"></span>
+                </div>
+
+                <!-- Zona Drag and Drop (visible si no está procesando) -->
+                <div x-show="!procesandoCargaMasiva"
+                     class="border-2 border-dashed rounded-2xl p-6 text-center transition-colors cursor-pointer"
+                     :class="arrastrandoMasivo ? 'border-primary-500 bg-primary-50/30' : 'border-dark-200 hover:border-primary-400 bg-dark-50/40'"
+                     @dragover.prevent="arrastrandoMasivo = true"
+                     @dragleave.prevent="arrastrandoMasivo = false"
+                     @drop.prevent="soltarArchivoMasivo($event)"
+                     @click="$refs.fileInputMasivo.click()">
+                    
+                    <input type="file" 
+                           x-ref="fileInputMasivo" 
+                           @change="seleccionarArchivoMasivo($event)" 
+                           accept=".pdf,.doc,.docx,.zip,.rar"
+                           multiple
+                           class="hidden">
+
+                    <div class="space-y-2" :class="archivosMasivo.length ? 'mb-3' : ''">
+                        <div class="w-12 h-12 mx-auto rounded-2xl bg-white border border-dark-100 shadow-soft flex items-center justify-center text-primary-600" x-show="!archivosMasivo.length">
+                            <i data-lucide="archive" class="w-6 h-6"></i>
+                        </div>
+                        <div class="text-xs text-dark-600">
+                            <span class="font-bold text-primary-600 hover:underline">Hacé click para buscar</span> o arrastrá CVs individuales o paquetes ZIP/RAR acá
+                        </div>
+                        <p class="text-[11px] text-dark-400">CVs en PDF, DOC o DOCX (hasta 100 CVs individuales) o archivos comprimidos .ZIP / .RAR (hasta 500 MB)</p>
+                    </div>
+
+                    <div x-show="archivosMasivo.length" class="space-y-1.5 max-h-48 overflow-y-auto pr-1 custom-scrollbar" data-testid="lista-archivos-masivo">
+                        <p class="text-[11px] font-semibold text-dark-600 text-left" x-text="archivosMasivo.length + ' archivo(s) seleccionado(s) - CVs individuales: ' + cantidadIndividualesMasivo() + ' de 100'"></p>
+                        <template x-for="(f, idx) in archivosMasivo" :key="idx + '|' + f.name">
+                            <div class="flex items-center justify-between p-2 bg-white rounded-xl border border-dark-200 text-left">
+                                <div class="flex items-center gap-3 min-w-0">
+                                    <div class="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center flex-shrink-0">
+                                        <i :data-lucide="esComprimidoMasivo(f) ? 'file-archive' : 'file-text'" class="w-4 h-4"></i>
+                                    </div>
+                                    <div class="truncate">
+                                        <p class="text-xs font-semibold text-dark-800 truncate" x-text="f.name"></p>
+                                        <p class="text-[10px] text-dark-400" x-text="tamanoTextoMasivo(f)"></p>
+                                    </div>
+                                </div>
+                                <button type="button"
+                                        @click.stop="quitarArchivoMasivo(idx)"
+                                        class="p-1 text-dark-400 hover:text-red-600 rounded-lg hover:bg-dark-50 transition-colors">
+                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Información del límite (siempre visible mientras el modal está abierto) -->
+                <p class="mt-2 text-[11px] text-dark-400 text-center" data-testid="info-limite-masivo">Máximo 100 CVs individuales por carga.</p>
+
+                <!-- Avance real del lote: procesados / total informado por el backend -->
+                <div x-show="procesandoCargaMasiva || estadoMasivo === 'cancelado'" x-cloak data-testid="progreso-carga-masiva"
+                     class="p-4 sm:p-6 space-y-3 bg-primary-50/40 rounded-2xl border border-primary-100">
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm font-bold text-dark-800" data-testid="titulo-progreso-masivo" x-text="tituloProgresoMasivo()"></p>
+                        <span class="text-sm font-bold text-primary-700 tabular-nums" data-testid="porcentaje-carga-masiva" x-text="porcentajeMasivo() + '%'"></span>
+                    </div>
+                    <div class="w-full h-3 rounded-full bg-dark-100 overflow-hidden" role="progressbar" aria-label="Progreso de la carga masiva"
+                         aria-valuemin="0" aria-valuemax="100" :aria-valuenow="porcentajeMasivo()" data-testid="barra-progreso-carga-masiva">
+                        <div class="barra-progreso-fill h-full rounded-full" :class="estadoMasivo === 'cancelado' ? 'bg-dark-400' : 'bg-primary-600'"
+                             :style="'width:' + porcentajeMasivo() + '%'" data-testid="barra-progreso-relleno"></div>
+                    </div>
+                    <p class="text-xs text-dark-500" data-testid="texto-progreso-carga-masiva" x-text="textoProgresoMasivo()"></p>
+                </div>
+
+                <!-- Aviso discreto: se rechazó una selección que superaba los 100 CVs individuales (no es un error de procesamiento) -->
+                <p x-show="!procesandoCargaMasiva && advertenciaLimiteMasivo" x-cloak
+                   class="mt-3 text-xs text-red-600" data-testid="advertencia-limite-masivo"
+                   x-text="advertenciaLimiteMasivo"></p>
+
+                <!-- Info de Lote -->
+                <div class="mt-4 p-3 bg-primary-50/50 rounded-xl border border-primary-100/60 text-[11.5px] text-primary-800 flex items-start gap-2">
+                    <i data-lucide="info" class="w-4 h-4 text-primary-600 mt-0.5 flex-shrink-0"></i>
+                    <span>El sistema ignorará carpetas del sistema y procesará cada CV de forma aislada. Si algún archivo contiene errores o formato no legible, se reportará sin interrumpir el resto.</span>
+                </div>
+
+                <div class="mt-6 flex items-center justify-end gap-3">
+                    <button type="button" @click="procesandoCargaMasiva ? cancelarProcesoMasivo() : cerrarCargaMasiva()" :disabled="cancelandoMasivo" data-testid="cancelar-carga-masiva" class="px-4 py-2 text-xs font-semibold text-dark-600 hover:text-dark-800 bg-white border border-dark-200 rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"><span x-text="cancelandoMasivo ? 'Cancelando...' : 'Cancelar'"></span></button>
+                    <button type="button" 
+                            @click="subirYProcesarLoteCVs()" 
+                            :disabled="!archivosMasivo.length || procesandoCargaMasiva"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span x-show="!procesandoCargaMasiva" class="inline-flex"><i data-lucide="upload-cloud" class="w-4 h-4"></i></span>
+                        <span x-text="'Iniciar Carga Masiva'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de resultados de la Carga Masiva de CVs (se muestra una sola vez, al terminar todo el lote) -->
+    <div x-show="modalResumenMasivoAbierto"
+         x-cloak
+         data-testid="modal-resumen-carga-masiva"
+         class="fixed inset-0 z-[60] overflow-y-auto"
+         aria-labelledby="modal-title-resumen-masivo" role="dialog" aria-modal="true">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-xs transition-opacity"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all w-full max-w-xl p-6 border border-dark-100">
+                <div class="flex items-center gap-2.5 pb-3 border-b border-dark-100 mb-4">
+                    <div class="w-9 h-9 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                        <i data-lucide="clipboard-check" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 id="modal-title-resumen-masivo" class="text-base font-bold text-dark-900">Carga masiva finalizada</h3>
+                        <p class="text-xs text-dark-400" data-testid="resumen-masivo-total"
+                           x-text="(resumenFinalMasivo && resumenFinalMasivo.resumen) ? ('Total de archivos recibidos: ' + resumenFinalMasivo.resumen.total_archivos) : ''"></p>
+                    </div>
+                </div>
+
+                <div class="space-y-1.5" data-testid="resumen-masivo-categorias">
+                    <template x-for="cat in categoriasResumenMasivo()" :key="cat.clave">
+                        <div class="flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold"
+                             :class="cat.clase"
+                             :data-testid="'resumen-masivo-' + cat.clave">
+                            <span class="flex flex-col"><span x-text="cat.etiqueta"></span><span x-show="cat.ayuda" class="text-[10px] font-normal opacity-80" x-text="cat.ayuda" :data-testid="'resumen-masivo-ayuda-' + cat.clave"></span></span>
+                            <span class="text-sm font-bold" x-text="cat.valor"></span>
+                        </div>
+                    </template>
+                </div>
+
+                <template x-if="detalleNoCreadosMasivo().length > 0">
+                    <div class="mt-4 pt-3 border-t border-dark-100">
+                        <p class="text-[11px] font-semibold text-dark-700 mb-1.5" x-text="'Archivos que no generaron un candidato nuevo (' + detalleNoCreadosMasivo().length + '):'"></p>
+                        <div class="max-h-44 overflow-y-auto space-y-1 pr-1 custom-scrollbar" data-testid="resumen-masivo-detalle">
+                            <template x-for="(item, idx) in detalleNoCreadosMasivo()" :key="idx">
+                                <div class="text-[10.5px] p-1.5 rounded-lg bg-dark-50 border border-dark-100 text-dark-700 flex flex-col gap-0.5">
+                                    <span class="font-semibold break-all" x-text="item.archivo"></span>
+                                    <span class="text-dark-500 text-[10px]" x-text="etiquetaResultadoMasivo(item.resultado) + ': ' + item.mensaje"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <div class="mt-6 flex items-center justify-end">
+                    <button type="button"
+                            data-testid="resumen-masivo-aceptar"
+                            @click="aceptarResumenMasivo()"
+                            class="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer">
+                        Aceptar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if error_listado %}
+    <div class="mb-6 p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 flex items-center gap-3" data-testid="candidatos-error">
+        <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0"></i>
+        <span>{{ error_listado }}</span>
+    </div>
+    {% endif %}
+
+    <!-- Barra de filtros superior: los controles se distribuyen en las filas que haga falta según el ancho disponible -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6 shadow-soft">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-3">
+            <div class="relative flex-[2_1_18rem] min-w-[14rem]">
+                <i data-lucide="search" class="w-4 h-4 text-dark-400 absolute left-3.5 top-1/2 -translate-y-1/2"></i>
+                <input type="text" 
+                       x-model="busqueda" 
+                       @keydown.enter.prevent="irAPagina(1)"
+                       placeholder="Buscar (Enter para filtrar)" 
+                       class="w-full pl-10 pr-4 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            <div class="flex-[1_1_13rem] min-w-[12rem]">
+                <select x-model="filtroSeniority" 
+                        @change="irAPagina(1)"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-dark-700 cursor-pointer">
+                    <option value="">Todos los seniorities</option>
+                    {% for nivel in niveles_seniority %}
+                    <option value="{{ nivel }}">{{ nivel }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex-[1_1_13rem] min-w-[12rem]">
+                <select x-model="filtroUbicacion"
+                        @change="irAPagina(1)"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-dark-700 cursor-pointer">
+                    <option value="">Todas las ubicaciones</option>
+                    {% for provincia in provincias %}
+                    <option value="{{ provincia }}">{{ provincia }}</option>
+                    {% endfor %}
+                    <option value="otros">Otros</option>
+                </select>
+            </div>
+            <div class="flex-[1_1_16rem] min-w-[14rem]">
+                <select x-model="filtroPuesto"
+                        @change="irAPagina(1)"
+                        title="Perfil de puesto"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-dark-700 cursor-pointer">
+                    <option value="">Todos los perfiles de puesto</option>
+                    {% for perfil in perfiles_puesto %}
+                    <option value="{{ perfil }}">{{ perfil }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- Categorías de skills (catálogo recruiting_skills): candidatos con al menos una skill de la categoría elegida -->
+            <div class="flex-[1_1_16rem] min-w-[14rem] max-w-sm">
+                <select x-model="filtroCategoria"
+                        @change="filtroSkill = ''; irAPagina(1)"
+                        title="Categoría de skills"
+                        data-testid="filtro-categoria"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-dark-700 cursor-pointer">
+                    <option value="">Todas las categorías</option>
+                    {% for categoria in categorias_skills %}
+                    <option value="{{ categoria }}">{{ categoria }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <!-- Skills de la categoría elegida (opcional): sin selección se filtra solo por categoría -->
+            <div class="flex-[1_1_16rem] min-w-[14rem] max-w-sm">
+                <select x-model="filtroSkill"
+                        @change="irAPagina(1)"
+                        :disabled="!filtroCategoria"
+                        title="Skills de la categoría"
+                        data-testid="filtro-skill"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-dark-700 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
+                    <option value="">Todas las skills de la categoría</option>
+                    <template x-for="s in skillsDeCategoria()" :key="s">
+                        <option :value="s" x-text="s" :selected="s === filtroSkill"></option>
+                    </template>
+                </select>
+            </div>
+            <div class="flex items-center shrink-0 lg:ml-auto">
+                <button type="button" 
+                        @click="limpiarFiltros()" 
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-dark-600 hover:text-dark-900 bg-dark-50 hover:bg-dark-100 border border-dark-200 rounded-xl transition-colors cursor-pointer whitespace-nowrap"
+                        title="Restablecer todos los filtros">
+                    <i data-lucide="rotate-ccw" class="w-3.5 h-3.5 text-dark-500"></i>
+                    <span>Limpiar Filtros</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla estándar limpia -->
+    <!-- w-0 min-w-full: la tarjeta ocupa el ancho disponible sin ensanchar la página; relative: contiene los sr-only absolutos de las filas;
+         la tabla se desplaza dentro de su propio contenedor -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden relative w-0 min-w-full">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse min-w-[850px] lg:min-w-full">
+                <thead>
+                    <tr class="bg-slate-100 text-slate-600 border-b border-slate-200 dark:bg-slate-900/90 dark:text-slate-200 dark:border-slate-700/80 font-semibold text-xs tracking-wider uppercase">
+                        <th class="px-4 py-3 text-left">CANDIDATO</th>
+                        <th class="px-4 py-3 text-left">CONTACTO / EMAIL</th>
+                        <th class="px-4 py-3 text-left">UBICACIÓN</th>
+                        <th class="px-4 py-3 text-left">SKILLS</th>
+                        <th class="px-4 py-3 text-left">ORIGEN / FUENTE</th>
+                        <th class="px-4 py-3 text-left">ESTADO</th>
+                        <th class="px-4 py-3 text-right">ACCIONES</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100 text-xs">
+                    {% for c in candidatos %}
+                    <tr class="hover:bg-dark-50/50 transition-colors">
+                        <!-- Nombre y apellido -->
+                        <td class="px-4 py-3">
+                            <a href="/recruiting/candidatos/{{ c.id }}" 
+                               class="font-bold text-dark-900 hover:text-primary-600 transition-colors block text-[13px]">
+                                {{ c.nombre }} {{ c.apellido }}
+                            </a>
+                        </td>
+
+                        <!-- Contacto: Email y Teléfono -->
+                        <td class="px-3 py-3 text-dark-600">
+                            <p class="font-medium text-dark-800 text-xs">{{ c.email }}</p>
+                            {% if c.telefono %}
+                            <p class="text-[11px] text-gray-500">Tel: {{ c.telefono }}</p>
+                            {% endif %}
+                        </td>
+
+                        <!-- Ubicación -->
+                        <td class="px-3 py-3 text-dark-600 text-xs">
+                            <span class="font-medium text-dark-800">{{ c.ubicacion or c.ciudad or c.localidad or '—' }}</span>
+                        </td>
+
+                        <!-- Skills originales/existentes (sin mostrar habilidades de recruiting_habilidades) -->
+                        <td class="px-3 py-3">
+                            <div class="space-y-1 max-w-[220px]">
+                                {% if c.skills and c.skills|length > 0 %}
+                                <div class="flex flex-wrap items-center gap-1">
+                                    {% for skill in c.skills[:2] %}
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-blue-50 text-blue-700 border border-blue-200/50" title="Tecnología">
+                                        {{ skill }}
+                                    </span>
+                                    {% endfor %}
+                                    {% if c.skills|length > 2 %}
+                                    {# Tooltip con las skills ocultas: hover en escritorio, toque en dispositivos tactiles; fijo en body para no cortarse con la tabla #}
+                                    <span x-data="{ abierto: false, x: 0, y: 0, arriba: false,
+                                                    mostrar(el) { const r = el.getBoundingClientRect(); this.x = Math.min(Math.max(r.left + r.width / 2, 130), window.innerWidth - 130); this.arriba = r.bottom > window.innerHeight - 160; this.y = this.arriba ? r.top - 6 : r.bottom + 6; this.abierto = true; } }"
+                                          class="inline-block"
+                                          @mouseenter="mostrar($refs.disparador)" @mouseleave="abierto = false"
+                                          @click.outside="abierto = false" @scroll.window="abierto = false">
+                                        <button type="button" x-ref="disparador" data-testid="skills-ocultas"
+                                                @click.stop="abierto ? abierto = false : mostrar($refs.disparador)"
+                                                @focus="mostrar($refs.disparador)" @blur="abierto = false" @keydown.escape="abierto = false"
+                                                aria-label="Ver las {{ c.skills|length - 2 }} skills restantes"
+                                                class="px-1 py-0.5 text-[9px] font-semibold text-dark-400 hover:text-primary-600 cursor-default rounded focus:outline-none focus:ring-1 focus:ring-primary-300">+{{ c.skills|length - 2 }}</button>
+                                        <template x-teleport="body">
+                                            <div x-show="abierto" x-cloak role="tooltip" data-testid="skills-ocultas-tooltip"
+                                                 :style="`position: fixed; left: ${x}px; top: ${y}px; transform: translate(-50%, ${arriba ? '-100%' : '0'}); z-index: 70;`"
+                                                 class="pointer-events-none max-w-[260px] px-2.5 py-2 rounded-lg bg-dark-900 text-white shadow-xl">
+                                                <div class="flex flex-wrap gap-1">
+                                                    {% for skill in c.skills[2:] %}
+                                                    <span class="px-1.5 py-0.5 text-[10px] font-medium rounded-md bg-white/10 border border-white/15">{{ skill }}</span>
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <span class="text-dark-400 text-xs italic">Sin skills registradas</span>
+                                {% endif %}
+                            </div>
+                        </td>
+
+                        <!-- Fuente -->
+                        <td class="px-3 py-3 whitespace-nowrap">
+                            <span class="px-2 py-0.5 text-[11px] font-medium rounded-lg inline-flex items-center gap-1 bg-dark-100 text-dark-700 border border-dark-200/60">
+                                <i data-lucide="compass" class="w-3 h-3 text-dark-500"></i>
+                                <span>{{ c.fuente or 'Portal Propio' }}</span>
+                            </span>
+                        </td>
+
+                        <!-- Estado -->
+                        <td class="px-3 py-3 whitespace-nowrap">
+                            {% if not c.activo %}
+                            <span class="px-2 py-0.5 text-[11px] font-semibold rounded-lg inline-block bg-gray-100 text-gray-700 border border-gray-200">
+                                Dado de baja
+                            </span>
+                            {% else %}
+                            {% set est = c.estado or 'Activo' %}
+                            <span class="px-2 py-0.5 text-[11px] font-semibold rounded-lg inline-block
+                                  {% if est == 'Activo' %}bg-emerald-100 text-emerald-700
+                                  {% elif est == 'Rechazado' %}bg-red-100 text-red-700
+                                  {% elif est == 'Baja del proceso' %}bg-dark-100 text-dark-600
+                                  {% else %}bg-amber-100 text-amber-700{% endif %}">
+                                {{ est }}
+                            </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Acciones -->
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <div class="flex items-center justify-end gap-1.5">
+                                {% if c.cv_url %}
+                                <a href="/storage/{{ c.cv_url }}" 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-dark-700 bg-white border border-dark-200 hover:bg-dark-50 rounded-lg transition-colors cursor-pointer"
+                                   title="Descargar CV">
+                                    <i data-lucide="file-text" class="w-3.5 h-3.5 text-primary-600"></i>
+                                    <span>CV</span>
+                                </a>
+                                {% endif %}
+                                <a href="/recruiting/candidatos/{{ c.id }}" 
+                                   class="inline-flex items-center justify-center w-7 h-7 text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors cursor-pointer"
+                                   title="Ver candidato"
+                                   aria-label="Ver candidato">
+                                    <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                                    <span class="sr-only">Ver candidato</span>
+                                </a>
+                                {% if puede_eliminar_candidatos %}
+                                <button type="button"
+                                        @click="eliminarCandidato('{{ c.id }}', '{{ c.nombre | escape }} {{ (c.apellido or '') | escape }}')"
+                                        :disabled="eliminandoId === '{{ c.id }}'"
+                                        class="inline-flex items-center justify-center p-1 text-xs font-medium text-red-600 bg-red-50 hover:bg-red-100 border border-red-200/60 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                                        title="Eliminar candidato">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-16 text-center text-dark-400">
+                            <i data-lucide="inbox" class="w-10 h-10 mx-auto mb-3 text-dark-300"></i>
+                            <p class="font-semibold text-base text-dark-700">No se encontraron candidatos en la base de talentos</p>
+                            {% if puede_cargar_cv_general %}
+                            <p class="text-xs text-dark-400 mt-1 max-w-sm mx-auto">Comenzá sumando perfiles mediante "+ Nuevo Candidato" o utilizá la "Carga Masiva CVs".</p>
+                            {% else %}
+                            <p class="text-xs text-dark-400 mt-1 max-w-sm mx-auto">Sumá perfiles mediante "+ Nuevo Candidato" o cargá CVs desde el detalle de una búsqueda que tengas asignada.</p>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Barra de Paginación -->
+        <div class="px-5 py-3.5 border-t border-dark-100 bg-dark-50/40 dark:bg-slate-900/90 dark:border-t dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-dark-600 dark:text-slate-300">
+            <!-- Lado izquierdo: Selector de tamaño de página -->
+            <div class="flex items-center gap-2">
+                <span class="text-dark-500 dark:text-slate-300 font-medium">Mostrar por página:</span>
+                <select x-model.number="limite"
+                        @change="cambiarLimite($event.target.value)"
+                        class="bg-white border border-dark-200 rounded-lg px-2.5 py-1 text-xs font-semibold text-dark-800 outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 cursor-pointer shadow-2xs dark:bg-slate-800 dark:text-slate-100 dark:border-slate-700">
+                    <option value="20" {% if (limite_actual or 20) == 20 %}selected{% endif %} :selected="limite === 20">20</option>
+                    <option value="50" {% if (limite_actual or 20) == 50 %}selected{% endif %} :selected="limite === 50">50</option>
+                    <option value="100" {% if (limite_actual or 20) == 100 %}selected{% endif %} :selected="limite === 100">100</option>
+                </select>
+                <span class="text-dark-400 dark:text-slate-400">registros</span>
+            </div>
+
+            <!-- Centro: Texto descriptivo en español -->
+            <div class="text-dark-600 dark:text-slate-300 font-medium text-center">
+                {% if total_registros and total_registros > 0 %}
+                <span>Mostrando <strong class="text-dark-900 dark:text-slate-100 font-bold">{{ registro_inicio }}</strong> a <strong class="text-dark-900 dark:text-slate-100 font-bold">{{ registro_fin }}</strong> de <strong class="text-dark-900 dark:text-slate-100 font-bold">{{ total_registros }}</strong> candidatos</span>
+                {% else %}
+                <span>Sin candidatos para mostrar</span>
+                {% endif %}
+            </div>
+
+            <!-- Lado derecho: Botones de navegación y número de página -->
+            <div class="flex items-center gap-2">
+                <button type="button"
+                        @click="irAPagina(pagina - 1)"
+                        :disabled="pagina <= 1"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dark-200 bg-white font-medium text-dark-700 hover:bg-dark-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:disabled:opacity-40 dark:disabled:text-slate-500 dark:disabled:hover:bg-slate-800"
+                        title="Página anterior">
+                    <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+                    <span>Anterior</span>
+                </button>
+
+                <span class="px-2 font-semibold text-dark-700 dark:text-slate-300">
+                    Página <span x-text="pagina"></span> de <span x-text="totalPaginas"></span>
+                </span>
+
+                <button type="button"
+                        @click="irAPagina(pagina + 1)"
+                        :disabled="pagina >= totalPaginas"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-dark-200 bg-white font-medium text-dark-700 hover:bg-dark-50 transition-colors shadow-2xs cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700 dark:disabled:opacity-40 dark:disabled:text-slate-500 dark:disabled:hover:bg-slate-800"
+                        title="Página siguiente">
+                    <span>Siguiente</span>
+                    <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function candidatosComponent() {
+    return {
+        busqueda: '{{ filtro_busqueda or "" }}',
+        filtroSeniority: '{{ filtro_seniority or "" }}',
+        filtroUbicacion: '{{ filtro_ubicacion or "" }}',
+        filtroPuesto: {{ (filtro_puesto or "") | tojson }},
+        filtroCategoria: {{ ((filtro_categorias or [""])[0]) | tojson }},
+        filtroSkill: {{ (filtro_skill or "") | tojson }},
+        skillsPorCategoria: {{ (skills_por_categoria or {}) | tojson }},
+        skillsDeCategoria() {
+            return this.skillsPorCategoria[this.filtroCategoria] || [];
+        },
+        filtroFuente: '{{ filtro_fuente or "" }}',
+        filtroEstado: '{{ filtro_estado or "" }}',
+
+        // Paginación
+        pagina: {{ pagina_actual or 1 }},
+        limite: {{ limite_actual or 20 }},
+        totalPaginas: {{ total_paginas or 1 }},
+        totalRegistros: {{ total_registros or 0 }},
+        
+        // Estado de modal de Carga Individual de CV
+        modalCargaIndividualAbierto: false,
+        arrastrandoIndividual: false,
+        archivoIndividual: null,
+        archivoTamanoTexto: '',
+        procesandoCarga: false,
+        errorCarga: '',
+        comparacionCv: null,
+        visorCv: null,
+        modalComparacionAbierto: false,
+        actualizandoCv: false,
+
+        // Estado de modal de Carga Masiva de CVs (.zip, .rar)
+        modalCargaMasivaAbierto: false,
+        arrastrandoMasivo: false,
+        archivosMasivo: [],
+        advertenciaLimiteMasivo: '',
+        procesandoCargaMasiva: false,
+        errorCargaMasiva: '',
+        loteIdMasivo: null,
+        estadoMasivo: '',
+        progresoMasivo: { procesados: 0, total: 0 },
+        cancelandoMasivo: false,
+        temporizadorMasivo: null,
+        fallosAvanceMasivo: 0,
+        reporteMasivo: null,
+        modalResumenMasivoAbierto: false,
+        resumenFinalMasivo: null,
+
+        eliminandoId: null,
+
+
+        abrirCargaIndividual() {
+            this.errorCarga = '';
+            this.quitarArchivoIndividual();
+            this.modalCargaIndividualAbierto = true;
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        cerrarCargaIndividual() {
+            if (this.procesandoCarga) return;
+            this.modalCargaIndividualAbierto = false;
+            this.quitarArchivoIndividual();
+        },
+        seleccionarArchivoIndividual(e) {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                this.validarArchivoIndividual(files[0]);
+            }
+        },
+        soltarArchivoIndividual(e) {
+            this.arrastrandoIndividual = false;
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                this.validarArchivoIndividual(files[0]);
+            }
+        },
+        validarArchivoIndividual(file) {
+            this.errorCarga = '';
+            if (!file) return;
+
+            const nombre = file.name || '';
+            const ext = nombre.slice((nombre.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+            const validas = ['pdf', 'doc', 'docx'];
+
+            if (!validas.includes(ext)) {
+                this.errorCarga = 'Formato no admitido. Seleccioná un archivo PDF, DOC o DOCX.';
+                this.quitarArchivoIndividual();
+                return;
+            }
+
+            const maxBytes = 5 * 1024 * 1024;
+            if (file.size > maxBytes) {
+                this.errorCarga = 'El archivo supera el tamaño máximo permitido de 5 MB.';
+                this.quitarArchivoIndividual();
+                return;
+            }
+
+            this.archivoIndividual = file;
+            if (file.size < 1024 * 1024) {
+                this.archivoTamanoTexto = (file.size / 1024).toFixed(0) + ' KB';
+            } else {
+                this.archivoTamanoTexto = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+            }
+
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        quitarArchivoIndividual() {
+            this.archivoIndividual = null;
+            this.archivoTamanoTexto = '';
+            if (this.$refs.fileInputIndividual) {
+                this.$refs.fileInputIndividual.value = '';
+            }
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        prepararVisoresCv(archivo, actual) {
+            this.liberarVisoresCv();
+            const esPdf = (nombre) => /\.pdf$/i.test(nombre || '');
+            const esWord = (nombre) => /\.docx?$/i.test(nombre || '');
+            const claveActual = actual && actual.cv_url ? actual.cv_url : '';
+            const urlActual = claveActual ? '/storage/' + claveActual : '';
+            const urlNuevo = archivo ? URL.createObjectURL(archivo) : '';
+            const actualWord = esWord(claveActual);
+            const nuevoWord = !!archivo && esWord(archivo.name);
+            this.visorCv = {
+                actual: { url: esPdf(claveActual) ? urlActual : '', descarga: urlActual, nombre: actual && actual.archivo, cargando: actualWord, vistaBlob: '' },
+                nuevo: { url: archivo && esPdf(archivo.name) ? urlNuevo : '', descarga: urlNuevo, nombre: archivo && archivo.name, cargando: nuevoWord, vistaBlob: '' },
+            };
+            if (actualWord) this.cargarVistaPreviaWord('actual', () => fetch('/storage/preview-pdf/' + claveActual));
+            if (nuevoWord) {
+                this.cargarVistaPreviaWord('nuevo', () => {
+                    const formData = new FormData();
+                    formData.append('archivo', archivo);
+                    return fetch('/storage/preview-pdf', { method: 'POST', body: formData });
+                });
+            }
+        },
+        // Convierte un CV Word a PDF en el backend y lo muestra como blob; si falla queda el aviso con la descarga
+        async cargarVistaPreviaWord(columna, solicitar) {
+            const visor = this.visorCv;
+            let vistaBlob = '';
+            try {
+                const response = await solicitar();
+                const tipo = response.headers.get('content-type') || '';
+                if (!response.ok || !/pdf/i.test(tipo)) throw new Error('HTTP ' + response.status);
+                vistaBlob = URL.createObjectURL(await response.blob());
+            } catch (err) {
+                console.warn('Vista previa de CV Word no disponible (' + columna + '):', err);
+            }
+            if (this.visorCv !== visor) {
+                if (vistaBlob) URL.revokeObjectURL(vistaBlob);
+                return;
+            }
+            this.visorCv[columna].vistaBlob = vistaBlob;
+            this.visorCv[columna].url = vistaBlob;
+            this.visorCv[columna].cargando = false;
+        },
+        liberarVisoresCv() {
+            if (this.visorCv && this.visorCv.nuevo.descarga) URL.revokeObjectURL(this.visorCv.nuevo.descarga);
+            if (this.visorCv && this.visorCv.actual.vistaBlob) URL.revokeObjectURL(this.visorCv.actual.vistaBlob);
+            if (this.visorCv && this.visorCv.nuevo.vistaBlob) URL.revokeObjectURL(this.visorCv.nuevo.vistaBlob);
+            this.visorCv = null;
+        },
+        cerrarComparacionCv() {
+            // Solo cierra: no llama al backend ni modifica ningun CV
+            this.conservarCvActual();
+        },
+        conservarCvActual() {
+            if (this.actualizandoCv) return;
+            this.modalComparacionAbierto = false;
+            this.comparacionCv = null;
+            this.liberarVisoresCv();
+            this.quitarArchivoIndividual();
+        },
+        async actualizarConCvNuevo() {
+            if (!this.archivoIndividual || this.actualizandoCv) return;
+            this.actualizandoCv = true;
+            try {
+                const formData = new FormData();
+                formData.append('archivo', this.archivoIndividual);
+                const response = await fetch('/recruiting/candidatos/actualizar-cv', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData
+                });
+                const data = await response.json().catch(() => null);
+                if (response.ok && data && data.ok === true) {
+                    this.notificar('success', 'Candidato actualizado con el nuevo CV.');
+                    window.location.href = data.redirect || '/recruiting/candidatos';
+                } else {
+                    this.modalComparacionAbierto = false;
+                    this.comparacionCv = null;
+                    this.liberarVisoresCv();
+                    this.modalCargaIndividualAbierto = true;
+                    this.errorCarga = (data && (data.error || data.detail)) || 'No se pudo actualizar el candidato.';
+                }
+            } catch (err) {
+                this.modalComparacionAbierto = false;
+                this.comparacionCv = null;
+                this.liberarVisoresCv();
+                this.modalCargaIndividualAbierto = true;
+                this.errorCarga = err.message || 'Error al actualizar el candidato';
+            } finally {
+                this.actualizandoCv = false;
+            }
+        },
+        async subirYProcesarCV() {
+            if (!this.archivoIndividual || this.procesandoCarga) return;
+            this.procesandoCarga = true;
+            this.errorCarga = '';
+
+            try {
+                const formData = new FormData();
+                formData.append('archivo', this.archivoIndividual);
+
+                const response = await fetch('/recruiting/candidatos/cargar-cv', {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    body: formData
+                });
+
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch (jsonErr) {
+                    throw new Error('Error al procesar el archivo en el servidor.');
+                }
+
+                if (response.ok && data && (data.ok === true || data.success === true)) {
+                    this.notificar('success', 'Candidato creado y CV procesado exitosamente.');
+                    window.location.href = data.redirect || '/recruiting/candidatos';
+                } else if (response.status === 409 && data && data.requiere_comparacion) {
+                    this.errorCarga = '';
+                    this.comparacionCv = { actual: data.actual || {}, nuevo: data.nuevo || {} };
+                    this.prepararVisoresCv(this.archivoIndividual, data.actual);
+                    this.modalCargaIndividualAbierto = false;
+                    this.modalComparacionAbierto = true;
+                    this.$nextTick(() => {
+                        if (window.lucide) lucide.createIcons();
+                    });
+                } else {
+                    const mensajeError = (data && (data.error || data.detail)) ? (data.error || data.detail) : 'Error al procesar el archivo';
+
+                    if (response.status === 409 || mensajeError.includes('Ya existe un candidato registrado con este email')) {
+                        const emailMatch = mensajeError.match(/([a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)/);
+                        const emailEncontrado = emailMatch ? emailMatch[1] : '';
+                        this.errorCarga = emailEncontrado 
+                            ? `El candidato ya se encuentra registrado con el email ${emailEncontrado}.`
+                            : 'El candidato ya se encuentra registrado con este email.';
+                    } else {
+                        this.errorCarga = mensajeError;
+                        if (response.status === 422) {
+                            this.notificar('warning', mensajeError);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('Error al subir individual CV:', err);
+                this.errorCarga = err.message || 'Error al procesar el archivo';
+            } finally {
+                this.procesandoCarga = false;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
+            }
+        },
+
+        abrirCargaMasiva() {
+            this.errorCargaMasiva = '';
+            this.reporteMasivo = null;
+            this.estadoMasivo = '';
+            this.progresoMasivo = { procesados: 0, total: 0 };
+            this.quitarArchivoMasivo();
+            this.modalCargaMasivaAbierto = true;
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        cerrarCargaMasiva() {
+            if (this.procesandoCargaMasiva) return;
+            const huboCambios = this.reporteMasivo && this.reporteMasivo.procesados_exitosamente > 0;
+            this.modalCargaMasivaAbierto = false;
+            this.quitarArchivoMasivo();
+            this.reporteMasivo = null;
+            if (huboCambios) {
+                window.location.reload();
+            }
+        },
+        notificar(tipo, mensaje) {
+            // El store de toasts se registra con Alpine.store('toasts') en core/base.html (window.$store no existe)
+            const toasts = (typeof Alpine !== 'undefined') ? Alpine.store('toasts') : null;
+            if (toasts && typeof toasts[tipo] === 'function') toasts[tipo](mensaje);
+        },
+        etiquetaResultadoMasivo(resultado) {
+            const etiquetas = {
+                creado: 'Creado correctamente',
+                duplicado: 'CV duplicado',
+                sin_email: 'Sin email',
+                formato_tamano: 'Rechazado por formato o tamaño',
+                error_lectura: 'Error de lectura o extracción',
+                error_validacion: 'Error de validación',
+                error_persistencia: 'Error de persistencia',
+                error_otro: 'Error de procesamiento'
+            };
+            return etiquetas[resultado] || 'Otro error';
+        },
+        categoriasResumenMasivo() {
+            const r = this.resumenFinalMasivo && this.resumenFinalMasivo.resumen;
+            if (!r) return [];
+            const neutro = 'bg-dark-50 border-dark-200 text-dark-500';
+            const filas = [
+                { clave: 'creados', etiqueta: 'Candidatos creados correctamente', valor: r.creados, clase: r.creados > 0 ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : neutro, siempre: true },
+                { clave: 'duplicados', etiqueta: 'CV duplicados', ayuda: 'Incluye duplicados detectados por email o por nombre de archivo.', valor: r.duplicados_omitidos, clase: r.duplicados_omitidos > 0 ? 'bg-amber-50 border-amber-100 text-amber-800' : neutro, siempre: true },
+                { clave: 'sin-email', etiqueta: 'CV sin email', valor: r.sin_email, clase: r.sin_email > 0 ? 'bg-red-50 border-red-100 text-red-700' : neutro, siempre: true },
+                { clave: 'formato-tamano', etiqueta: 'CV rechazados por formato o tamaño', valor: r.rechazados_formato_tamano, clase: r.rechazados_formato_tamano > 0 ? 'bg-red-50 border-red-100 text-red-700' : neutro, siempre: true },
+                { clave: 'errores-lectura', etiqueta: 'CV con error de lectura o extracción', valor: r.errores_lectura, clase: 'bg-red-50 border-red-100 text-red-700' },
+                { clave: 'errores-validacion', etiqueta: 'CV con error de validación', valor: r.errores_validacion, clase: 'bg-red-50 border-red-100 text-red-700' },
+                { clave: 'errores-persistencia', etiqueta: 'CV con error al guardar el candidato', valor: r.errores_persistencia, clase: 'bg-red-50 border-red-100 text-red-700' },
+                { clave: 'errores-otros', etiqueta: 'CV con otros errores de procesamiento', valor: r.errores_otros, clase: 'bg-red-50 border-red-100 text-red-700' }
+            ];
+            return filas.filter(f => f.siempre || f.valor > 0);
+        },
+        detalleNoCreadosMasivo() {
+            const lista = (this.resumenFinalMasivo && this.resumenFinalMasivo.resultados) || [];
+            return lista.filter(i => i.resultado !== 'creado');
+        },
+        aceptarResumenMasivo() {
+            const huboCreados = this.resumenFinalMasivo && this.resumenFinalMasivo.resumen && this.resumenFinalMasivo.resumen.creados > 0;
+            this.modalResumenMasivoAbierto = false;
+            this.resumenFinalMasivo = null;
+            if (huboCreados) {
+                // Refresca el listado para mostrar los candidatos nuevos
+                window.location.reload();
+            }
+        },
+        cantidadRechazadosMasivo() {
+            return (this.reporteMasivo && Array.isArray(this.reporteMasivo.fallidos)) ? this.reporteMasivo.fallidos.length : 0;
+        },
+        recargarPaginaMasiva() {
+            window.location.reload();
+        },
+        seleccionarArchivoMasivo(e) {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                this.agregarArchivosMasivo(Array.from(files));
+            }
+            e.target.value = '';
+        },
+        soltarArchivoMasivo(e) {
+            this.arrastrandoMasivo = false;
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                this.agregarArchivosMasivo(Array.from(files));
+            }
+        },
+        extensionMasivo(file) {
+            const nombre = (file && file.name) || '';
+            return nombre.slice((nombre.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+        },
+        esComprimidoMasivo(file) {
+            return ['zip', 'rar'].includes(this.extensionMasivo(file));
+        },
+        cantidadIndividualesMasivo() {
+            return this.archivosMasivo.filter(f => !this.esComprimidoMasivo(f)).length;
+        },
+        tamanoTextoMasivo(file) {
+            return file.size < 1024 * 1024 ? (file.size / 1024).toFixed(0) + ' KB' : (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+        },
+        agregarArchivosMasivo(files) {
+            this.errorCargaMasiva = '';
+            this.advertenciaLimiteMasivo = '';
+            this.reporteMasivo = null;
+            const maxBytes = 500 * 1024 * 1024; // 500 MB en total
+            const mensajes = [];
+            const nuevos = [];
+            let bytes = this.archivosMasivo.reduce((t, f) => t + f.size, 0);
+
+            for (const file of files) {
+                const ext = this.extensionMasivo(file);
+                if (!['pdf', 'doc', 'docx', 'zip', 'rar'].includes(ext)) {
+                    mensajes.push('Formato no admitido: "' + file.name + '". Solo se aceptan .PDF, .DOC, .DOCX, .ZIP y .RAR.');
+                    continue;
+                }
+                if (bytes + file.size > maxBytes) {
+                    mensajes.push('La carga supera el tamaño máximo permitido de 500 MB. No se agregó "' + file.name + '".');
+                    continue;
+                }
+                bytes += file.size;
+                nuevos.push(file);
+            }
+
+            // Límite de 100 CVs individuales por operación: si la nueva selección lo supera se rechaza completa y se conserva la anterior
+            const individualesNuevos = nuevos.filter(f => !this.esComprimidoMasivo(f)).length;
+            if (this.cantidadIndividualesMasivo() + individualesNuevos > 100) {
+                this.advertenciaLimiteMasivo = 'No se pueden cargar más de 100 CVs individuales por operación. Seleccioná hasta 100 archivos o comprimilos en un archivo ZIP o RAR.';
+                return;
+            }
+
+            this.archivosMasivo = this.archivosMasivo.concat(nuevos);
+            if (mensajes.length) this.errorCargaMasiva = mensajes.join(' ');
+
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        quitarArchivoMasivo(idx) {
+            this.advertenciaLimiteMasivo = '';
+            if (typeof idx === 'number') {
+                this.archivosMasivo = this.archivosMasivo.filter((_, i) => i !== idx);
+            } else {
+                this.archivosMasivo = [];
+            }
+            if (this.$refs.fileInputMasivo) {
+                this.$refs.fileInputMasivo.value = '';
+            }
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        // ---- Bloqueo de scroll horizontal del fondo (solo mientras el modal de Carga Masiva esta abierto) ----
+        bloquearScrollHorizontal(activo) {
+            const raiz = document.documentElement;
+            const cuerpo = document.body;
+            if (activo && !window.__bloqueoCvMasivo) {
+                let tx = 0, ty = 0;
+                const alRueda = (e) => {
+                    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.preventDefault();
+                };
+                const alTocar = (e) => { const t = e.touches[0]; tx = t.clientX; ty = t.clientY; };
+                const alMoverToque = (e) => {
+                    const t = e.touches[0];
+                    if (Math.abs(t.clientX - tx) > Math.abs(t.clientY - ty)) e.preventDefault();
+                };
+                const alTeclear = (e) => {
+                    const campo = e.target && e.target.closest ? e.target.closest('input, textarea, select') : null;
+                    if (['ArrowLeft', 'ArrowRight'].includes(e.key) && !campo) e.preventDefault();
+                };
+                const opciones = { passive: false, capture: true };
+                document.addEventListener('wheel', alRueda, opciones);
+                document.addEventListener('touchstart', alTocar, { passive: true, capture: true });
+                document.addEventListener('touchmove', alMoverToque, opciones);
+                document.addEventListener('keydown', alTeclear, true);
+                window.__bloqueoCvMasivo = () => {
+                    document.removeEventListener('wheel', alRueda, opciones);
+                    document.removeEventListener('touchstart', alTocar, { capture: true });
+                    document.removeEventListener('touchmove', alMoverToque, opciones);
+                    document.removeEventListener('keydown', alTeclear, true);
+                };
+                raiz.classList.add('bloqueo-scroll-horizontal');
+                cuerpo.classList.add('bloqueo-scroll-horizontal');
+            } else if (!activo && window.__bloqueoCvMasivo) {
+                window.__bloqueoCvMasivo();
+                window.__bloqueoCvMasivo = null;
+                raiz.classList.remove('bloqueo-scroll-horizontal');
+                cuerpo.classList.remove('bloqueo-scroll-horizontal');
+            }
+        },
+        destroy() {
+            // Desmontaje inesperado del componente: no deja estado residual
+            this.bloquearScrollHorizontal(false);
+            this.detenerSeguimientoMasivo();
+        },
+
+        // ---- Avance real de la carga masiva ----
+        porcentajeMasivo() {
+            const { procesados, total } = this.progresoMasivo;
+            if (!total) return 0;
+            return Math.min(100, Math.max(0, Math.floor((procesados / total) * 100)));
+        },
+        tituloProgresoMasivo() {
+            if (this.estadoMasivo === 'cancelado') return 'Carga cancelada';
+            if (this.cancelandoMasivo) return 'Cancelando carga...';
+            if (this.estadoMasivo === 'finalizado') return 'Carga finalizada';
+            return 'Procesando CVs...';
+        },
+        textoProgresoMasivo() {
+            const { procesados, total } = this.progresoMasivo;
+            if (!total && this.estadoMasivo !== 'cancelado') return 'Preparando archivos...';
+            return 'Procesados ' + procesados + ' de ' + total + ' CVs';
+        },
+        detenerSeguimientoMasivo() {
+            if (this.temporizadorMasivo) clearTimeout(this.temporizadorMasivo);
+            this.temporizadorMasivo = null;
+        },
+        async cancelarProcesoMasivo() {
+            if (!this.loteIdMasivo || this.cancelandoMasivo) return;
+            this.cancelandoMasivo = true;
+            try {
+                const r = await fetch('/recruiting/candidatos/cargar-cv-masivo/' + this.loteIdMasivo + '/cancelar', { method: 'POST' });
+                if (!r.ok) throw new Error('cancelar');
+            } catch (err) {
+                this.cancelandoMasivo = false;
+                this.notificar('error', 'No se pudo cancelar la carga. Intentá nuevamente.');
+            }
+        },
+        terminarSeguimientoMasivo() {
+            this.detenerSeguimientoMasivo();
+            this.procesandoCargaMasiva = false;
+            this.cancelandoMasivo = false;
+            this.loteIdMasivo = null;
+            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        },
+        async consultarAvanceMasivo() {
+            const lote = this.loteIdMasivo;
+            if (!lote) return;
+            try {
+                // Una consulta que no responde no puede dejar la pantalla cargando para siempre: se corta a los 20 s
+                const r = await fetch('/recruiting/candidatos/cargar-cv-masivo/' + lote + '/estado', { headers: { 'Accept': 'application/json' }, signal: AbortSignal.timeout(20000) });
+                const d = await r.json();
+                if (lote !== this.loteIdMasivo) return;
+                if (!r.ok) throw new Error(d.error || 'estado');
+                this.fallosAvanceMasivo = 0;
+                this.progresoMasivo = { procesados: d.procesados || 0, total: d.total || 0 };
+                if (d.estado === 'finalizado') {
+                    this.estadoMasivo = 'finalizado';
+                    this.detenerSeguimientoMasivo();
+                    // Se muestra 100% y el mensaje de finalizacion un instante antes del resumen
+                    setTimeout(() => {
+                        this.resumenFinalMasivo = d.reporte;
+                        this.quitarArchivoMasivo();
+                        this.modalCargaMasivaAbierto = false;
+                        this.modalResumenMasivoAbierto = true;
+                        this.terminarSeguimientoMasivo();
+                    }, 700);
+                    return;
+                }
+                if (d.estado === 'cancelado') {
+                    this.estadoMasivo = 'cancelado';
+                    const creados = d.reporte && d.reporte.resumen ? d.reporte.resumen.creados : 0;
+                    this.reporteMasivo = { procesados_exitosamente: creados };
+                    this.errorCargaMasiva = 'Carga cancelada. Se procesaron ' + d.procesados + ' de ' + d.total + ' CVs' + (creados ? ' (los ' + creados + ' candidato(s) ya creados se conservan).' : '.');
+                    this.terminarSeguimientoMasivo();
+                    return;
+                }
+                if (d.estado === 'error') {
+                    this.estadoMasivo = 'error';
+                    this.errorCargaMasiva = d.error || 'Ocurrió un error al procesar el lote de CVs.';
+                    this.notificar('warning', this.errorCargaMasiva);
+                    this.terminarSeguimientoMasivo();
+                    return;
+                }
+                this.temporizadorMasivo = setTimeout(() => this.consultarAvanceMasivo(), 800);
+            } catch (err) {
+                console.error('Error al consultar el avance de la carga masiva:', err);
+                // Un corte momentaneo no cancela el seguimiento: se reintenta unas veces antes de informar el error
+                this.fallosAvanceMasivo = (this.fallosAvanceMasivo || 0) + 1;
+                if (this.fallosAvanceMasivo < 4 && lote === this.loteIdMasivo) {
+                    this.temporizadorMasivo = setTimeout(() => this.consultarAvanceMasivo(), 2000);
+                    return;
+                }
+                this.estadoMasivo = 'error';
+                this.errorCargaMasiva = 'Error de comunicación con el servidor al consultar el avance de la carga.';
+                this.notificar('error', this.errorCargaMasiva);
+                this.terminarSeguimientoMasivo();
+            }
+        },
+        async subirYProcesarLoteCVs() {
+            if (!this.archivosMasivo.length || this.procesandoCargaMasiva) return;
+            this.procesandoCargaMasiva = true;
+            this.errorCargaMasiva = '';
+            this.reporteMasivo = null;
+            this.estadoMasivo = 'procesando';
+            this.progresoMasivo = { procesados: 0, total: 0 };
+            this.cancelandoMasivo = false;
+
+            try {
+                const formData = new FormData();
+                this.archivosMasivo.forEach(f => formData.append('archivos', f));
+
+                const response = await fetch('/recruiting/candidatos/cargar-cv-masivo/iniciar', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json' },
+                    body: formData
+                });
+                const data = await response.json();
+                if (!response.ok || !data.lote_id) {
+                    this.estadoMasivo = 'error';
+                    this.errorCargaMasiva = data.error || data.detail || 'Ocurrió un error al procesar el lote de CVs.';
+                    this.notificar('warning', this.errorCargaMasiva);
+                    this.terminarSeguimientoMasivo();
+                    return;
+                }
+                this.loteIdMasivo = data.lote_id;
+                this.consultarAvanceMasivo();
+            } catch (err) {
+                console.error('Error al iniciar lote masivo:', err);
+                this.estadoMasivo = 'error';
+                this.errorCargaMasiva = 'Error de comunicación con el servidor al procesar el archivo comprimido.';
+                this.notificar('error', this.errorCargaMasiva);
+                this.terminarSeguimientoMasivo();
+            }
+        },
+
+        async eliminarCandidato(candidatoId, candidatoNombre) {
+            if (this.eliminandoId) return;
+            const nombre = (candidatoNombre || 'el candidato').trim();
+            const confirmado = window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${nombre}" de la base de datos? Esta acción no se puede deshacer.`);
+            if (!confirmado) return;
+
+            this.eliminandoId = candidatoId;
+            try {
+                const res = await fetch(`/recruiting/candidatos/${candidatoId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const data = await res.json().catch(() => ({}));
+
+                if (res.ok && (data.success !== false)) {
+                    if (typeof Alpine !== 'undefined' && Alpine.store('toasts')) {
+                        Alpine.store('toasts').success('Candidato eliminado correctamente');
+                    } else if (window.$store && window.$store.toasts) {
+                        window.$store.toasts.success('Candidato eliminado correctamente');
+                    }
+                    // Actualizar la grilla para reflejar la eliminación
+                    window.location.reload();
+                } else {
+                    const errorMsg = data.error || data.detail || 'Error al eliminar el candidato.';
+                    if (typeof Alpine !== 'undefined' && Alpine.store('toasts')) {
+                        Alpine.store('toasts').error(errorMsg);
+                    } else if (window.$store && window.$store.toasts) {
+                        window.$store.toasts.error(errorMsg);
+                    } else {
+                        alert(errorMsg);
+                    }
+                }
+            } catch (err) {
+                console.error('Error al eliminar candidato:', err);
+                const netErr = 'Error de red al intentar eliminar el candidato.';
+                if (window.$store && window.$store.toasts) {
+                    window.$store.toasts.error(netErr);
+                } else {
+                    alert(netErr);
+                }
+            } finally {
+                this.eliminandoId = null;
+            }
+        },
+
+        // Parámetros de Perfil de puesto y categorías de skills (una categoría)
+        aplicarFiltrosPerfil(urlParams) {
+            if (this.filtroPuesto) {
+                urlParams.set('puesto', this.filtroPuesto);
+            } else {
+                urlParams.delete('puesto');
+            }
+            urlParams.delete('skills');
+            urlParams.delete('categorias');
+            if (this.filtroCategoria) {
+                urlParams.set('categorias', this.filtroCategoria);
+                if (this.filtroSkill && this.skillsDeCategoria().includes(this.filtroSkill)) {
+                    urlParams.set('skills', this.filtroSkill);
+                }
+            }
+        },
+
+        irAPagina(nuevaPagina) {
+            if (nuevaPagina < 1 || (this.totalPaginas && nuevaPagina > this.totalPaginas)) return;
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('page', nuevaPagina);
+            urlParams.set('limit', this.limite || 20);
+
+            if (this.busqueda && this.busqueda.trim()) {
+                urlParams.set('busqueda', this.busqueda.trim());
+            } else {
+                urlParams.delete('busqueda');
+            }
+
+            if (this.filtroSeniority) {
+                urlParams.set('seniority', this.filtroSeniority);
+            } else {
+                urlParams.delete('seniority');
+            }
+
+            if (this.filtroUbicacion) {
+                urlParams.set('ubicacion', this.filtroUbicacion);
+            } else {
+                urlParams.delete('ubicacion');
+            }
+
+            this.aplicarFiltrosPerfil(urlParams);
+            urlParams.delete('ciudad');
+
+            if (this.filtroFuente) {
+                urlParams.set('fuente', this.filtroFuente);
+            } else {
+                urlParams.delete('fuente');
+            }
+
+            if (this.filtroEstado) {
+                urlParams.set('estado', this.filtroEstado);
+            } else {
+                urlParams.delete('estado');
+            }
+
+            window.location.search = urlParams.toString();
+        },
+        cambiarLimite(nuevoLimite) {
+            const limiteNum = parseInt(nuevoLimite, 10) || 20;
+            const urlParams = new URLSearchParams(window.location.search);
+            urlParams.set('limit', limiteNum);
+            urlParams.set('page', 1);
+
+            if (this.busqueda && this.busqueda.trim()) {
+                urlParams.set('busqueda', this.busqueda.trim());
+            } else {
+                urlParams.delete('busqueda');
+            }
+
+            if (this.filtroSeniority) {
+                urlParams.set('seniority', this.filtroSeniority);
+            } else {
+                urlParams.delete('seniority');
+            }
+
+            if (this.filtroUbicacion) {
+                urlParams.set('ubicacion', this.filtroUbicacion);
+            } else {
+                urlParams.delete('ubicacion');
+            }
+
+            this.aplicarFiltrosPerfil(urlParams);
+            urlParams.delete('ciudad');
+
+            if (this.filtroFuente) {
+                urlParams.set('fuente', this.filtroFuente);
+            } else {
+                urlParams.delete('fuente');
+            }
+
+            if (this.filtroEstado) {
+                urlParams.set('estado', this.filtroEstado);
+            } else {
+                urlParams.delete('estado');
+            }
+
+            window.location.search = urlParams.toString();
+        },
+
+        cambiarEstadoFiltro() {
+            // Si el estado seleccionado es 'Inactivo' o veníamos de 'Inactivo', recargar vía query param para consultar al backend
+            const urlParams = new URLSearchParams(window.location.search);
+            const estadoActualUrl = urlParams.get('estado') || '';
+            if (this.filtroEstado === 'Inactivo' || estadoActualUrl === 'Inactivo') {
+                if (this.filtroEstado) {
+                    urlParams.set('estado', this.filtroEstado);
+                } else {
+                    urlParams.delete('estado');
+                }
+                window.location.search = urlParams.toString();
+            }
+        },
+        limpiarFiltros() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const limit = urlParams.get('limit') || this.limite || 20;
+            window.location.href = `/recruiting/candidatos?page=1&limit=${limit}`;
+        },
+        normalizarTexto(txt) {
+            return (txt || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .trim();
+        },
+        estaVisible(codigo, nombre, email, ubicacion, seniority, fuente, estado, activo) {
+            const q = (this.busqueda || '').toLowerCase().trim();
+            const matchBusqueda = !q ||
+                (codigo && codigo.toLowerCase().includes(q)) ||
+                (nombre && nombre.toLowerCase().includes(q)) ||
+                (email && email.toLowerCase().includes(q)) ||
+                (ubicacion && ubicacion.toLowerCase().includes(q));
+
+            const sFiltro = (this.filtroSeniority || '').toLowerCase().trim();
+            const sVal = (seniority || '').toLowerCase().trim();
+            const matchSeniority = !sFiltro || sVal === sFiltro;
+
+            // Filtro por ubicación
+            let matchUbicacion = true;
+            if (this.filtroUbicacion) {
+                const uNorm = this.normalizarTexto(ubicacion);
+                if (this.filtroUbicacion === 'cordoba') {
+                    matchUbicacion = uNorm.includes('cordoba');
+                } else if (this.filtroUbicacion === 'buenos aires') {
+                    matchUbicacion = uNorm.includes('buenos aires') || uNorm.includes('caba');
+                } else if (this.filtroUbicacion === 'otros') {
+                    matchUbicacion = uNorm.length > 0 && !uNorm.includes('cordoba') && !uNorm.includes('buenos aires') && !uNorm.includes('caba');
+                }
+            }
+
+            const fFiltro = (this.filtroFuente || '').toLowerCase().trim();
+            const fVal = (fuente || '').toLowerCase().trim();
+            const matchFuente = !fFiltro || fVal === fFiltro;
+
+            // Filtro de Estado y Activo:
+            // - Si filtroEstado es "Inactivo", solo muestra los inactivos (activo === false)
+            // - Si filtroEstado está vacío ("Todos los estados"), solo muestra los activos (activo === true)
+            // - Si filtroEstado es otro ("Activo", "Rechazado", etc.), solo muestra activos que coincidan con dicho estado
+            let matchEstado = false;
+            const eFiltro = (this.filtroEstado || '').toLowerCase().trim();
+            const eVal = (estado || '').toLowerCase().trim();
+
+            if (eFiltro === 'inactivo' || eFiltro === 'dado de baja') {
+                matchEstado = (activo === false);
+            } else if (!eFiltro) {
+                matchEstado = (activo === true);
+            } else {
+                matchEstado = (activo === true) && (eVal === eFiltro);
+            }
+
+            return matchBusqueda && matchSeniority && matchUbicacion && matchFuente && matchEstado;
+        }
+    };
+}
+</script>
+{% endblock %}

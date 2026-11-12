@@ -4,8 +4,9 @@
 
 {#
   Dashboard de Recruiting (migrado del módulo original). Los datos salen de GET /api/v1/recruiting/dashboard.
-  Las tarjetas, las acciones rápidas y los avisos remitían a Candidatos, Búsquedas, Pipeline y Parámetros: hasta que
-  esas pantallas se migren no son enlaces, y las acciones quedan como "Próx." (igual que el menú).
+  Las tarjetas, las acciones rápidas y los avisos remitían a Candidatos, Búsquedas, Pipeline y Parámetros. Candidatos
+  ya está migrado y sus enlaces funcionan; el resto no son enlaces hasta que se migren esas pantallas, y las acciones
+  quedan como "Próx." (igual que el menú).
 #}
 
 {% block content %}
@@ -35,7 +36,11 @@
             ("habilidades_catalogo", "Habilidades en BD", "Catálogo", "award", "from-amber-500 to-orange-600", "bg-amber-50 text-amber-700 border-amber-100/60"),
         ] %}
         {% for clave, rotulo, etiqueta, icono, degrade, insignia in tarjetas %}
+        {% if clave == "total_candidatos" and tiene_candidatos %}
+        <a href="{{ url_for('recruiting.candidatos') }}" class="block bg-white rounded-2xl p-6 border border-dark-100 hover:border-primary-200 hover:shadow-soft transition-all" data-testid="kpi-{{ clave }}">
+        {% else %}
         <div class="bg-white rounded-2xl p-6 border border-dark-100" data-testid="kpi-{{ clave }}">
+        {% endif %}
             <div class="flex items-center justify-between mb-4">
                 <div class="w-12 h-12 bg-gradient-to-br {{ degrade }} rounded-xl flex items-center justify-center shadow-soft">
                     <i data-lucide="{{ icono }}" class="w-6 h-6 text-white"></i>
@@ -44,7 +49,7 @@
             </div>
             <p class="text-3xl font-bold text-dark-900 mb-1" data-testid="kpi-{{ clave }}-valor">{{ kpis[clave] }}</p>
             <p class="text-dark-500 text-sm">{{ rotulo }}</p>
-        </div>
+        {% if clave == "total_candidatos" and tiene_candidatos %}</a>{% else %}</div>{% endif %}
         {% endfor %}
     </div>
 
@@ -63,12 +68,21 @@
                     <span class="text-xs text-dark-400">Atajos frecuentes del reclutador</span>
                 </div>
                 <div class="p-6 grid grid-cols-4 gap-3" data-testid="acciones-rapidas">
-                    {% for titulo, detalle, icono in [
-                        ("Nueva Búsqueda", "Crear posición", "briefcase-business"),
-                        ("Carga CV Individual", "Parser inteligente", "file-up"),
-                        ("Base Candidatos", "Banco de talentos", "users"),
-                        ("Pipeline Búsquedas", "Embudo de selección", "columns-3"),
+                    {% for titulo, detalle, icono, destino in [
+                        ("Nueva Búsqueda", "Crear posición", "briefcase-business", None),
+                        ("Carga CV Individual", "Parser inteligente", "file-up", url_for('recruiting.candidatos', accion='cargar-cv') if tiene_candidatos else None),
+                        ("Base Candidatos", "Banco de talentos", "users", url_for('recruiting.candidatos') if tiene_candidatos else None),
+                        ("Pipeline Búsquedas", "Embudo de selección", "columns-3", None),
                     ] %}
+                    {% if destino %}
+                    <a href="{{ destino }}" class="flex flex-col items-center p-4 bg-dark-50 hover:bg-primary-50 rounded-xl text-center transition-colors" data-testid="accion-rapida">
+                        <div class="w-11 h-11 bg-white rounded-xl flex items-center justify-center mb-2.5 shadow-sm">
+                            <i data-lucide="{{ icono }}" class="w-5 h-5 text-primary-600"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-dark-700">{{ titulo }}</span>
+                        <span class="text-[10px] text-dark-500 mt-0.5">{{ detalle }}</span>
+                    </a>
+                    {% else %}
                     <div class="flex flex-col items-center p-4 bg-dark-50 rounded-xl text-center cursor-not-allowed opacity-70"
                          title="Disponible cuando se migre la pantalla correspondiente">
                         <div class="w-11 h-11 bg-white rounded-xl flex items-center justify-center mb-2.5 shadow-sm">
@@ -78,6 +92,7 @@
                         <span class="text-[10px] text-dark-400 mt-0.5">{{ detalle }}</span>
                         <span class="mt-2 text-[10px] bg-dark-100 text-dark-500 px-1.5 py-0.5 rounded">Próx.</span>
                     </div>
+                    {% endif %}
                     {% endfor %}
                 </div>
             </div>
@@ -129,7 +144,9 @@
                 <div class="space-y-3" data-testid="avisos-lista">
                     {% set colores = {"amber": "bg-amber-100 text-amber-700", "primary": "bg-primary-100 text-primary-700", "emerald": "bg-emerald-100 text-emerald-700"} %}
                     {% for aviso in avisos %}
-                    <div class="block p-3.5 rounded-xl border border-dark-100" data-testid="aviso" data-tipo="{{ aviso.tipo }}">
+                    {# Solo los avisos que remiten a la ficha de un candidato son enlaces: Búsquedas todavía no está migrado #}
+                    {% set enlace_aviso = aviso.enlace if (tiene_candidatos and aviso.enlace.startswith('/recruiting/candidatos/')) else None %}
+                    <{{ 'a' if enlace_aviso else 'div' }}{% if enlace_aviso %} href="{{ enlace_aviso }}"{% endif %} class="block p-3.5 rounded-xl border border-dark-100{% if enlace_aviso %} hover:border-primary-200 hover:bg-primary-50/30 transition-colors{% endif %}" data-testid="aviso" data-tipo="{{ aviso.tipo }}">
                         <div class="flex items-start gap-3">
                             <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 {{ colores.get(aviso.color, 'bg-dark-100 text-dark-700') }}">
                                 <i data-lucide="{{ 'alert-circle' if aviso.icono == 'alert-triangle' else aviso.icono }}" class="w-4 h-4"></i>
@@ -142,7 +159,7 @@
                                 <p class="text-[11px] text-dark-500 mt-0.5 line-clamp-2">{{ aviso.descripcion }}</p>
                             </div>
                         </div>
-                    </div>
+                    </{{ 'a' if enlace_aviso else 'div' }}>
                     {% endfor %}
                 </div>
                 {% else %}

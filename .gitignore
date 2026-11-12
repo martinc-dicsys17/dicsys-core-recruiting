@@ -221,6 +221,7 @@ data/nomina/fotos/thumbnails/*
 # Certificacion IA files
 data/certificacion_ia/
 data/llm/
+data/cv/
 
 # Banners og:image de certificados (generados/cacheados por el backend)
 data/innovacion/certificados/

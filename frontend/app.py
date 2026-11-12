@@ -253,6 +253,42 @@ def create_app(config=None, api_request_func=None):
         """Proxy para servir thumbnails de archivos (PDFs renderizados como PNG)."""
         return _proxy_with_cache(f"{app.config['API_URL']}/storage/thumbnail/{filepath}", timeout=30.0)
 
+    # Vista previa en PDF de un CV Word (Recruiting): la conversión se hace en el backend; sin caché para no mostrar un
+    # CV reemplazado
+    @app.route("/storage/preview-pdf/<path:filepath>")
+    def proxy_storage_preview_pdf(filepath):
+        """Proxy para la vista previa en PDF de un CV .doc/.docx."""
+        return _proxy_with_cache(f"{app.config['API_URL']}/storage/preview-pdf/{filepath}", timeout=90.0, max_age=0)
+
+    @app.route("/storage/preview-pdf", methods=["POST"])
+    def proxy_storage_preview_pdf_subido():
+        """Convierte a PDF un CV Word subido (todavía no guardado) para la vista previa del modal de comparación."""
+        if "token" not in session:
+            return Response("", status=401)
+        archivo = request.files.get("archivo")
+        if not archivo or not archivo.filename:
+            return Response("", status=400)
+        try:
+            with httpx.Client(timeout=90.0) as client:
+                resp = client.post(
+                    f"{app.config['API_URL']}/storage/preview-pdf",
+                    headers={"Authorization": f"Bearer {session.get('token')}"},
+                    files={
+                        "archivo": (
+                            archivo.filename,
+                            archivo.read(),
+                            archivo.content_type or "application/octet-stream",
+                        )
+                    },
+                )
+            if resp.status_code != 200:
+                return Response("", status=resp.status_code)
+            return Response(
+                resp.content, status=200, content_type="application/pdf", headers={"Cache-Control": "no-store"}
+            )
+        except Exception:
+            return Response("", status=502)
+
     # Proxy genérico para archivos en cloud storage del backend
     @app.route("/storage/<path:filepath>")
     def proxy_storage(filepath):

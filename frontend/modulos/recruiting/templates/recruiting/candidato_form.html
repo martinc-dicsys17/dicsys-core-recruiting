@@ -1,0 +1,792 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}
+    Nuevo candidato — Reclutamiento | {{ config.APP_NAME }}
+{% endblock %}
+
+{% block content %}
+<div class="p-2 lg:p-4 w-full animate-fade-in" x-data="candidatoFormComponent()">
+
+    {% set destino_volver = volver_a(url_for('recruiting.candidatos')) %}
+    <!-- Header simple con botón Volver a la derecha -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">Nuevo Candidato</h1>
+        </div>
+        <div>
+            <a href="{{ destino_volver }}"
+               class="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-soft transition-colors cursor-pointer text-sm"
+               title="Volver a Candidatos">
+                <i data-lucide="arrow-left" class="w-4 h-4 text-white"></i>
+                <span>Volver</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Banner de error si existiera -->
+    {% if error %}
+    <div class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-3">
+        <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 flex-shrink-0"></i>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <div x-show="errorMessage" x-cloak class="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex items-center gap-3">
+        <i data-lucide="alert-circle" class="w-5 h-5 text-red-600 flex-shrink-0"></i>
+        <span x-text="errorMessage"></span>
+    </div>
+
+    <!-- Formulario limpio estándar -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden">
+        <form @submit.prevent="guardarCandidato()" class="p-6 lg:p-8 space-y-6">
+
+            <!-- Sección 1: Datos Personales -->
+            <div>
+                <h2 class="text-base font-bold text-dark-900 pb-2 mb-4 border-b border-dark-100 flex items-center gap-2">
+                    <i data-lucide="user" class="w-4 h-4 text-primary-600"></i>
+                    <span>Datos Personales y Contacto</span>
+                </h2>
+                <div class="grid sm:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Nombres *</label>
+                        <input type="text" 
+                               name="nombre"
+                               x-model="form.nombre" 
+                               placeholder="Nombres" 
+                               required 
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Apellido *</label>
+                        <input type="text" 
+                               name="apellido"
+                               x-model="form.apellido" 
+                               placeholder="Apellido" 
+                               required 
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Email *</label>
+                        <input type="email" 
+                               name="email"
+                               x-model="form.email" 
+                               value="test@test.com"
+                               placeholder="ejemplo@correo.com" 
+                               required 
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Teléfono *</label>
+                        <input type="text" 
+                               name="telefono"
+                               x-model="form.telefono" 
+                               required
+                               placeholder="ej: +54 9 351 1234567"
+                               @input="$event.target.value = $event.target.value.replace(/[^0-9+]/g, ''); form.telefono = $event.target.value"
+                               class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Provincia</label>
+                        <select name="provincia_id"
+                                x-model="form.provincia_id"
+                                @change="cambiarProvincia()"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm bg-white">
+                            <option value="">Seleccionar provincia...</option>
+                            <template x-for="p in provinciasCatalogo" :key="p.provincia_id">
+                                <option :value="String(p.provincia_id)" x-text="p.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Ciudad</label>
+                        <select name="ciudad_id"
+                                x-model="form.ciudad_id"
+                                :disabled="!form.provincia_id"
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm bg-white disabled:opacity-50 disabled:cursor-not-allowed">
+                            <option value="">Seleccionar ciudad...</option>
+                            <template x-for="c in ciudadesDisponibles" :key="c.ciudad_id">
+                                <option :value="String(c.ciudad_id)" x-text="c.nombre"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Perfil de LinkedIn</label>
+                        <input type="text" 
+                                x-model="form.linkedin" 
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">DNI</label>
+                        <input type="text" 
+                                name="dni"
+                                x-model="form.dni" 
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Fecha de Nacimiento</label>
+                        <div>
+                            <input type="text" 
+                                   name="fecha_nacimiento"
+                                   x-ref="fechaNacimientoInput"
+                                   x-model="form.fecha_nacimiento" 
+                                   @input="onFechaNacimientoInput($event)"
+                                   @blur="validarFechaNacimientoBlur()"
+                                   maxlength="10"
+                                   placeholder="DD-MM-YYYY" 
+                                   :class="fechaError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/20 text-red-900 bg-red-50/20' : 'border-dark-200 focus:border-primary-500 focus:ring-primary-500/20 text-dark-900 bg-white'"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border focus:outline-none focus:ring-2 text-sm transition-colors">
+                            <p x-show="fechaError" x-cloak class="mt-1 text-xs text-red-600 font-medium" x-text="fechaError"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección 2: Perfil Profesional -->
+            <div class="pt-4">
+                <h2 class="text-base font-bold text-dark-900 pb-2 mb-4 border-b border-dark-100 flex items-center gap-2">
+                    <i data-lucide="briefcase" class="w-4 h-4 text-primary-600"></i>
+                    <span>Perfil Profesional</span>
+                </h2>
+                <div class="grid sm:grid-cols-2 gap-5">
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Puesto</label>
+                        <select name="puesto" 
+                                x-model="form.puesto" 
+                                class="w-full sm:max-w-md px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm bg-white cursor-pointer">
+                            <option value="">Seleccionar puesto...</option>
+                            {% for perfil in perfiles_puesto_catalogo %}
+                            <option value="{{ perfil }}">{{ perfil }}</option>
+                            {% endfor %}
+                        </select>
+                        {% if not perfiles_puesto_ok %}
+                        <p class="text-[11px] text-rose-600 mt-1" data-testid="perfiles-puesto-error">No se pudieron cargar los perfiles profesionales. Podés guardar el candidato sin puesto.</p>
+                        {% elif not perfiles_puesto_catalogo %}
+                        <p class="text-[11px] text-dark-400 mt-1" data-testid="perfiles-puesto-vacio">No hay perfiles profesionales activos. Se administran en Parámetros.</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Seniority</label>
+                        <select name="seniority"
+                                x-model="form.seniority" 
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm text-dark-700 cursor-pointer">
+                            {% for item in niveles_seniority_catalogo %}
+                            <option value="{{ item }}">{{ item }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Modalidad preferida</label>
+                        <select x-model="form.modalidad" 
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm text-dark-700 cursor-pointer">
+                            <option value="Remoto">Remoto</option>
+                            <option value="Híbrido">Híbrido</option>
+                            <option value="Presencial">Presencial</option>
+                        </select>
+                    </div>
+
+                    <!-- Selector Interactivo de Skills / Tecnologías -->
+                    <div class="sm:col-span-2 space-y-2">
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Skills / Tecnologías</label>
+                        
+                        <!-- Chips seleccionados -->
+                        <div class="flex flex-wrap gap-1.5 p-2 bg-dark-50 border border-dark-200 rounded-xl min-h-[44px] items-center">
+                            <template x-for="(skill, index) in form.skills" :key="skill">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 border border-primary-200/60">
+                                    <span x-text="skill"></span>
+                                    <button type="button" @click="quitarSkill(index)" class="hover:text-primary-900 focus:outline-none">
+                                        <i data-lucide="x" class="w-3 h-3"></i>
+                                    </button>
+                                </span>
+                            </template>
+                            <span x-show="form.skills.length === 0" class="text-xs text-dark-400 italic px-2">
+                                Ninguna tecnología seleccionada. Podés elegir del catálogo o agregar una nueva.
+                            </span>
+                        </div>
+
+                        <!-- Selector rápido alimentado por el catálogo de Recruiting Skills -->
+                        <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span class="text-xs font-medium text-dark-400 mr-1">Tecnologías disponibles:</span>
+                            <template x-for="opc in skillsPredefinidas" :key="opc">
+                                <button type="button" 
+                                        @click="toggleSkill(opc)"
+                                        :class="form.skills.includes(opc) ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-dark-700 hover:bg-dark-100 border-dark-200'"
+                                        class="px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer"
+                                        x-text="opc">
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Input para agregar skill custom -->
+                        <div class="flex items-center gap-2 pt-2">
+                            <input type="text" 
+                                   x-model="skillCustom" 
+                                   @keydown.enter.prevent="agregarSkillCustom()"
+                                   placeholder="Agregar otra tecnología (ej: Python, Docker, AWS)..." 
+                                   class="flex-1 px-3.5 py-2 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                            <button type="button" 
+                                    @click="agregarSkillCustom()"
+                                    class="px-4 py-2 bg-dark-100 hover:bg-dark-200 text-dark-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
+                                + Agregar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Selector Interactivo de Habilidades / Competencias -->
+                    <div class="sm:col-span-2 space-y-2">
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Habilidades / Competencias</label>
+                        
+                        <!-- Chips seleccionados -->
+                        <div class="flex flex-wrap gap-1.5 p-2 bg-dark-50 border border-dark-200 rounded-xl min-h-[44px] items-center">
+                            <template x-for="(hab, index) in form.habilidades" :key="hab">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                                    <span x-text="hab"></span>
+                                    <button type="button" @click="quitarHabilidad(index)" class="hover:text-emerald-900 focus:outline-none">
+                                        <i data-lucide="x" class="w-3 h-3"></i>
+                                    </button>
+                                </span>
+                            </template>
+                            <span x-show="form.habilidades.length === 0" class="text-xs text-dark-400 italic px-2">
+                                Ninguna habilidad o competencia seleccionada. Podés elegir del catálogo o agregar una nueva.
+                            </span>
+                        </div>
+
+                        <!-- Selector rápido alimentado por el catálogo de Recruiting Habilidades -->
+                        <div class="flex flex-wrap items-center gap-1.5 pt-1">
+                            <span class="text-xs font-medium text-dark-400 mr-1">Competencias disponibles:</span>
+                            <template x-for="opc in habilidadesPredefinidas" :key="opc">
+                                <button type="button" 
+                                        @click="toggleHabilidad(opc)"
+                                        :class="form.habilidades.includes(opc) ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-dark-700 hover:bg-dark-100 border-dark-200'"
+                                        class="px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer"
+                                        x-text="opc">
+                                </button>
+                            </template>
+                        </div>
+
+                        <!-- Input para agregar habilidad custom -->
+                        <div class="flex items-center gap-2 pt-2">
+                            <input type="text" 
+                                   x-model="habilidadCustom" 
+                                   @keydown.enter.prevent="agregarHabilidadCustom()"
+                                   placeholder="Agregar otra habilidad (ej: Liderazgo, Comunicación, Negociación)..." 
+                                   class="flex-1 px-3.5 py-2 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm">
+                            <button type="button" 
+                                    @click="agregarHabilidadCustom()"
+                                    class="px-4 py-2 bg-dark-100 hover:bg-dark-200 text-dark-800 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
+                                + Agregar
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Disponibilidad -->
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Disponibilidad</label>
+                        <select name="disponibilidad" 
+                                x-model="form.disponibilidad" 
+                                class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm bg-white cursor-pointer">
+                            <option value="Inmediata" selected>Inmediata</option>
+                            <option value="2 semanas">2 semanas (preaviso estándar)</option>
+                            <option value="1 mes">1 mes</option>
+                            <option value="A convenir">A convenir</option>
+                        </select>
+                    </div>
+
+                    <!-- Observaciones -->
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Observaciones</label>
+                        <textarea name="observaciones" 
+                                  rows="3" 
+                                  x-model="form.observaciones" 
+                                  placeholder="Notas internas, comentarios de contacto o feedback preliminar..." 
+                                  class="w-full px-3.5 py-2.5 rounded-xl border border-dark-200 focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 text-sm resize-none"></textarea>
+                    </div>
+
+                    <!-- Adjuntar CV (Funcional: PDF, DOC, DOCX, máx 2MB) -->
+                    <div class="sm:col-span-2">
+                        <label class="block text-xs font-semibold text-dark-600 mb-1">Curriculum Vitae (CV)</label>
+                        
+                        <!-- Input file invisible -->
+                        <input type="file" 
+                               x-ref="fileInput" 
+                               @change="seleccionarArchivo($event)" 
+                               accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+                               class="hidden">
+
+                        <!-- Dropzone / Card sin archivo seleccionado -->
+                        <div x-show="!archivoSeleccionado" 
+                             @click="$refs.fileInput.click()"
+                             @dragover.prevent="arrastrando = true"
+                             @dragleave.prevent="arrastrando = false"
+                             @drop.prevent="soltarArchivo($event)"
+                             :class="arrastrando ? 'border-primary-500 bg-primary-50/40 ring-2 ring-primary-500/20' : 'border-dark-200 hover:border-primary-400 bg-dark-50/50 hover:bg-white'"
+                             class="border-2 border-dashed rounded-2xl p-5 text-center transition-all cursor-pointer group">
+                            <div class="flex flex-col items-center justify-center gap-2">
+                                <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center group-hover:scale-105 transition-transform">
+                                    <i data-lucide="upload-cloud" class="w-5 h-5"></i>
+                                </div>
+                                <div class="text-xs text-dark-600">
+                                    <span class="font-semibold text-primary-600 hover:underline">Hacé click para adjuntar</span> o arrastrá el archivo acá
+                                </div>
+                                <p class="text-[11px] text-dark-400">Archivos permitidos: PDF, DOC o DOCX (Máx. 2MB)</p>
+                            </div>
+                        </div>
+
+                        <!-- Card de archivo seleccionado -->
+                        <div x-show="archivoSeleccionado" x-cloak class="p-3.5 rounded-2xl border border-primary-200 bg-primary-50/30 flex items-center justify-between transition-all">
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center flex-shrink-0">
+                                    <i data-lucide="file-text" class="w-5 h-5"></i>
+                                </div>
+                                <div class="truncate">
+                                    <p class="text-xs font-semibold text-dark-800 truncate" x-text="archivoNombre"></p>
+                                    <p class="text-[11px] text-dark-500" x-text="archivoTamano + ' • Listo para adjuntar'"></p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 flex-shrink-0 ml-3">
+                                <button type="button" 
+                                        @click="$refs.fileInput.click()" 
+                                        class="px-2.5 py-1 text-xs font-medium text-primary-700 hover:text-primary-900 bg-white border border-primary-200 rounded-lg hover:bg-primary-50 transition-colors">
+                                    Cambiar
+                                </button>
+                                <button type="button" 
+                                        @click="removerArchivo()" 
+                                        class="p-1.5 text-dark-400 hover:text-red-600 hover:bg-white rounded-lg transition-colors" 
+                                        title="Quitar archivo">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Error específico de archivo -->
+                        <div x-show="archivoError" x-cloak class="mt-2 text-xs text-red-600 flex items-center gap-1.5">
+                            <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                            <span x-text="archivoError"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de acción -->
+            <div class="pt-4 border-t border-dark-100 flex items-center justify-end gap-3">
+                <a href="{{ destino_volver }}"
+                   class="px-4 py-2.5 text-sm font-medium text-dark-600 hover:bg-dark-50 rounded-xl transition-colors">
+                    Cancelar
+                </a>
+                <button type="submit" 
+                        :disabled="guardando"
+                        class="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-soft transition-colors cursor-pointer">
+                    <span x-show="!guardando">Guardar Candidato</span>
+                    <span x-show="guardando" class="inline-flex items-center gap-2">
+                        <i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                        <span>Guardando...</span>
+                    </span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function candidatoFormComponent() {
+    return {
+        skillsPredefinidas: {{ skills_catalogo | default([]) | tojson }},
+        habilidadesPredefinidas: {{ habilidades_catalogo | default([]) | tojson }},
+        nivelesSeniorityCatalogo: {{ niveles_seniority_catalogo | default([]) | tojson }},
+        provinciasCatalogo: {{ provincias_catalogo | default([]) | tojson }},
+        ciudadesCatalogo: {{ ciudades_catalogo | default([]) | tojson }},
+        get ciudadesDisponibles() {
+            const provinciaId = Number(this.form.provincia_id);
+            return provinciaId ? this.ciudadesCatalogo.filter(c => c.provincia_id === provinciaId) : [];
+        },
+        cambiarProvincia() {
+            // La ciudad depende de la provincia: al cambiarla se limpia la ciudad seleccionada
+            this.form.ciudad_id = '';
+        },
+        skillCustom: '',
+        habilidadCustom: '',
+        guardando: false,
+        errorMessage: '',
+        // Estado para archivo de CV
+        archivoSeleccionado: null,
+        archivoNombre: '',
+        archivoTamano: '',
+        archivoError: '',
+        fechaError: '',
+        arrastrando: false,
+
+        validarFechaNacimiento(fechaStr) {
+            if (!fechaStr) {
+                this.fechaError = '';
+                return true;
+            }
+            const val = fechaStr.trim();
+            if (!val) {
+                this.fechaError = '';
+                return true;
+            }
+
+            let dia, mes, anio;
+
+            // Verificar formato DD-MM-YYYY o DD/MM/YYYY
+            const matchDMY = val.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+            if (matchDMY) {
+                dia = parseInt(matchDMY[1], 10);
+                mes = parseInt(matchDMY[2], 10);
+                anio = parseInt(matchDMY[3], 10);
+            } else {
+                // Verificar formato YYYY-MM-DD
+                const matchYMD = val.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+                if (matchYMD) {
+                    anio = parseInt(matchYMD[1], 10);
+                    mes = parseInt(matchYMD[2], 10);
+                    dia = parseInt(matchYMD[3], 10);
+                } else {
+                    this.fechaError = 'Fecha inválida';
+                    return false;
+                }
+            }
+
+            // Validar que el mes esté estrictamente entre 1 y 12
+            if (isNaN(mes) || mes < 1 || mes > 12) {
+                this.fechaError = 'Fecha inválida';
+                return false;
+            }
+
+            // Validar que el año esté entre 1900 y 2010
+            if (isNaN(anio) || anio < 1900 || anio > 2010) {
+                this.fechaError = 'El año de nacimiento debe estar entre 1900 y 2010';
+                return false;
+            }
+
+            // Validar que el día sea válido según el mes y año (bisiestos, días máximos de mes)
+            const d = new Date(anio, mes - 1, dia);
+            if (isNaN(d.getTime()) || d.getFullYear() !== anio || d.getMonth() !== (mes - 1) || d.getDate() !== dia) {
+                this.fechaError = 'Fecha inválida';
+                return false;
+            }
+
+            this.fechaError = '';
+            return true;
+        },
+
+        init() {
+            if (!this.form.seniority && this.nivelesSeniorityCatalogo && this.nivelesSeniorityCatalogo.length > 0) {
+                this.form.seniority = this.nivelesSeniorityCatalogo[0];
+            }
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+
+        onFechaNacimientoInput(e) {
+            let val = e.target.value || '';
+            // Permitir solo dígitos y guiones, extraer solo dígitos
+            let digits = val.replace(/\D/g, '').slice(0, 8);
+            let formatted = '';
+
+            if (digits.length > 0) {
+                formatted = digits.slice(0, 2);
+                if (digits.length > 2) {
+                    formatted += '-' + digits.slice(2, 4);
+                }
+                if (digits.length > 4) {
+                    formatted += '-' + digits.slice(4, 8);
+                }
+            }
+
+            this.form.fecha_nacimiento = formatted;
+            if (this.$refs.fechaNacimientoInput) {
+                this.$refs.fechaNacimientoInput.value = formatted;
+            }
+
+            // Si se completaron los 8 dígitos (DD-MM-YYYY)
+            if (digits.length === 8) {
+                this.validarFechaNacimiento(formatted);
+            } else {
+                // Al seguir escribiendo, limpiar error preliminar hasta completar
+                this.fechaError = '';
+            }
+        },
+
+        validarFechaNacimientoBlur() {
+            const val = (this.form.fecha_nacimiento || '').trim();
+            if (!val) {
+                this.fechaError = '';
+                return;
+            }
+
+            // Si viene separado con / normalizar
+            const matchSlash = val.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+            if (matchSlash) {
+                const d = matchSlash[1].padStart(2, '0');
+                const m = matchSlash[2].padStart(2, '0');
+                const y = matchSlash[3];
+                this.form.fecha_nacimiento = `${d}-${m}-${y}`;
+            }
+
+            this.validarFechaNacimiento(this.form.fecha_nacimiento);
+        },
+
+        parsearFechaBackend(fechaStr) {
+            if (!fechaStr) return null;
+            const str = fechaStr.trim();
+            if (!str) return null;
+            // Match DD-MM-YYYY o DD/MM/YYYY
+            const matchDMY = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+            if (matchDMY) {
+                const dia = matchDMY[1].padStart(2, '0');
+                const mes = matchDMY[2].padStart(2, '0');
+                const anio = matchDMY[3];
+                return `${anio}-${mes}-${dia}`;
+            }
+            // Match YYYY-MM-DD
+            const matchYMD = str.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+            if (matchYMD) {
+                const anio = matchYMD[1];
+                const mes = matchYMD[2].padStart(2, '0');
+                const dia = matchYMD[3].padStart(2, '0');
+                return `${anio}-${mes}-${dia}`;
+            }
+            return str;
+        },
+
+        form: {
+            nombre: '',
+            apellido: '',
+            email: 'test@test.com',
+            telefono: '',
+            provincia_id: '',
+            ciudad_id: '',
+            dni: '',
+            fecha_nacimiento: '',
+            linkedin: '',
+            puesto: '',
+            headline: '',
+            seniority: 'Semi Senior',
+            estado: 'Activo',
+            pretension_salarial: '',
+            salario: '',
+            modalidad: 'Remoto',
+            disponibilidad: 'Inmediata',
+            observaciones: '',
+            skills: [],
+            habilidades: []
+        },
+
+        validarYSetearArchivo(file) {
+            this.archivoError = '';
+            if (!file) return;
+
+            const nombre = file.name || '';
+            const ext = nombre.slice((nombre.lastIndexOf(".") - 1 >>> 0) + 2).toLowerCase();
+            const validas = ['pdf', 'doc', 'docx'];
+
+            if (!validas.includes(ext)) {
+                this.archivoError = 'Formato inválido. Solo se admiten archivos PDF, DOC o DOCX.';
+                this.removerArchivo();
+                return;
+            }
+
+            const maxBytes = 2 * 1024 * 1024; // 2 MB
+            if (file.size > maxBytes) {
+                this.archivoError = 'El archivo supera el tamaño máximo permitido de 2 MB.';
+                this.removerArchivo();
+                return;
+            }
+
+            this.archivoSeleccionado = file;
+            this.archivoNombre = file.name;
+            
+            // Formatear tamaño legible (ej: 420 KB o 1.2 MB)
+            if (file.size < 1024 * 1024) {
+                this.archivoTamano = (file.size / 1024).toFixed(0) + ' KB';
+            } else {
+                this.archivoTamano = (file.size / (1024 * 1024)).toFixed(1) + ' MB';
+            }
+
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+
+        seleccionarArchivo(e) {
+            const files = e.target.files;
+            if (files && files.length > 0) {
+                this.validarYSetearArchivo(files[0]);
+            }
+        },
+
+        soltarArchivo(e) {
+            this.arrastrando = false;
+            const files = e.dataTransfer.files;
+            if (files && files.length > 0) {
+                this.validarYSetearArchivo(files[0]);
+            }
+        },
+
+        removerArchivo() {
+            this.archivoSeleccionado = null;
+            this.archivoNombre = '';
+            this.archivoTamano = '';
+            if (this.$refs.fileInput) {
+                this.$refs.fileInput.value = '';
+            }
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+
+        toggleSkill(skill) {
+            if (this.form.skills.includes(skill)) {
+                this.form.skills = this.form.skills.filter(s => s !== skill);
+            } else {
+                this.form.skills.push(skill);
+            }
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        agregarSkillCustom() {
+            const val = (this.skillCustom || '').trim();
+            if (val && !this.form.skills.includes(val)) {
+                this.form.skills.push(val);
+                this.skillCustom = '';
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
+            }
+        },
+        quitarSkill(index) {
+            this.form.skills.splice(index, 1);
+        },
+        toggleHabilidad(hab) {
+            if (this.form.habilidades.includes(hab)) {
+                this.form.habilidades = this.form.habilidades.filter(h => h !== hab);
+            } else {
+                this.form.habilidades.push(hab);
+            }
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+        },
+        agregarHabilidadCustom() {
+            const val = (this.habilidadCustom || '').trim();
+            if (val && !this.form.habilidades.includes(val)) {
+                this.form.habilidades.push(val);
+                this.habilidadCustom = '';
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
+            }
+        },
+        quitarHabilidad(index) {
+            this.form.habilidades.splice(index, 1);
+        },
+        formatearSalario(e) {
+            let valor = (e.target.value || '').toString();
+            // Filtrar solo dígitos
+            let digitos = valor.replace(/\D/g, '');
+            if (!digitos) {
+                this.form.pretension_salarial = '';
+                this.form.salario = '';
+                return;
+            }
+            // Formatear con separador de miles '.'
+            let formateado = digitos.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            this.form.pretension_salarial = '$ ' + formateado;
+            this.form.salario = '$ ' + formateado;
+        },
+        async guardarCandidato() {
+            this.errorMessage = '';
+            this.archivoError = '';
+
+            if (this.form.fecha_nacimiento && !this.validarFechaNacimiento(this.form.fecha_nacimiento)) {
+                if (this.$refs.fechaNacimientoInput) {
+                    this.$refs.fechaNacimientoInput.focus();
+                }
+                this.errorMessage = 'Por favor verificá los errores en el formulario: ' + this.fechaError;
+                return;
+            }
+
+            if (!this.form.nombre || !this.form.apellido || !this.form.email || !this.form.telefono) {
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                this.errorMessage = 'Por favor completá los campos obligatorios (*): Nombre, Apellido, Email y Teléfono.';
+                return;
+            }
+
+            this.guardando = true;
+
+            const payload = {
+                ...this.form,
+                fecha_nacimiento: this.parsearFechaBackend(this.form.fecha_nacimiento),
+                // La pretensión salarial no se carga desde este formulario
+                pretension_salarial: null,
+                salario: null,
+                volver: {{ volver_a('') | tojson }}
+            };
+
+            try {
+                // 1. Crear el candidato
+                const res = await fetch("{{ url_for('recruiting.crear_candidato') }}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.success) {
+                    const nuevoId = data.candidato?.id;
+
+                    // 2. Si seleccionó archivo de CV, subirlo asociado al ID generado
+                    if (this.archivoSeleccionado && nuevoId) {
+                        try {
+                            const formDataCV = new FormData();
+                            formDataCV.append('archivo', this.archivoSeleccionado);
+
+                            const resCV = await fetch(`/recruiting/candidatos/${nuevoId}/cv`, {
+                                method: 'POST',
+                                body: formDataCV
+                            });
+                            
+                            if (!resCV.ok) {
+                                console.warn('Candidato creado, pero falló la subida de CV');
+                            }
+                        } catch (cvErr) {
+                            console.error('Error al subir el CV adjunto:', cvErr);
+                        }
+                    }
+
+                    if (window.$store && window.$store.toasts) {
+                        window.$store.toasts.success('Candidato guardado exitosamente.');
+                    }
+                    window.location.href = data.redirect || {{ destino_volver | tojson }};
+                } else {
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    this.errorMessage = data.error || 'Ocurrió un error al guardar el candidato.';
+                }
+            } catch (err) {
+                console.error(err);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                this.errorMessage = 'Error de conexión con el servidor. Reintentá en unos momentos.';
+            } finally {
+                this.guardando = false;
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

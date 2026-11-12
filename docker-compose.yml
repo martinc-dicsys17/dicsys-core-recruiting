@@ -76,6 +76,8 @@ services:
       - ./data/nomina/fotos:/data/nomina/fotos
       # Volumen para logs raw de LLM (requests/responses)
       - ./data/llm:/data/llm
+      # CV archivados de Recruiting (cv_procesados_ok, cv_duplicados y cv_errores; CV_STORAGE_DIR, por defecto /data/cv)
+      - ./data/cv:/data/cv
       # Volumen para banners og:image de certificados (generados por el backend)
       - ./data/innovacion/certificados:/data/innovacion/certificados
       # Google Cloud Storage va con la identidad de la VM (ADC, F06-P04): sin la clave JSON montada

@@ -102,6 +102,7 @@ de `.env.template`.
 | ./data/files | bind | /data/files | Archivos subidos |
 | ./data/nomina/fotos | bind | /data/nomina/fotos | Fotos de empleados |
 | ./data/llm | bind | /data/llm | Logs raw de LLM |
+| ./data/cv | bind | /data/cv | CV archivados de Recruiting (carga masiva e individual) |
 | ./data/innovacion/certificados | bind | /data/innovacion/certificados | Banners og:image de certificados |
 | ./secrets/sheets-lectura.json | bind (ro) | /app/secrets/sheets-service-account.json | Service account de solo lectura de Sheets. GCS no lleva JSON: usa la identidad de la VM (F06-P04) |
 | ./secrets/oidc | bind (ro) | /app/secrets/oidc | Claves de firma del proveedor OpenID Connect; dueño uid 1000 ([OIDC.md](OIDC.md)) |

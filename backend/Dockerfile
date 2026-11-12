@@ -17,6 +17,18 @@ WORKDIR /build
 COPY backend/pyproject.toml backend/uv.lock ./
 RUN uv sync --frozen --no-dev
 
+# OCR de CV escaneados (Recruiting): modelo oficial de reconocimiento PP-OCRv6_rec_medium (multilingüe, incluye español)
+# de RapidOCR 3.10.0. Se descarga y se verifica por SHA256 al construir la imagen, en la carpeta de modelos del paquete
+# (donde ya viene la detección PP-OCRv6_det_small). En ejecución nunca se descarga nada (backend/core/cv_ocr.py).
+ARG OCR_REC_URL=https://www.modelscope.cn/models/RapidAI/RapidOCR/resolve/v3.10.0/onnx/PP-OCRv6/rec/PP-OCRv6_rec_medium.onnx
+ARG OCR_REC_SHA256=eef444829dbbe18d7fea59a3f6eb75647518d2b3a9568d27c92e42940204894b
+RUN /opt/venv/bin/python -c "import hashlib, pathlib, sys, urllib.request, rapidocr; \
+destino = pathlib.Path(rapidocr.__file__).parent / 'models' / 'PP-OCRv6_rec_medium.onnx'; \
+urllib.request.urlretrieve('${OCR_REC_URL}', destino); \
+sha = hashlib.sha256(destino.read_bytes()).hexdigest(); \
+print(destino, destino.stat().st_size, sha); \
+sys.exit(0 if sha == '${OCR_REC_SHA256}' else 'SHA256 invalido del modelo OCR: ' + sha)"
+
 
 # Etapa 1b: lo mismo más el grupo test (solo para la imagen de test)
 FROM builder AS builder-test
@@ -37,9 +49,13 @@ RUN groupadd --gid 1000 appgroup && \
 RUN mkdir -p /data/files/profile && chown -R appuser:appgroup /data
 
 # Instalar solo dependencias de runtime
+# unrar-free: carga masiva de CV en .rar; libreoffice-writer: vista previa de un CV Word en el modal de comparación
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     curl \
+    unrar-free \
+    libreoffice-writer \
+    fonts-liberation \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

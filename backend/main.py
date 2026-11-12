@@ -6,7 +6,7 @@ import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
+from fastapi import APIRouter, Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response as FastResponse
@@ -464,6 +464,48 @@ async def serve_storage_thumbnail(path: str):
             return FastResponse(content=content, media_type=content_type)
     else:
         return FastResponse(content=content, media_type=content_type)
+
+
+@application_router.get("/storage/preview-pdf/{path:path}", tags=["Storage"])
+async def serve_storage_preview_pdf(path: str):
+    """Sirve un CV Word (.doc/.docx) convertido a PDF para la vista previa del modal de comparación (Recruiting)."""
+    import asyncio
+    import os
+
+    from backend.core.cv_preview import ConversionNoDisponibleError, convertir_word_a_pdf, ruta_cv_convertible
+
+    if not ruta_cv_convertible(path):
+        raise HTTPException(status_code=400, detail="Archivo no admitido para vista previa")
+    try:
+        content = cloud_storage.download(path)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    try:
+        pdf = await asyncio.to_thread(convertir_word_a_pdf, content, os.path.splitext(path)[1].lower())
+    except ConversionNoDisponibleError:
+        raise HTTPException(status_code=503, detail="Vista previa no disponible")
+    return FastResponse(content=pdf, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
+@application_router.post("/storage/preview-pdf", tags=["Storage"], dependencies=[Depends(get_current_user)])
+async def convertir_cv_word_a_pdf_subido(archivo: UploadFile = File(...)):
+    """Convierte a PDF un CV Word subido (todavía no guardado) para la vista previa del modal de comparación."""
+    import asyncio
+    import os
+
+    from backend.core.cv_preview import EXTENSIONES_WORD, ConversionNoDisponibleError, convertir_word_a_pdf
+
+    extension = os.path.splitext((archivo.filename or "").lower())[1]
+    if extension not in EXTENSIONES_WORD:
+        raise HTTPException(status_code=400, detail="Solo se admiten archivos .doc y .docx")
+    content = await archivo.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="El archivo excede el tamaño máximo permitido de 5 MB.")
+    try:
+        pdf = await asyncio.to_thread(convertir_word_a_pdf, content, extension)
+    except ConversionNoDisponibleError:
+        raise HTTPException(status_code=503, detail="Vista previa no disponible")
+    return FastResponse(content=pdf, media_type="application/pdf", headers={"Cache-Control": "no-store"})
 
 
 @application_router.get("/storage/{path:path}", tags=["Storage"])
