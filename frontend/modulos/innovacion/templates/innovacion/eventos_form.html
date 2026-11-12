@@ -1,0 +1,115 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if item else 'Nuevo' }} Evento - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto animate-fade-in" x-data="eventoFormData()">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('innovacion.eventos_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar' if item else 'Nuevo' }} Evento</h1>
+            <p class="text-dark-500 text-sm">{{ 'Modifica la información del evento' if item else 'Completa los datos del evento' }}</p>
+        </div>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="form-error"></div>
+
+        <form hx-post="{{ url_for('innovacion.eventos_edit', id=item.id) if item else url_for('innovacion.eventos_create') }}"
+              hx-target="#form-error" hx-indicator="#submit-spinner" method="POST">
+            <input type="hidden" name="tags" :value="tags.join(',')">
+
+            <div class="p-8 space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre del Evento *</label>
+                    <input type="text" name="nombre" value="{{ (item.nombre or '') if item else '' }}" required
+                           minlength="2" maxlength="200"
+                           placeholder="Ej: Tech Talk - IA Generativa"
+                           class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha *</label>
+                        <input type="date" name="fecha" value="{{ (item.fecha or '') if item else '' }}" required
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Dueño</label>
+                        <input type="text" name="duenio" value="{{ (item.duenio or '') if item else '' }}"
+                               maxlength="100"
+                               placeholder="Ej: Innovacion, Formacion, Produccion"
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+
+                <!-- Tags -->
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Temas / Tags</label>
+                    <p class="text-dark-400 text-xs mb-2">Agregá los temas del evento</p>
+                    <div class="flex flex-wrap gap-2 mb-2 min-h-[36px] p-2 bg-dark-50 border border-dark-200 rounded-xl"
+                         :class="tags.length > 0 ? '' : 'items-center'">
+                        <template x-for="(tag, index) in tags" :key="index">
+                            <span class="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-700 rounded-lg text-sm font-medium">
+                                <span x-text="tag"></span>
+                                <button type="button" @click="removeTag(index)" class="ml-1.5 text-primary-500 hover:text-red-500 transition-colors" aria-label="Eliminar tag">
+                                    <i data-lucide="x" class="w-3 h-3"></i>
+                                </button>
+                            </span>
+                        </template>
+                        <span x-show="tags.length === 0" class="text-dark-400 text-sm" x-cloak>Sin tags agregados</span>
+                    </div>
+                    <div class="flex gap-2">
+                        <input type="text" x-model="nuevoTag" @keydown.enter.prevent="addTag()" @keydown.comma.prevent="addTag()"
+                               placeholder="Escribí y presioná Enter..."
+                               class="flex-1 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm">
+                        <button type="button" @click="addTag()"
+                                :disabled="!nuevoTag.trim()"
+                                :class="nuevoTag.trim() ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-dark-200 text-dark-400 cursor-not-allowed'"
+                                class="px-4 py-2.5 rounded-xl font-medium text-sm transition-all">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-8 py-5 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('innovacion.eventos_list') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+                <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                    <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                    {{ 'Guardar' if item else 'Crear Evento' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function eventoFormData() {
+    return {
+        tags: {{ item.tags | tojson if item and item.tags else '[]' }},
+        nuevoTag: '',
+        addTag() {
+            const t = this.nuevoTag.trim();
+            if (t && !this.tags.includes(t)) { this.tags.push(t); }
+            this.nuevoTag = '';
+            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        },
+        removeTag(i) {
+            this.tags.splice(i, 1);
+            this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends "core/base.html" %}
+
+{% block title %}Dashboard - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Dashboard</h1>
+            <p class="text-dark-500">Bienvenido de nuevo, {{ user.nombre if user.nombre else 'Usuario' }} 👋</p>
+        </div>
+    </div>
+
+    {% if user and user.rol == 'admin' %}
+    <!-- ==================== DASHBOARD ADMIN ==================== -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+        <div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+                    <i data-lucide="users" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.usuarios }}</p>
+            <p class="text-dark-500 text-sm">Total Usuarios</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-gradient-to-br from-accent-green to-green-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+                    <i data-lucide="user-check" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.activos }}</p>
+            <p class="text-dark-500 text-sm">Usuarios Activos</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-gradient-to-br from-accent-purple to-purple-700 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+                    <i data-lucide="shield" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.grupos }}</p>
+            <p class="text-dark-500 text-sm">Grupos de Permisos</p>
+        </div>
+        <div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-gradient-to-br from-accent-orange to-orange-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+                    <i data-lucide="building-2" class="w-6 h-6 text-white"></i>
+                </div>
+            </div>
+            <p class="text-3xl font-bold text-dark-900 mb-1">{{ empresa_nombre or '-' }}</p>
+            <p class="text-dark-500 text-sm">Empresa Activa</p>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100">
+                <h2 class="text-lg font-semibold text-dark-900">Acciones Rápidas</h2>
+            </div>
+            <div class="p-6 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <a href="{{ url_for('usuarios.create') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-primary-50 transition-colors group">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                        <i data-lucide="user-plus" class="w-5 h-5 text-dark-500 group-hover:text-primary-600"></i>
+                    </div>
+                    <span class="text-xs font-medium text-dark-600 group-hover:text-primary-600 text-center">Nuevo Usuario</span>
+                </a>
+                <a href="{{ url_for('permisos.grupos_list') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-primary-50 transition-colors group">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                        <i data-lucide="shield-plus" class="w-5 h-5 text-dark-500 group-hover:text-primary-600"></i>
+                    </div>
+                    <span class="text-xs font-medium text-dark-600 group-hover:text-primary-600 text-center">Permisos</span>
+                </a>
+                <a href="{{ url_for('nomina.empleados_list') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-primary-50 transition-colors group">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                        <i data-lucide="users" class="w-5 h-5 text-dark-500 group-hover:text-primary-600"></i>
+                    </div>
+                    <span class="text-xs font-medium text-dark-600 group-hover:text-primary-600 text-center">Empleados</span>
+                </a>
+                <a href="{{ url_for('administracion_recibos.recibos_list') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-primary-50 transition-colors group">
+                    <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                        <i data-lucide="file-text" class="w-5 h-5 text-dark-500 group-hover:text-primary-600"></i>
+                    </div>
+                    <span class="text-xs font-medium text-dark-600 group-hover:text-primary-600 text-center">Recibos</span>
+                </a>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-6">
+            <h2 class="text-lg font-semibold text-dark-900 mb-4">Sistema</h2>
+            <div class="space-y-3 text-sm">
+                <div class="flex justify-between">
+                    <span class="text-dark-500">Versión</span>
+                    <span class="text-dark-900 font-medium">{{ config.APP_NAME }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-dark-500">Empresa</span>
+                    <span class="text-dark-900 font-medium">{{ empresa_nombre or '-' }}</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-dark-500">Usuario</span>
+                    <span class="text-dark-900 font-medium">{{ user.email }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ==================== DASHBOARD EMPLEADO ==================== -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Mis Recibos de Sueldo -->
+        <div class="lg:col-span-2 bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="file-text" class="w-5 h-5 mr-2 text-cyan-500"></i>
+                    Mis Recibos de Sueldo
+                </h2>
+                <a href="{{ url_for('recibos_portal.mis_recibos') }}" class="text-primary-600 text-sm font-medium hover:text-primary-700">
+                    Ver todos →
+                </a>
+            </div>
+            <div id="dashboard-recibos"
+                 hx-get="{{ url_for('recibos_portal.mis_recibos_dashboard_partial') }}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="p-8 text-center">
+                    <svg class="animate-spin h-6 w-6 text-primary-500 mx-auto" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Accesos Rápidos + Info -->
+        <div class="space-y-6">
+            <!-- Accesos Rápidos -->
+            <div class="bg-white rounded-2xl border border-dark-100 p-6">
+                <h2 class="text-lg font-semibold text-dark-900 mb-4">Accesos Rápidos</h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <a href="{{ url_for('recibos_portal.mis_recibos') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-cyan-50 transition-colors group">
+                        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                            <i data-lucide="file-text" class="w-5 h-5 text-dark-500 group-hover:text-cyan-600"></i>
+                        </div>
+                        <span class="text-xs font-medium text-dark-600 group-hover:text-cyan-600 text-center">Mis Recibos</span>
+                    </a>
+                    <a href="{{ url_for('starmiles.home') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-amber-50 transition-colors group">
+                        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                            <i data-lucide="star" class="w-5 h-5 text-dark-500 group-hover:text-amber-600"></i>
+                        </div>
+                        <span class="text-xs font-medium text-dark-600 group-hover:text-amber-600 text-center">Star Miles</span>
+                    </a>
+                    <a href="{{ url_for('core.profile') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-primary-50 transition-colors group">
+                        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                            <i data-lucide="user" class="w-5 h-5 text-dark-500 group-hover:text-primary-600"></i>
+                        </div>
+                        <span class="text-xs font-medium text-dark-600 group-hover:text-primary-600 text-center">Mi Perfil</span>
+                    </a>
+                    <a href="{{ url_for('starmiles.desafios_list') }}" class="flex flex-col items-center p-4 bg-dark-50 rounded-xl hover:bg-purple-50 transition-colors group">
+                        <div class="w-10 h-10 bg-white rounded-lg flex items-center justify-center mb-2 shadow-sm">
+                            <i data-lucide="target" class="w-5 h-5 text-dark-500 group-hover:text-purple-600"></i>
+                        </div>
+                        <span class="text-xs font-medium text-dark-600 group-hover:text-purple-600 text-center">Desafíos</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Resumen Star Miles -->
+            <div class="bg-gradient-to-br from-primary-500 to-accent-purple rounded-2xl p-6 text-white">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="star" class="w-5 h-5 text-white"></i>
+                    </div>
+                    <h2 class="text-lg font-semibold">Star Miles</h2>
+                </div>
+                <a href="{{ url_for('starmiles.home') }}" class="text-sm text-white/80 hover:text-white transition-colors">
+                    Ir al portal Star Miles →
+                </a>
+            </div>
+        </div>
+
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

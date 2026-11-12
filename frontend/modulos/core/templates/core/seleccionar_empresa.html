@@ -1,0 +1,92 @@
+{% extends "core/base.html" %}
+
+{% block title %}Seleccionar Empresa - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <img src="{{ url_for('static', filename='logo-dicsys-ai-azul.svg') }}" alt="{{ config.APP_NAME }}" class="h-12 mx-auto mb-4">
+        <h1 class="text-2xl font-bold text-dark-900 mb-2">Seleccioná tu empresa</h1>
+        <p class="text-dark-500">Elegí la empresa con la que querés trabajar</p>
+    </div>
+
+        <!-- Error container -->
+        <div id="empresa-error" class="mb-4"></div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                <div class="mb-4 p-4 rounded-xl flex items-center {{ 'bg-red-50 text-red-800 border border-red-200' if category == 'error' else 'bg-emerald-50 text-emerald-800 border border-emerald-200' }}">
+                    <i data-lucide="{{ 'alert-circle' if category == 'error' else 'check-circle' }}" class="w-5 h-5 mr-3"></i>
+                    <span>{{ message }}</span>
+                </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <!-- Cards de empresas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for empresa in empresas %}
+            <form hx-post="{{ url_for('core.seleccionar_empresa') }}"
+                  hx-target="#empresa-error"
+                  hx-indicator="#spinner-{{ loop.index }}"
+                  class="group">
+                <input type="hidden" name="empresa_id" value="{{ empresa.id }}">
+                <button type="submit" class="w-full text-left bg-white rounded-2xl border border-dark-200 p-6 hover:border-primary-400 hover:shadow-soft transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
+                    <div class="flex items-start gap-4">
+                        <!-- Logo o iniciales -->
+                        {% if empresa.logo %}
+                        <img src="{{ empresa.logo }}" alt="Logo de {{ empresa.razon_social }}" class="w-14 h-14 rounded-xl object-cover border border-dark-100 flex-shrink-0">
+                        {% else %}
+                        <div class="w-14 h-14 bg-gradient-to-br from-primary-400 to-accent-purple rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-soft">
+                            {{ empresa.razon_social[0]|upper if empresa.razon_social else 'E' }}
+                        </div>
+                        {% endif %}
+
+                        <div class="flex-1 min-w-0">
+                            <h3 class="font-bold text-dark-900 group-hover:text-primary-700 transition-colors truncate">
+                                {{ empresa.razon_social }}
+                            </h3>
+                            {% if empresa.nombre_fantasia %}
+                            <p class="text-sm text-dark-500 truncate">{{ empresa.nombre_fantasia }}</p>
+                            {% endif %}
+                            <p class="text-xs text-dark-400 mt-1 font-mono">CUIT: {{ empresa.cuit }}</p>
+                        </div>
+
+                        <!-- Spinner + Arrow -->
+                        <div class="flex-shrink-0 mt-1">
+                            <svg id="spinner-{{ loop.index }}" class="htmx-indicator animate-spin h-5 w-5 text-primary-500" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                            </svg>
+                            <i data-lucide="arrow-right" class="w-5 h-5 text-dark-300 group-hover:text-primary-500 transition-colors"></i>
+                        </div>
+                    </div>
+                </button>
+            </form>
+            {% else %}
+            <div class="col-span-full text-center py-12">
+                <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="building-2" class="w-10 h-10 text-dark-300"></i>
+                </div>
+                <p class="text-dark-900 font-semibold mb-1">No hay empresas disponibles</p>
+                <p class="text-dark-500 text-sm">Contactá al administrador para que te asigne una empresa</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 text-center">
+            <a href="{{ url_for('core.logout') }}" class="text-sm text-dark-400 hover:text-dark-600 transition-colors">
+                <i data-lucide="log-out" class="w-4 h-4 inline mr-1"></i>Cerrar sesión
+            </a>
+        </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+</script>
+{% endblock %}

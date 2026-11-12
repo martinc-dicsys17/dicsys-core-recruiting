@@ -1,0 +1,220 @@
+{% extends "core/base.html" %}
+
+{% block title %}Importar Sheet - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+{# Importación del Sheet en su propia página: lee el Sheet guardado al abrir, muestra la vista
+   previa y recién al confirmar escribe en el registro y en la evaluación activa. #}
+{% set volver = url_for('administracion.config_evaluaciones_proveedores', tab='fuente') %}
+<div class="max-w-6xl mx-auto animate-fade-in"
+     x-data="importarSheet({api: '{{ url_for('administracion.config_evaluaciones_proveedores') }}/api', volver: '{{ volver }}'})">
+    <div class="flex items-center mb-6">
+        <a href="{{ volver }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver a Fuente de datos">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">Importar Sheet</h1>
+            <p class="text-dark-500 text-sm">Vista previa: nada se escribe hasta confirmar</p>
+        </div>
+    </div>
+
+    <!-- Leyendo -->
+    <div x-show="estado === 'leyendo'" class="bg-white rounded-2xl border border-dark-100 px-6 py-12 text-center text-dark-500">
+        <span class="inline-flex animate-spin mb-3"><i data-lucide="loader-2" class="w-6 h-6 text-primary-500"></i></span>
+        <p>Leyendo el Sheet y cruzándolo con el registro y la nómina…</p>
+    </div>
+
+    <!-- Error -->
+    <div x-show="estado === 'error'" x-cloak class="bg-white rounded-2xl border border-red-200 overflow-hidden">
+        <div class="px-6 py-5 bg-red-50 text-red-800 flex items-start gap-3">
+            <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
+            <p x-text="error"></p>
+        </div>
+        <div class="px-6 py-4 flex justify-end gap-3">
+            <a href="{{ volver }}" class="px-4 py-2.5 rounded-xl border border-dark-200 text-dark-700">Volver</a>
+            <button type="button" @click="leer()" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft">Reintentar</button>
+        </div>
+    </div>
+
+    <!-- Vista previa -->
+    <template x-if="estado === 'vista' || estado === 'confirmando'">
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 text-sm">
+                <template x-for="c in tarjetas()" :key="c.etiqueta">
+                    <div class="bg-white rounded-2xl border p-4" :class="c.destacada ? 'border-primary-200 bg-primary-50/40' : 'border-dark-100'">
+                        <p class="text-dark-500" x-text="c.etiqueta"></p><p class="text-2xl font-semibold" :class="c.destacada ? 'text-primary-700' : ''" x-text="c.valor"></p>
+                    </div>
+                </template>
+            </div>
+            <p class="text-sm text-dark-500">
+                Al confirmar, los proveedores del Sheet que todavía no están se agregan a la evaluación
+                <span class="font-semibold" x-text="vista.evaluacion"></span>, cada uno con su usuario referente como evaluador.
+                Los inactivos en el registro no se agregan. Las altas a las que les falta un dato obligatorio
+                (referente en la nómina, servicio, tipo de información, acuerdo Sí/No y, con No, la política/NDA) quedan rechazadas.
+            </p>
+            <p x-show="vista.faltan_adjunto" class="text-sm text-amber-700">
+                <span x-text="vista.faltan_adjunto"></span> alta(s) con acuerdo firmado: el Sheet no trae el archivo, se pide desde la edición del proveedor.
+            </p>
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <table class="w-full text-sm">
+                    <thead class="bg-dark-50 text-left text-xs font-semibold text-dark-500 uppercase tracking-wide">
+                        <tr><th class="px-4 py-3">Fila</th><th class="px-4 py-3">Proveedor</th>
+                            <th class="px-4 py-3">Evaluación <span x-text="vista.evaluacion"></span></th><th class="px-4 py-3">Registro</th>
+                            <th class="px-4 py-3">Referente en el Sheet</th><th class="px-4 py-3">Usuario referente</th><th class="px-4 py-3">Actualizar</th></tr>
+                    </thead>
+                    <tbody class="divide-y divide-dark-100">
+                        <template x-for="f in vista.filas" :key="f.id">
+                            <tr :class="{'bg-amber-50/60': f.accion === 'cambio_referente', 'bg-red-50/60': f.accion === 'rechazada'}">
+                                <td class="px-4 py-2 text-dark-400" x-text="f.fila_sheet"></td>
+                                <td class="px-4 py-2 font-medium" x-text="f.nombre"></td>
+                                <td class="px-4 py-2"><span class="px-2 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap" :class="claseEvaluacion(f.evaluacion)" x-text="textoEvaluacion(f.evaluacion)"></span></td>
+                                <td class="px-4 py-2">
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full whitespace-nowrap" :class="claseAccion(f.accion)" x-text="textoAccion(f.accion)"></span>
+                                    <p x-show="f.motivo" class="text-xs text-red-700 mt-1" x-text="f.motivo"></p>
+                                    <p x-show="f.falta_adjunto" class="text-xs text-amber-700 mt-1">Falta el adjunto del acuerdo</p>
+                                </td>
+                                <td class="px-4 py-2 text-dark-600" x-text="f.referente_sheet || '—'"></td>
+                                <td class="px-4 py-2">
+                                    <template x-if="f.accion === 'cambio_referente'">
+                                        <span><span class="line-through text-dark-400" x-text="f.referente_anterior || 'Sin definir'"></span> → <span class="font-medium" x-text="f.referente_nuevo"></span></span>
+                                    </template>
+                                    <template x-if="f.accion !== 'cambio_referente'">
+                                        <span :class="f.referente_nuevo ? '' : 'text-amber-700'" x-text="f.referente_nuevo || (f.accion === 'rechazada' ? 'No está en la nómina' : '—')"></span>
+                                    </template>
+                                </td>
+                                <td class="px-4 py-2">
+                                    <input type="checkbox" x-show="f.accion === 'cambio_referente'" x-model="f.confirmar"
+                                           :aria-label="`Actualizar el referente de ${f.nombre}`" class="w-4 h-4 rounded text-primary-600">
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div class="bg-white rounded-2xl border border-dark-100 px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-sm text-dark-500"><span x-text="cambiosConfirmados().length"></span> cambio(s) de referente marcados para actualizar</p>
+                <div class="flex gap-3">
+                    <button type="button" @click="cancelar()" :disabled="estado === 'confirmando'" class="px-4 py-2.5 rounded-xl border border-dark-200 text-dark-700 disabled:opacity-50">Cancelar</button>
+                    <button type="button" @click="confirmar()" :disabled="estado === 'confirmando'"
+                            class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft disabled:opacity-50">
+                        <span x-text="textoConfirmar()"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Listo -->
+    <div x-show="estado === 'listo'" x-cloak class="bg-white rounded-2xl border border-emerald-200 overflow-hidden">
+        <div class="px-6 py-5 bg-emerald-50 text-emerald-800 flex items-start gap-3">
+            <i data-lucide="check-circle-2" class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
+            <div>
+                <p class="font-semibold">Importación lista</p>
+                <p class="text-sm" x-text="textoResultado()"></p>
+            </div>
+        </div>
+        <div class="px-6 py-4 flex justify-end gap-3">
+            <a href="{{ url_for('administracion.evaluaciones_proveedores') }}" class="px-4 py-2.5 rounded-xl border border-dark-200 text-dark-700">Ver el tablero</a>
+            <a href="{{ volver }}" class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft">Volver a Configuración</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function importarSheet({api, volver}) {
+    return {
+        estado: 'leyendo',  // leyendo | error | vista | confirmando | listo
+        vista: null,
+        resultado: null,
+        error: null,
+
+        async init() {
+            await this.leer();
+        },
+        async pedir(ruta, opciones = {}) {
+            const r = await fetch(`${api}/${ruta}`, {headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, ...opciones});
+            const cuerpo = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(cuerpo.detail || 'Error en la operación');
+            return cuerpo;
+        },
+        async leer() {
+            this.estado = 'leyendo';
+            this.error = null;
+            try {
+                this.vista = await this.pedir('importaciones', {method: 'POST', body: '{}'});
+                this.estado = 'vista';
+                this.$nextTick(() => lucide.createIcons());
+            } catch (e) {
+                this.error = e.message;
+                this.estado = 'error';
+            }
+        },
+        cambiosConfirmados() {
+            return (this.vista?.filas || []).filter(f => f.accion === 'cambio_referente' && f.confirmar).map(f => f.id);
+        },
+        async confirmar() {
+            this.estado = 'confirmando';
+            try {
+                this.resultado = await this.pedir(`importaciones/${this.vista.id}/confirmar`,
+                    {method: 'POST', body: JSON.stringify({cambios_confirmados: this.cambiosConfirmados()})});
+                this.estado = 'listo';
+            } catch (e) {
+                this.error = e.message;
+                this.estado = 'error';
+            }
+        },
+        async cancelar() {
+            // La vista previa es temporal: se borra y se vuelve a Fuente de datos
+            try { await this.pedir(`importaciones/${this.vista.id}`, {method: 'DELETE'}); } catch (e) { /* se borra sola al empezar otra */ }
+            window.location.href = volver;
+        },
+        // Resumen de la vista previa: lo que pasa en la evaluación va primero y destacado
+        tarjetas() {
+            const v = this.vista;
+            const tarjetas = [
+                {etiqueta: `Se agregan a la evaluación ${v.evaluacion}`, valor: v.se_agregan, destacada: true},
+                {etiqueta: 'Ya están en la evaluación', valor: v.ya_estan},
+                {etiqueta: 'Altas en el registro', valor: v.altas},
+                {etiqueta: 'Rechazadas (faltan datos)', valor: v.rechazadas},
+                {etiqueta: 'Cambios de referente', valor: v.cambios_referente},
+                {etiqueta: 'Referente sin definir', valor: v.sin_definir},
+                {etiqueta: 'Filas del Sheet', valor: v.filas_leidas},
+            ];
+            if (v.de_baja) tarjetas.splice(2, 0, {etiqueta: 'Inactivos (no se agregan)', valor: v.de_baja});
+            return tarjetas;
+        },
+        textoConfirmar() {
+            if (this.estado === 'confirmando') return 'Importando…';
+            const n = this.vista.se_agregan;
+            return n ? `Confirmar y agregar ${n} a la evaluación ${this.vista.evaluacion}` : `Confirmar la importación a la evaluación ${this.vista.evaluacion}`;
+        },
+        textoResultado() {
+            const r = this.resultado;
+            if (!r) return '';
+            const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+            const evaluacion = `Evaluación ${this.vista?.evaluacion}: ${plural(r.asignados, 'proveedor agregado', 'proveedores agregados')}`
+                + (r.ya_estaban ? ` (${r.ya_estaban} ya ${r.ya_estaban === 1 ? 'estaba' : 'estaban'})` : '');
+            const registro = `En el registro: ${plural(r.altas, 'alta', 'altas')} y ${plural(r.cambios_referente, 'cambio', 'cambios')} de referente`
+                + (r.rechazadas ? `; ${plural(r.rechazadas, 'fila rechazada', 'filas rechazadas')} por datos faltantes.` : '.');
+            return `${evaluacion}. ${registro}`;
+        },
+        textoEvaluacion(e) {
+            return {se_agrega: 'Se agrega', ya_esta: 'Ya está', de_baja: 'Inactivo: no se agrega', no_entra: 'No entra'}[e] || e;
+        },
+        claseEvaluacion(e) {
+            return {se_agrega: 'bg-primary-100 text-primary-700', ya_esta: 'bg-dark-100 text-dark-600',
+                    de_baja: 'bg-red-100 text-red-700', no_entra: 'bg-red-100 text-red-700'}[e] || '';
+        },
+        textoAccion(a) {
+            return {alta: 'Alta', sin_cambios: 'Sin cambios', cambio_referente: 'Cambia el referente', rechazada: 'Rechazada'}[a] || a;
+        },
+        claseAccion(a) {
+            return {alta: 'bg-emerald-100 text-emerald-700', sin_cambios: 'bg-dark-100 text-dark-600',
+                    cambio_referente: 'bg-amber-100 text-amber-700', rechazada: 'bg-red-100 text-red-700'}[a] || '';
+        },
+    };
+}
+</script>
+{% endblock %}

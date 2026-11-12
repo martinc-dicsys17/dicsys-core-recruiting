@@ -1,0 +1,2801 @@
+{
+ "recruiting_provincias": [
+  {
+   "provincia_id": 1,
+   "nombre": "Cordoba"
+  },
+  {
+   "provincia_id": 2,
+   "nombre": "Buenos Aires"
+  },
+  {
+   "provincia_id": 3,
+   "nombre": "No identificada"
+  }
+ ],
+ "recruiting_ciudades": [
+  {
+   "ciudad_id": 1,
+   "nombre": "Cordoba Capital",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 2,
+   "nombre": "Villa Allende",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 3,
+   "nombre": "La Calera",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 4,
+   "nombre": "Saldan",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 5,
+   "nombre": "Mendiolaza",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 6,
+   "nombre": "Unquillo",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 7,
+   "nombre": "Rio Ceballos",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 8,
+   "nombre": "Salsipuedes",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 9,
+   "nombre": "Malagueño",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 10,
+   "nombre": "Estacion Juarez Celman",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 11,
+   "nombre": "Colonia Caroya",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 12,
+   "nombre": "Jesus Maria",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 13,
+   "nombre": "Monte Cristo",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 14,
+   "nombre": "Villa Carlos Paz",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 15,
+   "nombre": "Tanti",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 16,
+   "nombre": "Cosquin",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 17,
+   "nombre": "Valle Hermoso",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 18,
+   "nombre": "La Falda",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 19,
+   "nombre": "Villa Giardino",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 20,
+   "nombre": "Capilla del Monte",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 21,
+   "nombre": "Mina Clavero",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 22,
+   "nombre": "Villa Cura Brochero",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 23,
+   "nombre": "Villa Dolores",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 24,
+   "nombre": "Alta Gracia",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 25,
+   "nombre": "Despeñaderos",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 26,
+   "nombre": "Villa General Belgrano",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 27,
+   "nombre": "Santa Rosa de Calamuchita",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 28,
+   "nombre": "Embalse",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 29,
+   "nombre": "Rio Tercero",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 30,
+   "nombre": "Almafuerte",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 31,
+   "nombre": "Rio Cuarto",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 32,
+   "nombre": "Villa Maria",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 33,
+   "nombre": "Villa Nueva",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 34,
+   "nombre": "Oncativo",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 35,
+   "nombre": "Rio Segundo",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 36,
+   "nombre": "Oliva",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 37,
+   "nombre": "Bell Ville",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 38,
+   "nombre": "Marcos Juarez",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 39,
+   "nombre": "Corral de Bustos",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 40,
+   "nombre": "La Carlota",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 41,
+   "nombre": "Laboulaye",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 42,
+   "nombre": "Huinca Renanco",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 43,
+   "nombre": "San Francisco",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 44,
+   "nombre": "Las Varillas",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 45,
+   "nombre": "Morteros",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 46,
+   "nombre": "Arroyito",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 47,
+   "nombre": "General Deheza",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 48,
+   "nombre": "Villa del Rosario",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 49,
+   "nombre": "Cruz del Eje",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 50,
+   "nombre": "Dean Funes",
+   "provincia_id": 1
+  },
+  {
+   "ciudad_id": 51,
+   "nombre": "CABA",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 52,
+   "nombre": "La Plata",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 53,
+   "nombre": "Mar del Plata",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 54,
+   "nombre": "Bahia Blanca",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 55,
+   "nombre": "Vicente Lopez",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 56,
+   "nombre": "San Isidro",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 57,
+   "nombre": "San Fernando",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 58,
+   "nombre": "Tigre",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 59,
+   "nombre": "San Martin",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 60,
+   "nombre": "Tres de Febrero",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 61,
+   "nombre": "San Miguel",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 62,
+   "nombre": "Malvinas Argentinas",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 63,
+   "nombre": "Jose C. Paz",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 64,
+   "nombre": "Moreno",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 65,
+   "nombre": "Pilar",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 66,
+   "nombre": "Escobar",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 67,
+   "nombre": "Moron",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 68,
+   "nombre": "Hurlingham",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 69,
+   "nombre": "Ituzaingo",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 70,
+   "nombre": "Merlo",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 71,
+   "nombre": "La Matanza",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 72,
+   "nombre": "Marcos Paz",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 73,
+   "nombre": "General Rodriguez",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 74,
+   "nombre": "Avellaneda",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 75,
+   "nombre": "Lanus",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 76,
+   "nombre": "Lomas de Zamora",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 77,
+   "nombre": "Quilmes",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 78,
+   "nombre": "Almirante Brown",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 79,
+   "nombre": "Esteban Echeverria",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 80,
+   "nombre": "Ezeiza",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 81,
+   "nombre": "Berazategui",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 82,
+   "nombre": "Florencio Varela",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 83,
+   "nombre": "Presidente Peron",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 84,
+   "nombre": "San Vicente",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 85,
+   "nombre": "Cañuelas",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 86,
+   "nombre": "Ensenada",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 87,
+   "nombre": "Berisso",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 88,
+   "nombre": "Lujan",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 89,
+   "nombre": "Campana",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 90,
+   "nombre": "Zarate",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 91,
+   "nombre": "Tandil",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 92,
+   "nombre": "Olavarria",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 93,
+   "nombre": "Azul",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 94,
+   "nombre": "Junin",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 95,
+   "nombre": "Pergamino",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 96,
+   "nombre": "San Nicolas de los Arroyos",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 97,
+   "nombre": "Chivilcoy",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 98,
+   "nombre": "Mercedes",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 99,
+   "nombre": "Necochea",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 100,
+   "nombre": "Tres Arroyos",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 101,
+   "nombre": "Chascomus",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 102,
+   "nombre": "Pinamar",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 103,
+   "nombre": "Villa Gesell",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 104,
+   "nombre": "San Pedro",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 105,
+   "nombre": "Balcarce",
+   "provincia_id": 2
+  },
+  {
+   "ciudad_id": 106,
+   "nombre": "Hernando",
+   "provincia_id": 1
+  }
+ ],
+ "recruiting_etapas": [
+  {
+   "id": 1,
+   "nombre": "CANDIDATO",
+   "descripcion": "Etapa inicial de ingreso o postulacion del candidato."
+  },
+  {
+   "id": 2,
+   "nombre": "SCREENING",
+   "descripcion": "Validacion inicial de cumplimiento de requisitos minimos."
+  },
+  {
+   "id": 3,
+   "nombre": "ENTREVISTA RRHH",
+   "descripcion": "Primera entrevista de evaluacion de competencias y perfil."
+  },
+  {
+   "id": 4,
+   "nombre": "ENTREVISTA LIDER DICSYS",
+   "descripcion": "Entrevista de validacion tecnica y fit de equipo con lider interno."
+  },
+  {
+   "id": 5,
+   "nombre": "ENTREVISTA CLIENTE",
+   "descripcion": "Instancia de entrevista y evaluacion con el cliente."
+  },
+  {
+   "id": 6,
+   "nombre": "OFERTA",
+   "descripcion": "Presentacion y negociacion de la propuesta laboral."
+  },
+  {
+   "id": 7,
+   "nombre": "INGRESO",
+   "descripcion": "Incorporacion formal y cierre exitoso del proceso."
+  },
+  {
+   "id": 8,
+   "nombre": "VALIDACION ADMINISTRACION",
+   "descripcion": "Validacion administrativa del candidato previa a la entrevista con el cliente."
+  },
+  {
+   "id": 9,
+   "nombre": "EXAMEN MEDICO PREOCUPACIONAL",
+   "descripcion": "Examen medico preocupacional posterior a la oferta y previo al ingreso."
+  }
+ ],
+ "recruiting_motivos_descarte": [
+  {
+   "id": 1,
+   "motivo": "No cumple requisitos mínimos."
+  },
+  {
+   "id": 2,
+   "motivo": "Seniority no acorde."
+  },
+  {
+   "id": 3,
+   "motivo": "Pretensión salarial fuera de rango."
+  },
+  {
+   "id": 4,
+   "motivo": "Disponibilidad no compatible."
+  },
+  {
+   "id": 5,
+   "motivo": "Modalidad / ubicación no compatible."
+  },
+  {
+   "id": 6,
+   "motivo": "Candidato no responde / incontactable."
+  },
+  {
+   "id": 7,
+   "motivo": "Candidato no interesado."
+  },
+  {
+   "id": 8,
+   "motivo": "Otro."
+  },
+  {
+   "id": 9,
+   "motivo": "No cumple requisitos excluyentes."
+  },
+  {
+   "id": 10,
+   "motivo": "Candidato no responde."
+  },
+  {
+   "id": 11,
+   "motivo": "Requisitos / experiencia no acordes al perfil."
+  },
+  {
+   "id": 12,
+   "motivo": "Disponibilidad de ingreso no compatible."
+  },
+  {
+   "id": 13,
+   "motivo": "Modalidad de trabajo / presencialidad no compatible."
+  },
+  {
+   "id": 14,
+   "motivo": "Perfil no alineado con la búsqueda."
+  },
+  {
+   "id": 15,
+   "motivo": "Comunicación / habilidades interpersonales."
+  },
+  {
+   "id": 16,
+   "motivo": "Perfil técnico no acorde."
+  },
+  {
+   "id": 17,
+   "motivo": "Experiencia insuficiente."
+  },
+  {
+   "id": 18,
+   "motivo": "Competencias / actitud no acordes."
+  },
+  {
+   "id": 19,
+   "motivo": "Habilidades de comunicación."
+  },
+  {
+   "id": 20,
+   "motivo": "Candidato se baja del proceso."
+  },
+  {
+   "id": 21,
+   "motivo": "Requisitos técnicos no acordes."
+  },
+  {
+   "id": 22,
+   "motivo": "No conforme con la propuesta económica."
+  },
+  {
+   "id": 23,
+   "motivo": "Aceptó otra propuesta laboral."
+  },
+  {
+   "id": 24,
+   "motivo": "Contraoferta / retencion por empresa actual"
+  },
+  {
+   "id": 25,
+   "motivo": "Demora en el proceso"
+  },
+  {
+   "id": 26,
+   "motivo": "Cambio de disponibilidad."
+  },
+  {
+   "id": 27,
+   "motivo": "Motivos personales."
+  },
+  {
+   "id": 28,
+   "motivo": "Preexistencia médica."
+  },
+  {
+   "id": 29,
+   "motivo": "Inconsistencias en el historial de ANSES."
+  },
+  {
+   "id": 30,
+   "motivo": "Resultado no apto."
+  }
+ ],
+ "recruiting_motivos_descarte_etapas": [
+  {
+   "motivo_id": 1,
+   "etapa_id": 1,
+   "orden": 1
+  },
+  {
+   "motivo_id": 2,
+   "etapa_id": 1,
+   "orden": 2
+  },
+  {
+   "motivo_id": 2,
+   "etapa_id": 2,
+   "orden": 2
+  },
+  {
+   "motivo_id": 2,
+   "etapa_id": 4,
+   "orden": 3
+  },
+  {
+   "motivo_id": 2,
+   "etapa_id": 5,
+   "orden": 3
+  },
+  {
+   "motivo_id": 3,
+   "etapa_id": 1,
+   "orden": 3
+  },
+  {
+   "motivo_id": 3,
+   "etapa_id": 2,
+   "orden": 3
+  },
+  {
+   "motivo_id": 3,
+   "etapa_id": 3,
+   "orden": 1
+  },
+  {
+   "motivo_id": 4,
+   "etapa_id": 1,
+   "orden": 4
+  },
+  {
+   "motivo_id": 4,
+   "etapa_id": 2,
+   "orden": 4
+  },
+  {
+   "motivo_id": 5,
+   "etapa_id": 1,
+   "orden": 5
+  },
+  {
+   "motivo_id": 5,
+   "etapa_id": 2,
+   "orden": 5
+  },
+  {
+   "motivo_id": 6,
+   "etapa_id": 1,
+   "orden": 6
+  },
+  {
+   "motivo_id": 7,
+   "etapa_id": 1,
+   "orden": 7
+  },
+  {
+   "motivo_id": 7,
+   "etapa_id": 2,
+   "orden": 6
+  },
+  {
+   "motivo_id": 7,
+   "etapa_id": 3,
+   "orden": 7
+  },
+  {
+   "motivo_id": 8,
+   "etapa_id": 1,
+   "orden": 8
+  },
+  {
+   "motivo_id": 8,
+   "etapa_id": 2,
+   "orden": 8
+  },
+  {
+   "motivo_id": 8,
+   "etapa_id": 3,
+   "orden": 8
+  },
+  {
+   "motivo_id": 8,
+   "etapa_id": 4,
+   "orden": 7
+  },
+  {
+   "motivo_id": 8,
+   "etapa_id": 5,
+   "orden": 6
+  },
+  {
+   "motivo_id": 8,
+   "etapa_id": 6,
+   "orden": 7
+  },
+  {
+   "motivo_id": 9,
+   "etapa_id": 2,
+   "orden": 1
+  },
+  {
+   "motivo_id": 10,
+   "etapa_id": 2,
+   "orden": 7
+  },
+  {
+   "motivo_id": 11,
+   "etapa_id": 3,
+   "orden": 2
+  },
+  {
+   "motivo_id": 12,
+   "etapa_id": 3,
+   "orden": 3
+  },
+  {
+   "motivo_id": 13,
+   "etapa_id": 3,
+   "orden": 4
+  },
+  {
+   "motivo_id": 14,
+   "etapa_id": 3,
+   "orden": 5
+  },
+  {
+   "motivo_id": 15,
+   "etapa_id": 3,
+   "orden": 6
+  },
+  {
+   "motivo_id": 16,
+   "etapa_id": 4,
+   "orden": 1
+  },
+  {
+   "motivo_id": 17,
+   "etapa_id": 4,
+   "orden": 2
+  },
+  {
+   "motivo_id": 17,
+   "etapa_id": 5,
+   "orden": 2
+  },
+  {
+   "motivo_id": 18,
+   "etapa_id": 4,
+   "orden": 4
+  },
+  {
+   "motivo_id": 18,
+   "etapa_id": 5,
+   "orden": 4
+  },
+  {
+   "motivo_id": 19,
+   "etapa_id": 4,
+   "orden": 5
+  },
+  {
+   "motivo_id": 20,
+   "etapa_id": 4,
+   "orden": 6
+  },
+  {
+   "motivo_id": 20,
+   "etapa_id": 5,
+   "orden": 5
+  },
+  {
+   "motivo_id": 21,
+   "etapa_id": 5,
+   "orden": 1
+  },
+  {
+   "motivo_id": 22,
+   "etapa_id": 6,
+   "orden": 1
+  },
+  {
+   "motivo_id": 23,
+   "etapa_id": 6,
+   "orden": 2
+  },
+  {
+   "motivo_id": 24,
+   "etapa_id": 6,
+   "orden": 3
+  },
+  {
+   "motivo_id": 25,
+   "etapa_id": 6,
+   "orden": 4
+  },
+  {
+   "motivo_id": 26,
+   "etapa_id": 6,
+   "orden": 5
+  },
+  {
+   "motivo_id": 27,
+   "etapa_id": 6,
+   "orden": 6
+  },
+  {
+   "motivo_id": 28,
+   "etapa_id": 8,
+   "orden": 1
+  },
+  {
+   "motivo_id": 28,
+   "etapa_id": 9,
+   "orden": 1
+  },
+  {
+   "motivo_id": 29,
+   "etapa_id": 8,
+   "orden": 2
+  },
+  {
+   "motivo_id": 30,
+   "etapa_id": 9,
+   "orden": 2
+  }
+ ],
+ "recruiting_niveles_seniority": [
+  {
+   "id": 1,
+   "nombre": "Trainee"
+  },
+  {
+   "id": 2,
+   "nombre": "Junior"
+  },
+  {
+   "id": 3,
+   "nombre": "Semi Senior"
+  },
+  {
+   "id": 4,
+   "nombre": "Senior"
+  }
+ ],
+ "recruiting_perfiles_puesto": [
+  {
+   "id": 35,
+   "nombre": "Desarrollador .NET / C#",
+   "activo": true
+  },
+  {
+   "id": 36,
+   "nombre": "Desarrollador Frontend",
+   "activo": true
+  },
+  {
+   "id": 37,
+   "nombre": "Desarrollador Backend",
+   "activo": true
+  },
+  {
+   "id": 38,
+   "nombre": "Desarrollador Full Stack",
+   "activo": true
+  },
+  {
+   "id": 39,
+   "nombre": "QA Tester / Automation",
+   "activo": true
+  },
+  {
+   "id": 40,
+   "nombre": "Analista Funcional",
+   "activo": true
+  },
+  {
+   "id": 41,
+   "nombre": "Project Manager / Scrum Master",
+   "activo": true
+  },
+  {
+   "id": 42,
+   "nombre": "Líder Técnico",
+   "activo": true
+  },
+  {
+   "id": 43,
+   "nombre": "DevOps Engineer",
+   "activo": true
+  },
+  {
+   "id": 44,
+   "nombre": "Administrador de Base de Datos (DBA)",
+   "activo": true
+  },
+  {
+   "id": 45,
+   "nombre": "Recruiter / HRBP",
+   "activo": true
+  },
+  {
+   "id": 46,
+   "nombre": "Otro",
+   "activo": true
+  },
+  {
+   "id": 47,
+   "nombre": "Data Engineer",
+   "activo": true
+  },
+  {
+   "id": 48,
+   "nombre": "Data Architect",
+   "activo": true
+  },
+  {
+   "id": 49,
+   "nombre": "Cloud Engineer / DevOps",
+   "activo": true
+  },
+  {
+   "id": 50,
+   "nombre": "Project Manager",
+   "activo": true
+  },
+  {
+   "id": 82,
+   "nombre": "Data Analyst / BI Analyst",
+   "activo": true
+  },
+  {
+   "id": 83,
+   "nombre": "Analytics Engineer",
+   "activo": true
+  },
+  {
+   "id": 84,
+   "nombre": "Soporte IT / Help Desk",
+   "activo": true
+  }
+ ],
+ "recruiting_skills": [
+  {
+   "id": "d9f3771d-f5b3-4576-8da8-02f39fe33c8a",
+   "nombre": ".NET",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    ".net",
+    "dotnet",
+    ".net core",
+    "asp.net"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341270"
+  },
+  {
+   "id": "3e18bd8e-238d-47f3-aef5-a936a248995e",
+   "nombre": "ABAP",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "abap"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781454"
+  },
+  {
+   "id": "a8a53549-9b78-41ef-b264-9307a09723fc",
+   "nombre": "AWS",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "aws",
+    "amazon web services"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341279"
+  },
+  {
+   "id": "72ff1d35-48d4-4d30-bc42-62219b9536e2",
+   "nombre": "Airflow",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "airflow",
+    "apache airflow"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341276"
+  },
+  {
+   "id": "830086ca-9d13-4b37-b150-ec0769d1e732",
+   "nombre": "Angular",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "angular",
+    "angularjs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341278"
+  },
+  {
+   "id": "ba7efb0c-38d4-4bcf-adb6-9a32545fabea",
+   "nombre": "Appium",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "appium"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781479"
+  },
+  {
+   "id": "bb4d10c1-f2e2-4517-9bf0-f7d45aa27764",
+   "nombre": "Azure",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "azure",
+    "microsoft azure",
+    "azure cloud"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341280"
+  },
+  {
+   "id": "379038db-cfb1-4cc6-8ed2-a49cb8daee51",
+   "nombre": "Azure DevOps",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "azure devops",
+    "tfs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781450"
+  },
+  {
+   "id": "c584c82d-215c-46de-9994-d265e54bab81",
+   "nombre": "Bash",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "bash",
+    "shell script",
+    "shell scripts",
+    "shell scripting",
+    "unix shell"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781452"
+  },
+  {
+   "id": "5cdb5acb-7410-4ad6-89a8-8783c56a4e1c",
+   "nombre": "BigQuery",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "bigquery",
+    "google bigquery"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341281"
+  },
+  {
+   "id": "e39a0565-9865-4dc8-bde7-cb7b6e281e4e",
+   "nombre": "Bitbucket",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "bitbucket"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781467"
+  },
+  {
+   "id": "d87d2bc2-13c1-4651-9607-85a72b44170c",
+   "nombre": "Bootstrap",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "bootstrap"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781471"
+  },
+  {
+   "id": "ab315ffc-80b9-4468-a502-4aa07019cdac",
+   "nombre": "C#",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "c#",
+    "csharp"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341282"
+  },
+  {
+   "id": "99fd3e22-25c0-4879-8765-3d48e09ecaa1",
+   "nombre": "C++",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "c++"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781460"
+  },
+  {
+   "id": "a81caa97-b939-47bc-8a58-0d3002377ab5",
+   "nombre": "CI/CD",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "ci/cd",
+    "cicd",
+    "continuous integration",
+    "pipelines"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341283"
+  },
+  {
+   "id": "0d6b218d-42f5-4d4c-b1d3-0954866a1b61",
+   "nombre": "COBOL",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "cobol"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781461"
+  },
+  {
+   "id": "437c8092-a479-4fd3-9ce9-13f1156bffc3",
+   "nombre": "CSS",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "css",
+    "css3"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781459"
+  },
+  {
+   "id": "62e5ff46-04ad-4853-81f9-fcdfe9dcd304",
+   "nombre": "Confluence",
+   "categoria": "Herramientas & Gestión",
+   "sinonimos": [
+    "confluence"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781452"
+  },
+  {
+   "id": "bdd60f4b-83dc-4ef4-95e4-313d90345c54",
+   "nombre": "Control-M",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "control-m"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781492"
+  },
+  {
+   "id": "70de8960-e6c4-4625-875b-a80626449c97",
+   "nombre": "Cypress",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "cypress"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341284"
+  },
+  {
+   "id": "b2e05d5c-ca0f-4b75-b32c-ff9371dbbef4",
+   "nombre": "DAX",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "dax"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781436"
+  },
+  {
+   "id": "e7a7e39e-c678-4839-ae96-31e4b2603bd7",
+   "nombre": "DBeaver",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "dbeaver"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781489"
+  },
+  {
+   "id": "e6e31afd-66ad-4d3c-b9f6-e86103ed22d2",
+   "nombre": "Data Factory",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "data factory",
+    "azure data factory",
+    "adf"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341285"
+  },
+  {
+   "id": "96cddf10-cf9e-4651-9e4f-a6468145faa9",
+   "nombre": "DataStage",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "datastage",
+    "ibm datastage"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781491"
+  },
+  {
+   "id": "c7536024-92c5-4f07-8d04-d2f877748ffc",
+   "nombre": "Databricks",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "databricks"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341286"
+  },
+  {
+   "id": "926bc167-6745-482c-bd2e-94d2524ba09d",
+   "nombre": "Delta Lake",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "delta lake",
+    "deltalake"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341287"
+  },
+  {
+   "id": "84a1fb5e-ed4a-4e08-9b9f-922f7d5783d1",
+   "nombre": "Django",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "django"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341288"
+  },
+  {
+   "id": "271ac055-7e61-4b9a-a22a-83b17e0ed884",
+   "nombre": "Docker",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "docker",
+    "docker-compose"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341289"
+  },
+  {
+   "id": "ec9fb3f7-f808-4684-b99c-fda9524520f2",
+   "nombre": "DynamoDB",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "dynamodb"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781443"
+  },
+  {
+   "id": "ed0153c0-fdf9-4266-8f8c-f333f3c20bd2",
+   "nombre": "Elasticsearch",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "elastic",
+    "elasticsearch"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341290"
+  },
+  {
+   "id": "9cf19eaf-2657-4b50-8139-8552353d1c06",
+   "nombre": "Excel",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "excel",
+    "microsoft excel",
+    "ms excel"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781441"
+  },
+  {
+   "id": "cfc62d72-38c2-4cbf-a5f2-187a69048252",
+   "nombre": "Express",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "express",
+    "express.js",
+    "expressjs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781457"
+  },
+  {
+   "id": "35c57a9b-bc9e-4d28-ab75-5f580df55091",
+   "nombre": "FastAPI",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "fastapi"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341291"
+  },
+  {
+   "id": "a59227b8-47bd-4285-ae62-a7ca98389c77",
+   "nombre": "Firebase",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "firebase"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781469"
+  },
+  {
+   "id": "bf8388c1-3f06-4e9d-b748-bd352c17d1d5",
+   "nombre": "Flask",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "flask"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781468"
+  },
+  {
+   "id": "48eab736-e198-4794-8651-972dfcd9bae8",
+   "nombre": "GCP",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "gcp",
+    "google cloud",
+    "google cloud platform"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341292"
+  },
+  {
+   "id": "5cf1d7db-0222-45dd-a336-0d7ae162f12a",
+   "nombre": "Git",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "git",
+    "github",
+    "gitlab",
+    "bitbucket"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341293"
+  },
+  {
+   "id": "038de5a4-e794-4a7c-b385-87fb07b8a480",
+   "nombre": "GitHub",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "github"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781466"
+  },
+  {
+   "id": "ad590ff7-fbdf-4689-be10-3aeaf114e27e",
+   "nombre": "GitLab",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "gitlab"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781466"
+  },
+  {
+   "id": "ec796be3-5185-48ea-b0fb-eb285598723e",
+   "nombre": "Go",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "golang",
+    "go"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341293"
+  },
+  {
+   "id": "127498dd-e52c-495e-afbf-830911388014",
+   "nombre": "Google Analytics",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "google analytics"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781493"
+  },
+  {
+   "id": "53a9086b-e57c-4e51-8bd5-3499acdd7022",
+   "nombre": "Groovy",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "groovy"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781476"
+  },
+  {
+   "id": "2a1dca47-0a54-470a-82d5-b7cd4d498d59",
+   "nombre": "HTML",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "html",
+    "html5"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781459"
+  },
+  {
+   "id": "47b2b9b0-2bca-47fa-916c-4080f9f3b92d",
+   "nombre": "Hadoop",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "hadoop",
+    "hdfs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341294"
+  },
+  {
+   "id": "3a7f3280-0767-4065-9524-f9c6661e9efe",
+   "nombre": "Hibernate",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "hibernate"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781458"
+  },
+  {
+   "id": "3328baab-aa1d-4f8f-afaf-d9bdd98ec37e",
+   "nombre": "Hive",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "hive",
+    "apache hive"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781430"
+  },
+  {
+   "id": "8e5f3717-c19f-4f34-915f-394e1193c9c1",
+   "nombre": "Informatica",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "informatica",
+    "informatica powercenter",
+    "powercenter"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781424"
+  },
+  {
+   "id": "062a76c8-135b-4cdc-b663-7cb3ad370599",
+   "nombre": "JMeter",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "jmeter",
+    "apache jmeter"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781445"
+  },
+  {
+   "id": "c75ff46e-9bf5-4647-9d2d-ad0f7670e4bf",
+   "nombre": "Java",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "java"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341295"
+  },
+  {
+   "id": "bd3ed0b6-841d-4332-8637-6f108afdcf65",
+   "nombre": "JavaScript",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "javascript",
+    "js"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341296"
+  },
+  {
+   "id": "d70b2804-7507-49f8-87de-d8ab373e5944",
+   "nombre": "Jenkins",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "jenkins"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781449"
+  },
+  {
+   "id": "734666f2-b15e-42c5-b525-de6adfac097a",
+   "nombre": "Jira",
+   "categoria": "Herramientas & Gestión",
+   "sinonimos": [
+    "jira"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341297"
+  },
+  {
+   "id": "48f840ea-cfcc-46eb-bdb7-978c6741ec86",
+   "nombre": "Jupyter",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "jupyter",
+    "jupyter notebook",
+    "jupyter notebooks"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781488"
+  },
+  {
+   "id": "8ad34681-0abe-4f23-8bfc-a321ca1dd319",
+   "nombre": "K6",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "k6"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781479"
+  },
+  {
+   "id": "2165a18a-85ed-4840-ab55-e1fb99654365",
+   "nombre": "Kafka",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "kafka",
+    "apache kafka"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341298"
+  },
+  {
+   "id": "1ed61230-cffc-4381-bc55-eb92ad14069e",
+   "nombre": "Kibana",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "kibana"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781451"
+  },
+  {
+   "id": "44aa7935-dc67-419f-a946-867988528bae",
+   "nombre": "Kotlin",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "kotlin"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341299"
+  },
+  {
+   "id": "26fee514-101f-4f86-a937-2d77425e8566",
+   "nombre": "Kubernetes",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "k8s",
+    "kubernetes"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341300"
+  },
+  {
+   "id": "d12ed6fb-5ec9-46d3-b342-e8a8c69ac653",
+   "nombre": "LangChain",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "langchain"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781436"
+  },
+  {
+   "id": "4c38e729-87c4-4a6b-8381-aadc39db8d41",
+   "nombre": "Linux",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "linux",
+    "bash",
+    "shell"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341301"
+  },
+  {
+   "id": "1ebdc901-c2c0-4546-837b-524f63a5f5c6",
+   "nombre": "Looker",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "looker",
+    "looker studio",
+    "lookml"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781419"
+  },
+  {
+   "id": "fd9824ac-84d9-4ed9-a374-468bd5adfa89",
+   "nombre": "Magento",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "magento"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781494"
+  },
+  {
+   "id": "6971c4f5-9950-4d12-8354-da6dd9b91131",
+   "nombre": "Matillion",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "matillion"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781428"
+  },
+  {
+   "id": "17af7864-c6c8-4904-8d44-c7fa8d19fb33",
+   "nombre": "Matplotlib",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "matplotlib"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781484"
+  },
+  {
+   "id": "25a49ef6-43fc-46c9-bf97-cb403dc32589",
+   "nombre": "Maven",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "maven"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781474"
+  },
+  {
+   "id": "6ba612d7-2901-46de-a51f-e0c01a0fd734",
+   "nombre": "MicroStrategy",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "microstrategy"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781420"
+  },
+  {
+   "id": "92f274fb-e33d-4e32-9b2a-6b5f4aea55f6",
+   "nombre": "Microsoft Fabric",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "microsoft fabric",
+    "ms fabric"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781440"
+  },
+  {
+   "id": "0ec205d8-3db2-4885-9780-6cf09423000d",
+   "nombre": "MongoDB",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "mongo",
+    "mongodb"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341302"
+  },
+  {
+   "id": "788536ca-cebb-492c-9b28-99053b7a9862",
+   "nombre": "MySQL",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "mysql"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341303"
+  },
+  {
+   "id": "0e16e7d8-ed5c-4050-b010-a1ba300d4b64",
+   "nombre": "NestJS",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "nestjs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781456"
+  },
+  {
+   "id": "0d774c2e-a744-42ad-b0b7-f45e7aad69f5",
+   "nombre": "Next.js",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "next.js",
+    "nextjs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781455"
+  },
+  {
+   "id": "709e498f-46fe-442c-a96d-8185a209446f",
+   "nombre": "NiFi",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "nifi",
+    "apache nifi"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781429"
+  },
+  {
+   "id": "1bf87602-f2ca-46eb-b233-f3e020e2321b",
+   "nombre": "Node.js",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "node",
+    "node.js",
+    "nodejs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341304"
+  },
+  {
+   "id": "fcc1c865-a105-4879-89e6-fe292d646607",
+   "nombre": "NumPy",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "numpy"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781432"
+  },
+  {
+   "id": "91ea78f0-0662-48b8-bc5b-71920526e5df",
+   "nombre": "Oracle",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "oracle",
+    "oracle database"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781442"
+  },
+  {
+   "id": "0ccbf9de-58f8-4f66-b2c0-262e06948cc8",
+   "nombre": "Oracle BI",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "oracle bi",
+    "obiee"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781495"
+  },
+  {
+   "id": "a9bd66ab-24d2-42db-845e-279ea3b653a1",
+   "nombre": "PHP",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "php"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341305"
+  },
+  {
+   "id": "4150b083-02d2-4cc0-906a-44547c08ae0e",
+   "nombre": "PL/SQL",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "pl/sql",
+    "plsql",
+    "oracle pl/sql"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341306"
+  },
+  {
+   "id": "e5b033a5-e22a-4194-9556-cf194fff5f9b",
+   "nombre": "Pandas",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "pandas"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781431"
+  },
+  {
+   "id": "d3eae469-aebe-4993-8331-c49710742c9d",
+   "nombre": "Pentaho",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "pentaho"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781426"
+  },
+  {
+   "id": "b654ec41-a0d2-4739-a680-ac26298bd935",
+   "nombre": "Playwright",
+   "categoria": "Herramientas & Testing",
+   "sinonimos": [
+    "playwright"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341306"
+  },
+  {
+   "id": "43b3ed01-70fd-4cc6-b80d-e57b61fe577c",
+   "nombre": "Plotly",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "plotly"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781485"
+  },
+  {
+   "id": "162a2a23-7412-4c11-b5b9-7ae4018852ab",
+   "nombre": "Polars",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "polars"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781487"
+  },
+  {
+   "id": "c770df67-680c-4723-84cb-b677ee034492",
+   "nombre": "PostgreSQL",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "postgres",
+    "postgresql",
+    "postgre"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341307"
+  },
+  {
+   "id": "6b6fdbdb-ef6d-4cf9-94f3-380e87868bd9",
+   "nombre": "Postman",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "postman"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781444"
+  },
+  {
+   "id": "eb0ab766-8c5c-4571-bb06-d18c5cffa47f",
+   "nombre": "Power Apps",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "power apps",
+    "powerapps"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781439"
+  },
+  {
+   "id": "92d28453-325b-421f-9ed4-6275202d705a",
+   "nombre": "Power Automate",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "power automate",
+    "microsoft power automate"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781438"
+  },
+  {
+   "id": "8ff3fced-b263-451d-91f7-b9593c056c31",
+   "nombre": "Power BI",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "power bi",
+    "powerbi",
+    "pbi"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341308"
+  },
+  {
+   "id": "0364b94a-7e3e-466a-8ec6-ffcf522f5df3",
+   "nombre": "Power Query",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "power query"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781437"
+  },
+  {
+   "id": "1d8f616d-e713-4850-b7c6-9728427412a9",
+   "nombre": "PowerShell",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "powershell",
+    "pwsh"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341309"
+  },
+  {
+   "id": "cb75627c-99a4-4c66-809f-27521d1f81f1",
+   "nombre": "PySpark",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "pyspark",
+    "py-spark"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341310"
+  },
+  {
+   "id": "6a439daa-dd64-4ac8-8aee-9dc3a4ca520a",
+   "nombre": "PyTorch",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "pytorch"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781435"
+  },
+  {
+   "id": "f8f49b00-bdb1-454a-a20a-dbab28d26ad7",
+   "nombre": "Python",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "python",
+    "python3"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341311"
+  },
+  {
+   "id": "add965f3-23be-4b30-b1e7-c5ad2502f486",
+   "nombre": "Qlik",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "qlik",
+    "qlikview",
+    "qlik sense"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781417"
+  },
+  {
+   "id": "3446a30f-f4ce-4f7c-b817-ac2ec994acc1",
+   "nombre": "Quarkus",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "quarkus"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781475"
+  },
+  {
+   "id": "504e75c3-3595-4ffc-bd9e-7be81d71058d",
+   "nombre": "R",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "r",
+    "rstudio",
+    "r studio",
+    "r language",
+    "lenguaje r",
+    "r programming"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781465"
+  },
+  {
+   "id": "159ab152-3516-40e1-9665-8945573126aa",
+   "nombre": "REST API",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "rest api",
+    "rest apis",
+    "restful",
+    "restful api",
+    "restful apis"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781478"
+  },
+  {
+   "id": "4a345ebd-275d-45ed-a2eb-0f75bc0bcf99",
+   "nombre": "React",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "react",
+    "react.js",
+    "reactjs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341312"
+  },
+  {
+   "id": "9eda974f-1327-437c-b729-f21a94fe748f",
+   "nombre": "Redis",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "redis"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341313"
+  },
+  {
+   "id": "901bff8d-bd59-4e8f-b0c0-177e70d04f9b",
+   "nombre": "Redmine",
+   "categoria": "Herramientas & Gestión",
+   "sinonimos": [
+    "redmine"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781481"
+  },
+  {
+   "id": "0708bc4c-97d5-468a-a534-d1a460ae8f22",
+   "nombre": "Redshift",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "redshift",
+    "aws redshift"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341314"
+  },
+  {
+   "id": "ee670d02-ddab-4c89-bfd3-11f17f63c1e8",
+   "nombre": "SAP",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "sap"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781453"
+  },
+  {
+   "id": "c7aff456-d9ad-4b0f-863d-8661e08668d1",
+   "nombre": "SPSS",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "spss",
+    "ibm spss"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781492"
+  },
+  {
+   "id": "cdac08e7-8a4d-42c7-aa30-e74231c70b94",
+   "nombre": "SQL",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "sql",
+    "t-sql",
+    "pl-sql",
+    "pl/sql"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341318"
+  },
+  {
+   "id": "ef3ca90c-8956-467b-9950-8ef1618b7190",
+   "nombre": "SQL Server",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "sql server",
+    "mssql"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341319"
+  },
+  {
+   "id": "2d729d48-0d35-4637-9433-479c25fea289",
+   "nombre": "SSAS",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "ssas",
+    "sql server analysis services"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781423"
+  },
+  {
+   "id": "2233a27f-33dd-479a-af81-15b57443b2ed",
+   "nombre": "SSIS",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "ssis",
+    "sql server integration services"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781421"
+  },
+  {
+   "id": "99f19e48-2668-4348-a6c2-3b2755e12a83",
+   "nombre": "SSRS",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "ssrs",
+    "sql server reporting services"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781422"
+  },
+  {
+   "id": "3b983783-adbd-47f3-84cf-87ae2fc43e70",
+   "nombre": "Salesforce",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "salesforce"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781463"
+  },
+  {
+   "id": "6c4ea846-8541-46a6-83da-8d31af9e6214",
+   "nombre": "Sass",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "sass",
+    "scss"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781472"
+  },
+  {
+   "id": "9531528c-9bed-42b8-94ab-23e787d36a03",
+   "nombre": "Seaborn",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "seaborn"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781485"
+  },
+  {
+   "id": "4ae5e729-cbd7-49eb-a884-212291ad2971",
+   "nombre": "Selenium",
+   "categoria": "Herramientas & Testing",
+   "sinonimos": [
+    "selenium"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341315"
+  },
+  {
+   "id": "de726a13-594b-4c90-bb0c-8f7c8ec8625e",
+   "nombre": "SharePoint",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "sharepoint"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781464"
+  },
+  {
+   "id": "8134a9d3-cbd3-444d-a1a3-cce8dc259a93",
+   "nombre": "Snowflake",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "snowflake"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341316"
+  },
+  {
+   "id": "30c5b322-ab1d-4735-9544-b1657d5777b1",
+   "nombre": "SoapUI",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "soapui"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781446"
+  },
+  {
+   "id": "c0a8c319-7bdd-4546-bf6b-ce6a5fe7b903",
+   "nombre": "SonarQube",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "sonarqube"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781448"
+  },
+  {
+   "id": "d3082667-efdd-433b-88dd-043e1b8cc9ce",
+   "nombre": "Spark",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "spark",
+    "apache spark"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341317"
+  },
+  {
+   "id": "f097f29a-77a9-41a1-957d-d655d099e320",
+   "nombre": "Spring Boot",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "spring",
+    "spring boot",
+    "springboot"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341317"
+  },
+  {
+   "id": "26d1d2b5-3b6d-42f5-aaf5-ec7bc796d96f",
+   "nombre": "Streamlit",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "streamlit"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781486"
+  },
+  {
+   "id": "96c3ef12-43c4-457f-b221-6ed2061aa274",
+   "nombre": "Swagger",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "swagger",
+    "openapi"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781444"
+  },
+  {
+   "id": "3b2215f7-7ed3-4881-99c2-4d47ebb1eb92",
+   "nombre": "Synapse",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "synapse",
+    "azure synapse"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341320"
+  },
+  {
+   "id": "53073f1a-cd5d-458b-b3a9-233bc7483cd0",
+   "nombre": "Tableau",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "tableau",
+    "tableau desktop",
+    "tableau server"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781411"
+  },
+  {
+   "id": "b7be3af7-abf1-4cc4-b18d-cd2be490eaa9",
+   "nombre": "Tailwind CSS",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "tailwind css",
+    "tailwindcss",
+    "tailwind"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781470"
+  },
+  {
+   "id": "6674ef88-7814-4c47-a400-1c91c9a21923",
+   "nombre": "Talend",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "talend"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781427"
+  },
+  {
+   "id": "c2c4b945-805b-482d-83fd-cc0849311eef",
+   "nombre": "TensorFlow",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "tensorflow"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781434"
+  },
+  {
+   "id": "f6bd2fe3-5c1d-4d2d-91ce-350091d15b86",
+   "nombre": "Teradata",
+   "categoria": "Bases de Datos",
+   "sinonimos": [
+    "teradata"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781425"
+  },
+  {
+   "id": "3a816e1c-84d2-44a0-b73f-c2b27c6e2639",
+   "nombre": "Terraform",
+   "categoria": "Cloud & DevOps",
+   "sinonimos": [
+    "terraform"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341321"
+  },
+  {
+   "id": "5c6d35d5-564a-4cd7-a8f5-f1e69f2a1786",
+   "nombre": "TestRail",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "testrail"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781480"
+  },
+  {
+   "id": "2f6fd293-1ec4-44c6-a275-87be0da7f7ea",
+   "nombre": "Trello",
+   "categoria": "Herramientas & Gestión",
+   "sinonimos": [
+    "trello"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781482"
+  },
+  {
+   "id": "d8f8a905-c2c1-43e9-825d-a5c6befc0265",
+   "nombre": "TypeScript",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "typescript",
+    "ts"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341322"
+  },
+  {
+   "id": "7f353a77-19aa-4bbd-bf18-7cc4efc52431",
+   "nombre": "Visual Basic",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "visual basic",
+    "vb.net"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781477"
+  },
+  {
+   "id": "27cd416a-ef50-40f6-81f9-0f5f8a12d680",
+   "nombre": "Vite",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "vite"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781473"
+  },
+  {
+   "id": "17eb15f2-0a53-4ab1-a2c5-5f76a30b1fb8",
+   "nombre": "Vue",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "vue",
+    "vue.js",
+    "vuejs"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.341323"
+  },
+  {
+   "id": "d50be124-18d6-4de9-8698-c290ff42d90f",
+   "nombre": "Webpack",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "webpack"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781473"
+  },
+  {
+   "id": "fc142c3c-2d76-4076-850a-a8999589544d",
+   "nombre": "WordPress",
+   "categoria": "Desarrollo",
+   "sinonimos": [
+    "wordpress"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781462"
+  },
+  {
+   "id": "531c99f4-f387-41ac-9d3d-f9f9a378fb93",
+   "nombre": "Xray",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "xray",
+    "jira xray"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781447"
+  },
+  {
+   "id": "df4ee794-afac-4dd0-a6ec-30640de472f0",
+   "nombre": "Zephyr",
+   "categoria": "QA & Testing",
+   "sinonimos": [
+    "zephyr"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781483"
+  },
+  {
+   "id": "879d34f2-9783-41a2-9ea7-e4d736c14ad5",
+   "nombre": "dbt",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "dbt",
+    "dbt core",
+    "dbt cloud"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781430"
+  },
+  {
+   "id": "133fd229-99ea-433f-9f69-7e4b7a58747d",
+   "nombre": "n8n",
+   "categoria": "Herramientas & Gestión",
+   "sinonimos": [
+    "n8n"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781490"
+  },
+  {
+   "id": "4703a6c5-346b-4cd0-923f-4acad274d6f5",
+   "nombre": "scikit-learn",
+   "categoria": "Data & Analytics",
+   "sinonimos": [
+    "scikit-learn",
+    "sklearn"
+   ],
+   "activo": true,
+   "created_at": "2026-10-22T13:38:47.781433"
+  }
+ ],
+ "recruiting_habilidades": [
+  {
+   "id": "b0000001-0000-0000-0000-000000000007",
+   "nombre": "Adaptabilidad y flexibilidad",
+   "categoria": "Gestión Personal & Eficacia",
+   "sinonimos": [
+    "adaptabilidad",
+    "flexibilidad",
+    "gestion del cambio",
+    "tolerancia a la frustracion"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353809"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000012",
+   "nombre": "Capacidad de aprendizaje",
+   "categoria": "Analíticas & Cognitivas",
+   "sinonimos": [
+    "capacidad de aprendizaje",
+    "aprendizaje continuo",
+    "curiosidad intelectual",
+    "fast learner"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353814"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000001",
+   "nombre": "Comunicación efectiva",
+   "categoria": "Interpersonales & Comunicación",
+   "sinonimos": [
+    "comunicacion",
+    "comunicacion efectiva",
+    "comunicacion asertiva",
+    "expresion oral y escrita"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353800"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000002",
+   "nombre": "Liderazgo",
+   "categoria": "Liderazgo & Gestión",
+   "sinonimos": [
+    "liderazgo",
+    "liderazgo de equipos",
+    "people leadership",
+    "gestion de personas"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353804"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000004",
+   "nombre": "Negociación",
+   "categoria": "Interpersonales & Comunicación",
+   "sinonimos": [
+    "negociacion",
+    "acuerdo",
+    "resolucion de conflictos",
+    "manejo de objeciones"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353806"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000008",
+   "nombre": "Organización y planificación",
+   "categoria": "Gestión Personal & Eficacia",
+   "sinonimos": [
+    "organizacion",
+    "planificacion",
+    "gestion del tiempo",
+    "priorizacion"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353810"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000010",
+   "nombre": "Orientación a resultados",
+   "categoria": "Gestión Personal & Eficacia",
+   "sinonimos": [
+    "orientacion a resultados",
+    "enfoque a objetivos",
+    "cumplimiento de metas",
+    "goal oriented"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353812"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000011",
+   "nombre": "Orientación al cliente",
+   "categoria": "Interpersonales & Comunicación",
+   "sinonimos": [
+    "orientacion al cliente",
+    "customer focus",
+    "servicio al cliente",
+    "empatia con el cliente"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353813"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000006",
+   "nombre": "Pensamiento analítico",
+   "categoria": "Analíticas & Cognitivas",
+   "sinonimos": [
+    "pensamiento analitico",
+    "analisis",
+    "capacidad de analisis",
+    "pensamiento critico"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353808"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000009",
+   "nombre": "Proactividad e iniciativa",
+   "categoria": "Gestión Personal & Eficacia",
+   "sinonimos": [
+    "proactividad",
+    "iniciativa",
+    "autonomia",
+    "drive"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353811"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000005",
+   "nombre": "Resolución de problemas",
+   "categoria": "Analíticas & Cognitivas",
+   "sinonimos": [
+    "resolucion de problemas",
+    "problem solving",
+    "pensamiento resolutivo",
+    "troubleshooting conceptual"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353807"
+  },
+  {
+   "id": "b0000001-0000-0000-0000-000000000003",
+   "nombre": "Trabajo en equipo",
+   "categoria": "Interpersonales & Comunicación",
+   "sinonimos": [
+    "trabajo en equipo",
+    "colaboracion",
+    "team player",
+    "teamwork"
+   ],
+   "activo": true,
+   "created_at": "2026-10-08T16:05:29.353805"
+  }
+ ],
+ "recruiting_lideres": [
+  {
+   "id": "caf5e07d-efd7-48af-8a57-73fbf5fd4d59",
+   "nombre": "Andrea Vera",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "5e81d862-3ec8-456f-9716-d1668b5a08cd",
+   "nombre": "Fede",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "5cc7a19b-dae3-4e5b-9ae2-5b4b71c3ea90",
+   "nombre": "Maria Jose Padin",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "8ace84e5-3ee5-4fee-a998-91a770e6cd0a",
+   "nombre": "Martin Israilevich",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "dfd708fc-db42-401c-a770-0479a33a6e3d",
+   "nombre": "Nicolas Pozzi",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "e43e1223-2040-46ac-8ee4-1c3d66082ada",
+   "nombre": "Pablo Nardon",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "57f3ce79-47f9-462d-a1b0-a509c473d8da",
+   "nombre": "Ramiro Salas",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  }
+ ],
+ "recruiting_reclutadores": [
+  {
+   "id": "19aca5a3-0e63-4702-bd68-70c97ac5098d",
+   "nombre": "Richard",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  },
+  {
+   "id": "650da0bb-f4a0-4362-b63d-0d2cad83563b",
+   "nombre": "Sofi",
+   "activo": true,
+   "created_at": "2026-10-15T20:48:35.600117"
+  }
+ ]
+}

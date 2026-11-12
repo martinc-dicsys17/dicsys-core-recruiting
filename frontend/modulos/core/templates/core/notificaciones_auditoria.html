@@ -1,0 +1,42 @@
+{% extends "core/base.html" %}
+{% block title %}Auditoria de notificaciones - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in max-w-7xl mx-auto">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900 flex items-center gap-2"><i data-lucide="shield-check" class="w-6 h-6 text-primary-600"></i> Auditoria de notificaciones</h1>
+            <p class="mt-1 text-sm text-dark-500">Evidencia de envios del sistema, lecturas y eliminaciones por usuario.</p>
+        </div>
+        <a href="{{ url_for('core.historial_notificaciones') }}" class="inline-flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium bg-white border border-dark-200 rounded-lg text-dark-700 hover:bg-dark-50"><i data-lucide="arrow-left" class="w-4 h-4"></i> Mi historial</a>
+    </div>
+
+    <form method="get" class="bg-white border border-dark-200 rounded-lg p-4 mb-5 flex flex-col sm:flex-row gap-3">
+        <input type="text" name="buscar" value="{{ buscar }}" placeholder="Buscar por usuario o titulo" class="flex-1 px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm">
+        <input type="text" name="origen" value="{{ origen }}" placeholder="Origen del modulo" class="sm:w-56 px-3 py-2 bg-dark-50 border border-dark-200 rounded-lg text-sm">
+        <button class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700"><i data-lucide="search" class="w-4 h-4"></i> Buscar</button>
+    </form>
+
+    <div class="bg-white border border-dark-200 rounded-lg overflow-x-auto">
+        <table class="w-full min-w-[850px] text-sm">
+            <thead class="bg-dark-50 border-b border-dark-100 text-xs uppercase text-dark-500"><tr><th class="px-4 py-3 text-left">Fecha</th><th class="px-4 py-3 text-left">Destinatario</th><th class="px-4 py-3 text-left">Notificacion</th><th class="px-4 py-3 text-left">Origen</th><th class="px-4 py-3 text-left">Estado</th></tr></thead>
+            <tbody class="divide-y divide-dark-100">
+                {% for notificacion in items %}
+                <tr class="align-top hover:bg-dark-50/60">
+                    <td class="px-4 py-3 text-dark-500 whitespace-nowrap">{{ notificacion.created_at|datetime_gmt3_ampm }}</td>
+                    <td class="px-4 py-3"><p class="font-medium text-dark-900">{{ notificacion.usuario_nombre }}</p><p class="text-xs text-dark-500">{{ notificacion.usuario_email }}</p></td>
+                    <td class="px-4 py-3"><p class="font-medium text-dark-900">{{ notificacion.titulo }}</p><p class="mt-1 text-xs text-dark-600 max-w-md">{{ notificacion.mensaje }}</p></td>
+                    <td class="px-4 py-3 text-xs font-mono text-dark-600">{{ notificacion.origen or 'sistema' }}</td>
+                    <td class="px-4 py-3">
+                        {% if notificacion.deleted_at %}<span class="inline-flex px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-medium">Eliminada</span>
+                        {% elif notificacion.leida_at %}<span class="inline-flex px-2 py-1 rounded bg-emerald-100 text-emerald-700 text-xs font-medium">Leida</span>
+                        {% else %}<span class="inline-flex px-2 py-1 rounded bg-primary-100 text-primary-700 text-xs font-medium">No leida</span>{% endif %}
+                    </td>
+                </tr>
+                {% else %}<tr><td colspan="5" class="px-6 py-16 text-center text-dark-500">No hay notificaciones para los filtros aplicados.</td></tr>{% endfor %}
+            </tbody>
+        </table>
+        {% if total_paginas > 1 %}<div class="flex items-center justify-between px-4 py-3 border-t border-dark-100 text-sm"><span class="text-dark-500">Pagina {{ pagina }} de {{ total_paginas }}</span><div class="flex gap-2">{% if pagina > 1 %}<a href="{{ url_for('core.auditoria_notificaciones', pagina=pagina-1, buscar=buscar, origen=origen) }}" class="px-3 py-1.5 border border-dark-200 rounded-lg hover:bg-dark-50">Anterior</a>{% endif %}{% if pagina < total_paginas %}<a href="{{ url_for('core.auditoria_notificaciones', pagina=pagina+1, buscar=buscar, origen=origen) }}" class="px-3 py-1.5 border border-dark-200 rounded-lg hover:bg-dark-50">Siguiente</a>{% endif %}</div></div>{% endif %}
+    </div>
+</div>
+{% endblock %}

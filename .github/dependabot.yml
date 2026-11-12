@@ -1,0 +1,39 @@
+# Dependabot (F05-P03): PRs semanales contra main para las actions, las imágenes base y los locks de uv. Los parches y
+# las minors van juntos en un PR por ecosistema y carpeta; cada major viene en su propio PR.
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: weekly
+    ignore:
+      # Python 3.14 en Docker, CI y local (D-05): de la imagen base solo los parches
+      - dependency-name: python
+        update-types: [version-update:semver-major, version-update:semver-minor]
+    groups:
+      imagenes:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  - package-ecosystem: uv
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: weekly
+    groups:
+      dependencias:
+        patterns: ['*']
+        update-types: [minor, patch]

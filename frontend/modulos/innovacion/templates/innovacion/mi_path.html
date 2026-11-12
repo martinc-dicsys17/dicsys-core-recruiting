@@ -1,0 +1,2510 @@
+{% extends "core/base.html" %}
+
+{% block title %}Path de Certificación AI - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ lightboxOpen: false, lightboxSrc: '', lightboxAlt: '', lightboxIsPdf: false }">
+
+    <!-- Advertencia si no hay empleado asociado -->
+    {% if not tiene_empleado %}
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-5">
+        <div class="flex items-start space-x-4">
+            <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <i data-lucide="alert-triangle" class="w-6 h-6 text-amber-600"></i>
+            </div>
+            <div>
+                <h3 class="font-semibold text-amber-800 mb-1">No tenés un empleado asociado</h3>
+                <p class="text-amber-700 text-sm">
+                    Tu usuario no está vinculado a un registro de empleado.
+                    Contactá a RRHH para que asocien tu cuenta con tu legajo de empleado.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}{# not tiene_empleado #}
+
+    {% if tiene_empleado %}
+    <!-- Modal Lightbox para certificados -->
+    <div x-show="lightboxOpen" x-cloak class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+        @keydown.escape.window="lightboxOpen = false">
+        <div class="fixed inset-0 bg-dark-900/80 backdrop-blur-sm" @click="lightboxOpen = false"></div>
+        <div class="relative z-10 max-w-4xl max-h-[90vh] w-full flex flex-col items-center">
+            <button @click="lightboxOpen = false"
+                class="absolute -top-3 -right-3 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-dark-500 hover:text-dark-900 hover:bg-dark-50 transition-colors z-20"
+                aria-label="Cerrar vista completa">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <template x-if="lightboxIsPdf">
+                <iframe :src="lightboxSrc" class="w-full rounded-2xl shadow-2xl bg-white"
+                    style="height: 80vh;"></iframe>
+            </template>
+            <template x-if="!lightboxIsPdf">
+                <img :src="lightboxSrc" :alt="lightboxAlt"
+                    class="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain bg-white">
+            </template>
+        </div>
+    </div>
+
+    {% if cert %}
+    <div x-data="miPathData()">
+
+        <!-- HEADER COMPACTO + BARRA DE PROGRESO ÚNICA -->
+        <div class="mb-6">
+            <!-- Header con Flexbox: Info a la izquierda, Acciones a la derecha -->
+            <div class="flex items-center justify-between mb-4">
+                <!-- Grupo Izquierdo: Icono + Título + Badge -->
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-primary-500 rounded-2xl flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="trophy" class="w-6 h-6 text-white">
+                        </i>
+                    </div>
+                    <div class="flex items-center gap-2.5 flex-wrap">
+                        <h1 class="text-xl font-bold text-dark-900">Path de Certificación AI</h1>
+                        <span
+                            class="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-700 rounded-lg text-xs font-semibold border border-primary-200">
+                            {{ cert.tipo_nombre or cert.tipo_certificacion }}
+                        </span>
+                        <!-- Badge de estado -->
+                        {% if cert.estado == 'completada' %}
+                        <span
+                            class="inline-flex items-center px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg text-xs font-semibold border border-emerald-200">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5 mr-1"></i>
+                            Completada
+                        </span>
+                        {% elif cert.estado == 'en_revision' %}
+                        <span
+                            class="inline-flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200">
+                            <i data-lucide="clock" class="w-3.5 h-3.5 mr-1"></i>
+                            En Revisión
+                        </span>
+                        <form method="post" action="{{ url_for('innovacion.mi_path_volver_edicion') }}" class="inline">
+                            <button type="submit"
+                                class="inline-flex items-center gap-1.5 px-3 py-1 bg-white text-dark-600 hover:text-amber-700 hover:bg-amber-50 rounded-lg text-xs font-semibold border border-dark-200 hover:border-amber-200 transition-colors"
+                                title="Reabrir el path para seguir editando">
+                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                Volver a edición
+                            </button>
+                        </form>
+                        {% elif cert.estado == 'en_progreso' %}
+                        <span
+                            class="inline-flex items-center px-3 py-1 bg-amber-100 text-amber-700 rounded-lg text-xs font-semibold border border-amber-200">
+                            <i data-lucide="loader" class="w-3.5 h-3.5 mr-1"></i>
+                            En Progreso ({{ cert.porcentaje_avance or '0' }}%)
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Grupo Derecho: Acciones -->
+                <div class="flex items-center gap-2">
+                    {% set path_info_links = {
+                    'training':
+                    'https://dicsys.notion.site/1-Path-Training-Formaci-n-349b8570e4598039a3d7e4aa1e9491d4?pvs=74',
+                    'iniciativa':
+                    'https://dicsys.notion.site/2-Path-Iniciativa-Caso-de-Uso-349b8570e45980ad84a7c99804cd7a95?pvs=25',
+                    'finalista':
+                    'https://dicsys.notion.site/3-Finalizaste-del-Challenge-349b8570e459807e9466f8bacd250210'
+                    } %}
+                    {% if cert.tipo_certificacion in path_info_links %}
+                    <a href="{{ path_info_links[cert.tipo_certificacion] }}" target="_blank" rel="noopener"
+                        class="inline-flex items-center gap-1.5 px-3 py-2 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-lg text-sm font-medium transition-colors">
+                        <i data-lucide="external-link" class="w-4 h-4"></i>
+                        <span class="hidden sm:inline">Ver guía</span>
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- BARRA DE PROGRESO ÚNICA (solo visible si NO está completada) -->
+            {% if cert.estado != 'completada' %}
+            <div class="bg-white rounded-xl border border-dark-100 px-5 py-4">
+                {% if cert.estado == 'en_revision' %}
+                <!-- Estado: En Revisión -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="clock" class="w-5 h-5 text-blue-600"></i>
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-dark-900">Path completado - En revisión</p>
+                            <p class="text-xs text-dark-600">Esperando aprobación del equipo de Innovación</p>
+                        </div>
+                    </div>
+                    <span
+                        class="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-semibold border border-blue-200">
+                        <i data-lucide="check-circle" class="w-3.5 h-3.5 mr-1.5"></i>
+                        {{ cert.progreso_completados or '100%' }}
+                    </span>
+                </div>
+                {% else %}
+                <!-- Estado: En Progreso -->
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-semibold text-dark-700"
+                        x-text="'Paso ' + wizardStep + ' de ' + totalSteps + ': ' + currentStepLabel">
+                    </span>
+                    <span class="text-sm font-bold text-primary-600"
+                        x-text="porcentaje + '%'">
+                    </span>
+                </div>
+                <div class="w-full h-2.5 bg-dark-100 rounded-full overflow-hidden">
+                    <div class="h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all duration-500"
+                        :style="'width: ' + porcentaje + '%'">
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- LAYOUT 2 COLUMNAS: Form (certificado) izquierda + Sidebar (logros) derecha -->
+        <div class="flex flex-row gap-6 items-start">
+
+            <!-- COLUMNA PRINCIPAL -->
+            <div class="order-1 flex-1 min-w-0">
+                {% if cert.estado == 'completada' %}
+                <!-- === CERTIFICADO COMPLETADO === -->
+                {% include "innovacion/partials/certificate_card.html" %}
+                <div class="mt-4 text-center">
+                    <a href="{{ url_for('certificates.certificate_public', cert_id=cert.id) }}" target="_blank"
+                        class="inline-flex items-center px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold text-sm transition-all">
+                        <i data-lucide="external-link" class="w-4 h-4 mr-2"></i>
+                        Ver Certificado Público
+                    </a>
+                </div>
+
+                {% elif cert.estado == 'en_revision' %}
+                <!-- === PATH EN REVISIÓN === -->
+                <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                    <div class="p-8 text-center">
+                        <!-- Icono de éxito -->
+                        <div
+                            class="w-20 h-20 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-5">
+                            <i data-lucide="check-circle" class="w-10 h-10 text-blue-600"></i>
+                        </div>
+
+                        <!-- Título -->
+                        <h2 class="text-2xl font-bold text-dark-900 mb-2">¡Path completado!</h2>
+                        <p class="text-dark-600 mb-6 max-w-md mx-auto">
+                            Tu certificación está completa y esperando la aprobación del equipo de Innovación. Te
+                            notificaremos cuando sea aprobada.
+                        </p>
+
+                        <!-- Información de progreso -->
+                        <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 max-w-md mx-auto mb-6">
+                            <div class="flex items-center justify-between mb-3">
+                                <span class="text-sm font-medium text-dark-700">Progreso completado</span>
+                                <span class="text-sm font-bold text-blue-600">{{ cert.progreso_completados or '100%'
+                                    }}</span>
+                            </div>
+                            {% if cert.fecha_en_presentacion %}
+                            <div class="flex items-center justify-between text-xs text-dark-600">
+                                <span>Enviado el:</span>
+                                <span class="font-medium">{{ cert.fecha_en_presentacion.strftime('%d de %B de %Y') if
+                                    cert.fecha_en_presentacion.strftime else cert.fecha_en_presentacion }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Botón para volver -->
+                        <a href="{{ url_for('innovacion.resumen') }}"
+                            class="inline-flex items-center gap-2 px-5 py-2.5 bg-dark-100 text-dark-700 border border-dark-200 rounded-xl hover:bg-dark-200 font-medium text-sm transition-colors">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                            Volver al inicio
+                        </a>
+                    </div>
+                </div>
+
+                {% else %}
+                <!-- === FORMULARIO (en_progreso, iniciado, sin_iniciar) === -->
+                <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                    <div id="form-error">
+                    </div>
+                    <form hx-post="{{ url_for('innovacion.mi_path_actualizar', id=cert.id) }}" hx-target="#form-error"
+                        hx-indicator="#submit-spinner" method="POST" @submit="
+                            if (!validarTodoElPath()) {
+                                $event.preventDefault();
+                                return false;
+                            }
+                            return true;
+                          ">
+                        <div class="p-6 space-y-5">
+                            {% if cert.tipo_certificacion == 'finalista' %}
+                            <!-- === WIZARD FINALISTA DEL CHALLENGE === -->
+                            <input type="hidden" name="tecnologias" :value="tecnologias.join(',')">
+
+                            <!-- === PASO 1: Configuración del Challenge === -->
+                            <div x-show="wizardStep === 1" x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0 translate-x-4"
+                                x-transition:enter-end="opacity-100 translate-x-0">
+
+                                <!-- Mini guía colapsable -->
+                                <div x-data="{ guiaOpen: false }"
+                                    class="bg-primary-50/50 border border-primary-200 rounded-xl mb-5 overflow-hidden">
+                                    <button type="button" @click="guiaOpen = !guiaOpen"
+                                        class="w-full px-4 py-3 flex items-center justify-between hover:bg-primary-100/50 transition-colors">
+                                        <h4 class="font-semibold text-primary-800 text-sm flex items-center gap-2">
+                                            <i data-lucide="book-open" class="w-4 h-4 text-primary-600"></i>
+                                            ¿Cómo empezar?
+                                        </h4>
+                                        <i data-lucide="chevron-down"
+                                            class="w-4 h-4 text-primary-600 transition-transform"
+                                            :class="guiaOpen ? 'rotate-180' : ''"></i>
+                                    </button>
+                                    <div x-show="guiaOpen" x-collapse>
+                                        <div class="px-4 pb-4">
+                                            <!-- Pasos para empezar -->
+                                            <ol
+                                                class="text-xs text-primary-700 space-y-1.5 list-decimal list-inside mb-3">
+                                                <li>Registrá tu cuenta de GitHub con tu email <span
+                                                        class="font-semibold">@dicsys.com</span></li>
+                                                <li>Solicitá acceso al repositorio <a
+                                                        href="https://github.com/Dicsys-SA/innovacion-casos-uso"
+                                                        target="_blank"
+                                                        class="font-semibold underline hover:text-primary-900">innovacion-casos-uso</a>
+                                                    en el Canal <span class="font-semibold">#Innovación</span> de Webex
+                                                </li>
+                                                <li>Creá el path base (ej: <code
+                                                        class="bg-primary-100 px-1.5 py-0.5 rounded text-primary-800 font-mono">challenge_ai-2026/1-juan_perez</code>)
+                                                </li>
+                                            </ol>
+
+                                            <p class="text-xs text-primary-800 mb-3 font-medium">
+                                                Tu challenge se organiza en <span class="font-semibold">DOS
+                                                    carpetas</span> dentro del repositorio:
+                                            </p>
+
+                                            <!-- Carpeta Presentación -->
+                                            <div class="bg-white/70 rounded-lg p-3 mb-3 border border-primary-200">
+                                                <div class="flex items-start gap-2 mb-2">
+                                                    <i data-lucide="file-text"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0 mt-0.5"></i>
+                                                    <div class="flex-1">
+                                                        <h5 class="font-semibold text-primary-900 text-xs mb-1">📄
+                                                            Carpeta: /presentacion</h5>
+                                                        <p class="text-xs text-primary-700 mb-1.5">
+                                                            <span class="font-medium">Qué incluir</span> (podés usar uno
+                                                            o varios):
+                                                        </p>
+                                                        <ul class="text-xs text-primary-700 space-y-0.5 ml-3 list-disc">
+                                                            <li>Slides de la presentación (PPT, PDF)</li>
+                                                            <li>Videos de la demo o pitch</li>
+                                                            <li>Documentación del proyecto</li>
+                                                            <li>Diagramas y mockups</li>
+                                                        </ul>
+                                                        <p class="text-xs text-primary-800 font-medium mt-1.5">
+                                                            → Objetivo: Presentar <span class="font-semibold">QUÉ</span>
+                                                            hiciste y <span class="font-semibold">POR QUÉ</span>
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Carpeta Implementación -->
+                                            <div class="bg-white/70 rounded-lg p-3 mb-3 border border-primary-200">
+                                                <div class="flex items-start gap-2 mb-2">
+                                                    <i data-lucide="code"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0 mt-0.5"></i>
+                                                    <div class="flex-1">
+                                                        <h5 class="font-semibold text-primary-900 text-xs mb-1">💻
+                                                            Carpeta: /implementacion</h5>
+                                                        <p class="text-xs text-primary-700 mb-1.5">
+                                                            <span class="font-medium">Qué incluir</span> (podés usar uno
+                                                            o varios):
+                                                        </p>
+                                                        <ul class="text-xs text-primary-700 space-y-0.5 ml-3 list-disc">
+                                                            <li>Código fuente del proyecto</li>
+                                                            <li>Demo funcional o prototipo</li>
+                                                            <li>Documentación técnica (README, API docs)</li>
+                                                            <li>Scripts de instalación/deployment</li>
+                                                        </ul>
+                                                        <p class="text-xs text-primary-800 font-medium mt-1.5">
+                                                            → Objetivo: Demostrar <span
+                                                                class="font-semibold">CÓMO</span> funciona tu solución
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Advertencia -->
+                                            <div class="bg-amber-50/80 border border-amber-200 rounded-lg p-2.5">
+                                                <p class="text-xs text-amber-800 flex items-start gap-1.5">
+                                                    <i data-lucide="alert-circle"
+                                                        class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+                                                    <span><span class="font-semibold">Importante:</span> Ambas carpetas
+                                                        (/presentacion e /implementacion) las debes crear en el
+                                                        repositorio de Git.</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-dark-900 mb-1">Path del Challenge
+                                        *</label>
+                                    <p class="text-dark-600 text-xs mb-2">
+                                        Ingresá el path base de tu challenge. Deberás crear las carpetas
+                                        /presentacion e /implementacion.
+                                    </p>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span
+                                            class="text-sm text-dark-500 whitespace-nowrap">https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/</span>
+                                        <input type="text" x-model="repo_base_path"
+                                            @input="repo_base_full = 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path"
+                                            placeholder="challenge_ai-2026/1-juan_perez" maxlength="500"
+                                            class="flex-1 px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                    </div>
+                                    <p class="text-dark-500 text-xs mb-3">
+                                        <i data-lucide="info" class="w-3 h-3 inline"></i>
+                                        Ejemplo: <code
+                                            class="bg-dark-100 px-1.5 py-0.5 rounded text-dark-700 font-mono text-xs">challenge_ai-2026/1-juan_perez</code>
+                                    </p>
+
+                                    <!-- Preview de URLs generadas - SIEMPRE VISIBLE -->
+                                    <div class="mt-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                                        <p class="text-xs font-semibold text-emerald-800 mb-3 flex items-center gap-1">
+                                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                            Deberás subir la documentación en estas rutas:
+                                        </p>
+                                        <div class="space-y-2.5">
+                                            <div class="bg-white/60 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <i data-lucide="file-text" class="w-4 h-4 text-emerald-600"></i>
+                                                    <span
+                                                        class="text-xs font-semibold text-emerald-900">Presentación</span>
+                                                </div>
+                                                <code class="text-xs text-emerald-700 break-all block"
+                                                    x-text="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/presentacion' : 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/[tu-path]/presentacion'"></code>
+                                            </div>
+                                            <div class="bg-white/60 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <i data-lucide="code" class="w-4 h-4 text-emerald-600"></i>
+                                                    <span
+                                                        class="text-xs font-semibold text-emerald-900">Implementación</span>
+                                                </div>
+                                                <code class="text-xs text-emerald-700 break-all block"
+                                                    x-text="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/implementacion' : 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/[tu-path]/implementacion'"></code>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Campos hidden para enviar al backend -->
+                                    <input type="hidden" name="repo_presentacion"
+                                        :value="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/presentacion' : ''">
+                                    <input type="hidden" name="repo_demo"
+                                        :value="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/implementacion' : ''">
+                                </div>
+                            </div>
+                            <!-- /PASO 1 -->
+
+                            <!-- === PASO 2: Detalles del Challenge === -->
+                            <div x-show="wizardStep === 2" x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0 translate-x-4"
+                                x-transition:enter-end="opacity-100 translate-x-0">
+                                <div class="space-y-5">
+                                    <!-- Temática con Autocompletado -->
+                                    <div class="relative">
+                                        <label class="block text-xs font-semibold text-dark-900 mb-1">Temática *</label>
+                                        <p class="text-dark-600 text-xs mb-2">Área del challenge (ej: Data, Education,
+                                            Finance, Retail, Factory)</p>
+
+                                        <!-- Input con autocompletado -->
+                                        <div class="relative">
+                                            <input type="text" x-model="tematica" @input="onTematicaInputChange()"
+                                                @keydown="onTematicaInputKeydown($event)"
+                                                @focus="showTematicaSuggestions = filteredTematicaSuggestions.length > 0"
+                                                @blur="setTimeout(() => showTematicaSuggestions = false, 200)"
+                                                placeholder="Ej: Data, Finance, Retail..." maxlength="200"
+                                                class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all"
+                                                autocomplete="off">
+                                            <input type="hidden" name="tematica" :value="tematica">
+
+                                            <!-- Dropdown de sugerencias -->
+                                            <div x-show="showTematicaSuggestions && filteredTematicaSuggestions.length > 0"
+                                                x-cloak
+                                                class="absolute z-50 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                <template x-for="(suggestion, index) in filteredTematicaSuggestions"
+                                                    :key="suggestion">
+                                                    <button type="button" @click="selectTematicaSuggestion(suggestion)"
+                                                        :class="index === selectedTematicaSuggestionIndex ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                                                        class="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 border-b border-dark-100 last:border-b-0">
+                                                        <i data-lucide="tag" class="w-4 h-4 text-primary-500"></i>
+                                                        <span x-text="suggestion"></span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-dark-500 text-xs mt-2">
+                                            <i data-lucide="info" class="w-3 h-3 inline"></i>
+                                            Usá las flechas ↑↓ para navegar las sugerencias o escribí tu propia
+                                            temática.
+                                        </p>
+                                    </div>
+                                    <!-- Tecnologías con Autocompletado -->
+                                    <div class="relative">
+                                        <label class="block text-xs font-semibold text-dark-900 mb-1">Tecnologías Usadas
+                                            *</label>
+                                        <p class="text-dark-600 text-xs mb-2">Escribí para buscar tecnologías sugeridas
+                                            o agregá las tuyas</p>
+
+                                        <!-- Tags seleccionados -->
+                                        <div class="flex flex-wrap gap-2 mb-2 min-h-[42px] p-2.5 bg-white border border-dark-200 rounded-xl"
+                                            :class="tecnologias.length > 0 ? '' : 'items-center justify-center'">
+                                            <template x-for="(tag, index) in tecnologias" :key="index">
+                                                <span
+                                                    class="inline-flex items-center px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg text-sm font-medium shadow-sm">
+                                                    <span x-text="tag">
+                                                    </span>
+                                                    <button type="button" @click="removeTag(index)"
+                                                        class="ml-2 text-primary-500 hover:text-red-500 transition-colors"
+                                                        aria-label="Eliminar tecnología">
+                                                        <i data-lucide="x" class="w-3.5 h-3.5">
+                                                        </i>
+                                                    </button>
+                                                </span>
+                                            </template>
+                                            <span x-show="tecnologias.length === 0" class="text-dark-300 text-sm italic"
+                                                x-cloak>Ninguna tecnología agregada aún</span>
+                                        </div>
+
+                                        <!-- Input con autocompletado -->
+                                        <div class="relative">
+                                            <div class="flex gap-2">
+                                                <input type="text" x-model="nuevoTag" @input="onInputChange()"
+                                                    @keydown="onInputKeydown($event)" @keydown.enter.prevent="addTag()"
+                                                    @keydown.comma.prevent="addTag()"
+                                                    @focus="showSuggestions = filteredSuggestions.length > 0"
+                                                    @blur="setTimeout(() => showSuggestions = false, 200)"
+                                                    placeholder="Ej: Python, React, PostgreSQL..."
+                                                    class="flex-1 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm"
+                                                    autocomplete="off">
+                                                <button type="button" @click="addTag()" :disabled="!nuevoTag.trim()"
+                                                    :class="nuevoTag.trim() ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-dark-200 text-dark-400 cursor-not-allowed'"
+                                                    class="px-4 py-2.5 rounded-xl font-medium text-sm transition-all">
+                                                    <i data-lucide="plus" class="w-4 h-4">
+                                                    </i>
+                                                </button>
+                                            </div>
+
+                                            <!-- Dropdown de sugerencias -->
+                                            <div x-show="showSuggestions && filteredSuggestions.length > 0" x-cloak
+                                                class="absolute z-50 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                <template x-for="(suggestion, index) in filteredSuggestions"
+                                                    :key="suggestion">
+                                                    <button type="button" @click="selectSuggestion(suggestion)"
+                                                        :class="index === selectedSuggestionIndex ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                                                        class="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 border-b border-dark-100 last:border-b-0">
+                                                        <i data-lucide="code" class="w-4 h-4 text-primary-500">
+                                                        </i>
+                                                        <span x-text="suggestion">
+                                                        </span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-dark-500 text-xs mt-2">
+                                            <i data-lucide="info" class="w-3 h-3 inline">
+                                            </i>
+                                            Presioná Enter o coma para agregar. Usá las flechas ↑↓ para navegar las
+                                            sugerencias.
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-semibold text-dark-700 mb-1">Fecha de
+                                            Presentación en Tech-Talk *</label>
+                                        <p class="text-dark-500 text-xs mb-2">Pactá la fecha en el Canal #Innovacion de
+                                            Webex</p>
+                                        <input type="date" name="fecha_presentacion" x-model="fecha_presentacion"
+                                            class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- /PASO 2 -->
+                            {% elif cert.tipo_certificacion == 'iniciativa' %}
+                            <!-- === WIZARD INICIATIVA / CASO DE USO === -->
+                            <input type="hidden" name="tecnologias" :value="tecnologias.join(',')">
+
+                            <!-- === PASO 1: Descripción === -->
+                            <div x-show="wizardStep === 1" x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0 translate-x-4"
+                                x-transition:enter-end="opacity-100 translate-x-0">
+
+                                <!-- Mini guía colapsable -->
+                                <div x-data="{ guiaOpen: false }"
+                                    class="bg-primary-50/50 border border-primary-200 rounded-xl mb-5 overflow-hidden">
+                                    <button type="button" @click="guiaOpen = !guiaOpen"
+                                        class="w-full px-4 py-3 flex items-center justify-between hover:bg-primary-100/50 transition-colors">
+                                        <h4 class="font-semibold text-primary-800 text-sm flex items-center gap-2">
+                                            <i data-lucide="book-open" class="w-4 h-4 text-primary-600"></i>
+                                            ¿Cómo empezar?
+                                        </h4>
+                                        <i data-lucide="chevron-down"
+                                            class="w-4 h-4 text-primary-600 transition-transform"
+                                            :class="guiaOpen ? 'rotate-180' : ''"></i>
+                                    </button>
+                                    <div x-show="guiaOpen" x-collapse>
+                                        <div class="px-4 pb-4">
+                                            <!-- Pasos para empezar -->
+                                            <ol
+                                                class="text-xs text-primary-700 space-y-1.5 list-decimal list-inside mb-3">
+                                                <li>Registrá tu cuenta de GitHub con tu email <span
+                                                        class="font-semibold">@dicsys.com</span></li>
+                                                <li>Solicitá acceso al repositorio <a
+                                                        href="https://github.com/Dicsys-SA/innovacion-casos-uso"
+                                                        target="_blank"
+                                                        class="font-semibold underline hover:text-primary-900">innovacion-casos-uso</a>
+                                                    en el Canal <span class="font-semibold">#Innovación</span> de Webex
+                                                </li>
+                                                <li>Creá el path base (ej: <code
+                                                        class="bg-primary-100 px-1.5 py-0.5 rounded text-primary-800 font-mono">area/cliente/caso_uso</code>)
+                                                </li>
+                                            </ol>
+
+                                            <p class="text-xs text-primary-800 mb-3 font-medium">
+                                                Tu caso de uso se organiza en <span class="font-semibold">DOS
+                                                    carpetas</span> dentro del repositorio:
+                                            </p>
+
+                                            <!-- Carpeta Descripción -->
+                                            <div class="bg-white/70 rounded-lg p-3 mb-3 border border-primary-200">
+                                                <div class="flex items-start gap-2 mb-2">
+                                                    <i data-lucide="file-text"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0 mt-0.5"></i>
+                                                    <div class="flex-1">
+                                                        <h5 class="font-semibold text-primary-900 text-xs mb-1">📄
+                                                            Carpeta: /descripcion</h5>
+                                                        <p class="text-xs text-primary-700 mb-1.5">
+                                                            <span class="font-medium">Qué incluir</span> (podés usar uno
+                                                            o varios):
+                                                        </p>
+                                                        <ul class="text-xs text-primary-700 space-y-0.5 ml-3 list-disc">
+                                                            <li>README.md explicando el caso de uso</li>
+                                                            <li>Documentos PDF o Word con el análisis</li>
+                                                            <li>Videos demostrativos (si aplica)</li>
+                                                            <li>Diagramas de arquitectura o flujo</li>
+                                                        </ul>
+                                                        <p class="text-xs text-primary-800 font-medium mt-1.5">
+                                                            → Objetivo: Explicar <span class="font-semibold">QUÉ</span>
+                                                            problema resuelve
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Carpeta Implementación -->
+                                            <div class="bg-white/70 rounded-lg p-3 mb-3 border border-primary-200">
+                                                <div class="flex items-start gap-2 mb-2">
+                                                    <i data-lucide="code"
+                                                        class="w-4 h-4 text-primary-600 flex-shrink-0 mt-0.5"></i>
+                                                    <div class="flex-1">
+                                                        <h5 class="font-semibold text-primary-900 text-xs mb-1">💻
+                                                            Carpeta: /implementacion</h5>
+                                                        <p class="text-xs text-primary-700 mb-1.5">
+                                                            <span class="font-medium">Qué incluir</span> (podés usar uno
+                                                            o varios):
+                                                        </p>
+                                                        <ul class="text-xs text-primary-700 space-y-0.5 ml-3 list-disc">
+                                                            <li>Código fuente (Python, JavaScript, etc.)</li>
+                                                            <li>Scripts de automatización</li>
+                                                            <li>Notebooks de Jupyter (análisis de datos)</li>
+                                                            <li>PDFs/Word con capturas de resultados</li>
+                                                        </ul>
+                                                        <p class="text-xs text-primary-800 font-medium mt-1.5">
+                                                            → Objetivo: Mostrar <span class="font-semibold">CÓMO</span>
+                                                            implementaste la solución
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Advertencia -->
+                                            <div class="bg-amber-50/80 border border-amber-200 rounded-lg p-2.5">
+                                                <p class="text-xs text-amber-800 flex items-start gap-1.5">
+                                                    <i data-lucide="alert-circle"
+                                                        class="w-3.5 h-3.5 flex-shrink-0 mt-0.5"></i>
+                                                    <span><span class="font-semibold">Importante:</span> Ambas carpetas
+                                                        (/descripcion e /implementacion) las debes crear en el
+                                                        repositorio de Git.</span>
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-dark-900 mb-1">Path del Caso de Uso
+                                        *</label>
+                                    <p class="text-dark-600 text-xs mb-2">
+                                        Ingresá el nombre o path de tu caso de uso. Deberás crear las
+                                        carpetas /descripcion e /implementacion.
+                                    </p>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <span
+                                            class="text-sm text-dark-500 whitespace-nowrap">https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/</span>
+                                        <input type="text" x-model="repo_base_path"
+                                            @input="repo_base_full = 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path"
+                                            placeholder="area/cliente/caso_uso" maxlength="500"
+                                            class="flex-1 px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                    </div>
+                                    <p class="text-dark-500 text-xs mb-3">
+                                        <i data-lucide="info" class="w-3 h-3 inline"></i>
+                                        Ejemplos: <code
+                                            class="bg-dark-100 px-1.5 py-0.5 rounded text-dark-700 font-mono text-xs">dataengineering/arcor/caso_uso</code>,
+                                        <code
+                                            class="bg-dark-100 px-1.5 py-0.5 rounded text-dark-700 font-mono text-xs">desarrollo/agd/caso_uso</code>
+                                    </p>
+
+                                    <!-- Preview de URLs generadas - SIEMPRE VISIBLE -->
+                                    <div class="mt-3 p-4 bg-emerald-50 border border-emerald-200 rounded-xl">
+                                        <p class="text-xs font-semibold text-emerald-800 mb-3 flex items-center gap-1">
+                                            <i data-lucide="check-circle" class="w-4 h-4"></i>
+                                            Deberás subir la documentación en estas rutas:
+                                        </p>
+                                        <div class="space-y-2.5">
+                                            <div class="bg-white/60 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <i data-lucide="file-text" class="w-4 h-4 text-emerald-600"></i>
+                                                    <span class="text-xs font-semibold text-emerald-900">Descripción
+                                                        (documentación)</span>
+                                                </div>
+                                                <code class="text-xs text-emerald-700 break-all block"
+                                                    x-text="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/descripcion' : 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/[tu-path]/descripcion'"></code>
+                                            </div>
+                                            <div class="bg-white/60 rounded-lg p-3">
+                                                <div class="flex items-center gap-2 mb-1">
+                                                    <i data-lucide="code" class="w-4 h-4 text-emerald-600"></i>
+                                                    <span class="text-xs font-semibold text-emerald-900">Implementación
+                                                        (código)</span>
+                                                </div>
+                                                <code class="text-xs text-emerald-700 break-all block"
+                                                    x-text="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/implementacion' : 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/[tu-path]/implementacion'"></code>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Campos hidden para enviar al backend -->
+                                    <input type="hidden" name="repo_presentacion"
+                                        :value="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/descripcion' : ''">
+                                    <input type="hidden" name="repo_demo"
+                                        :value="repo_base_path ? 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/' + repo_base_path + '/implementacion' : ''">
+                                </div>
+                            </div>
+                            <!-- /PASO 1 -->
+
+                            <!-- === PASO 2: Detalles del Caso de Uso === -->
+                            <div x-show="wizardStep === 2" x-transition:enter="transition ease-out duration-200"
+                                x-transition:enter-start="opacity-0 translate-x-4"
+                                x-transition:enter-end="opacity-100 translate-x-0">
+                                <div class="space-y-5">
+                                    <h3 class="text-base font-bold text-dark-900">Contanos sobre tu caso de uso</h3>
+                                    <!-- Temática con Autocompletado -->
+                                    <div class="relative">
+                                        <label class="block text-xs font-semibold text-dark-900 mb-1">Temática *</label>
+                                        <p class="text-dark-600 text-xs mb-2">Área del caso de uso (ej: Data, Education,
+                                            Finance, Retail, Factory)</p>
+
+                                        <!-- Input con autocompletado -->
+                                        <div class="relative">
+                                            <input type="text" x-model="tematica" @input="onTematicaInputChange()"
+                                                @keydown="onTematicaInputKeydown($event)"
+                                                @focus="showTematicaSuggestions = filteredTematicaSuggestions.length > 0"
+                                                @blur="setTimeout(() => showTematicaSuggestions = false, 200)"
+                                                placeholder="Ej: Data, Finance, Retail..." maxlength="200"
+                                                class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all"
+                                                autocomplete="off">
+                                            <input type="hidden" name="tematica" :value="tematica">
+
+                                            <!-- Dropdown de sugerencias -->
+                                            <div x-show="showTematicaSuggestions && filteredTematicaSuggestions.length > 0"
+                                                x-cloak
+                                                class="absolute z-50 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                <template x-for="(suggestion, index) in filteredTematicaSuggestions"
+                                                    :key="suggestion">
+                                                    <button type="button" @click="selectTematicaSuggestion(suggestion)"
+                                                        :class="index === selectedTematicaSuggestionIndex ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                                                        class="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 border-b border-dark-100 last:border-b-0">
+                                                        <i data-lucide="tag" class="w-4 h-4 text-primary-500"></i>
+                                                        <span x-text="suggestion"></span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-dark-500 text-xs mt-2">
+                                            <i data-lucide="info" class="w-3 h-3 inline"></i>
+                                            Usá las flechas ↑↓ para navegar las sugerencias o escribí tu propia
+                                            temática.
+                                        </p>
+                                    </div>
+                                    <!-- Tecnologías con Autocompletado -->
+                                    <div class="relative">
+                                        <label class="block text-xs font-semibold text-dark-900 mb-1">Tecnologías Usadas
+                                            *</label>
+                                        <p class="text-dark-600 text-xs mb-2">Escribí para buscar tecnologías sugeridas
+                                            o agregá las tuyas</p>
+
+                                        <!-- Tags seleccionados -->
+                                        <div class="flex flex-wrap gap-2 mb-2 min-h-[42px] p-2.5 bg-white border border-dark-200 rounded-xl"
+                                            :class="tecnologias.length > 0 ? '' : 'items-center justify-center'">
+                                            <template x-for="(tag, index) in tecnologias" :key="index">
+                                                <span
+                                                    class="inline-flex items-center px-3 py-1.5 bg-primary-100 text-primary-700 rounded-lg text-sm font-medium shadow-sm">
+                                                    <span x-text="tag">
+                                                    </span>
+                                                    <button type="button" @click="removeTag(index)"
+                                                        class="ml-2 text-primary-500 hover:text-red-500 transition-colors"
+                                                        aria-label="Eliminar tecnología">
+                                                        <i data-lucide="x" class="w-3.5 h-3.5">
+                                                        </i>
+                                                    </button>
+                                                </span>
+                                            </template>
+                                            <span x-show="tecnologias.length === 0" class="text-dark-300 text-sm italic"
+                                                x-cloak>Ninguna tecnología agregada aún</span>
+                                        </div>
+
+                                        <!-- Input con autocompletado -->
+                                        <div class="relative">
+                                            <div class="flex gap-2">
+                                                <input type="text" x-model="nuevoTag" @input="onInputChange()"
+                                                    @keydown="onInputKeydown($event)" @keydown.enter.prevent="addTag()"
+                                                    @keydown.comma.prevent="addTag()"
+                                                    @focus="showSuggestions = filteredSuggestions.length > 0"
+                                                    @blur="setTimeout(() => showSuggestions = false, 200)"
+                                                    placeholder="Ej: Python, React, PostgreSQL..."
+                                                    class="flex-1 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm"
+                                                    autocomplete="off">
+                                                <button type="button" @click="addTag()" :disabled="!nuevoTag.trim()"
+                                                    :class="nuevoTag.trim() ? 'bg-primary-500 text-white hover:bg-primary-600' : 'bg-dark-200 text-dark-400 cursor-not-allowed'"
+                                                    class="px-4 py-2.5 rounded-xl font-medium text-sm transition-all">
+                                                    <i data-lucide="plus" class="w-4 h-4">
+                                                    </i>
+                                                </button>
+                                            </div>
+
+                                            <!-- Dropdown de sugerencias -->
+                                            <div x-show="showSuggestions && filteredSuggestions.length > 0" x-cloak
+                                                class="absolute z-50 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                                <template x-for="(suggestion, index) in filteredSuggestions"
+                                                    :key="suggestion">
+                                                    <button type="button" @click="selectSuggestion(suggestion)"
+                                                        :class="index === selectedSuggestionIndex ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                                                        class="w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 border-b border-dark-100 last:border-b-0">
+                                                        <i data-lucide="code" class="w-4 h-4 text-primary-500">
+                                                        </i>
+                                                        <span x-text="suggestion">
+                                                        </span>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </div>
+
+                                        <p class="text-dark-500 text-xs mt-2">
+                                            <i data-lucide="info" class="w-3 h-3 inline">
+                                            </i>
+                                            Presioná Enter o coma para agregar. Usá las flechas ↑↓ para navegar las
+                                            sugerencias.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- /PASO 2 -->
+                            {% elif cert.tipo_certificacion == 'training' %}
+                            <!-- === WIZARD TRAINING / FORMACIÓN === -->
+
+                            <div class="space-y-6">
+                                <!-- === PASO 1: NoN-Code === -->
+                                <div x-show="wizardStep === 1" x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 translate-x-4"
+                                    x-transition:enter-end="opacity-100 translate-x-0">
+                                    <!-- Mini guía colapsable -->
+                                    <div x-data="{ guiaOpen: false }"
+                                        class="bg-primary-50/50 border border-primary-200 rounded-xl mb-5 overflow-hidden">
+                                        <button type="button" @click="guiaOpen = !guiaOpen"
+                                            class="w-full px-4 py-3 flex items-center justify-between hover:bg-primary-100/50 transition-colors">
+                                            <h4 class="font-semibold text-primary-800 text-sm flex items-center gap-2">
+                                                <i data-lucide="book-open" class="w-4 h-4 text-primary-600"></i>
+                                                ¿Cómo empezar?
+                                            </h4>
+                                            <i data-lucide="chevron-down"
+                                                class="w-4 h-4 text-primary-600 transition-transform"
+                                                :class="guiaOpen ? 'rotate-180' : ''"></i>
+                                        </button>
+                                        <div x-show="guiaOpen" x-collapse>
+                                            <div class="px-4 pb-4">
+                                                <ol
+                                                    class="text-xs text-primary-700 space-y-1.5 list-decimal list-inside">
+                                                    <li>Completá las formaciones requeridas (NoN-Code, n8n, Rutas GCP)
+                                                    </li>
+                                                    <li>Subí los certificados obtenidos en cada paso</li>
+                                                    <li>Indicá si la formación fue realizada en DICSYS o en una
+                                                        institución externa</li>
+                                                    <li>Para formaciones externas, adjuntá el plan de estudio o programa
+                                                        del curso</li>
+                                                </ol>
+                                                <div class="mt-2.5 bg-white/60 rounded-lg p-2.5 text-xs text-dark-600">
+                                                    <p class="text-dark-500 text-[10px] font-sans font-medium mb-1">
+                                                        Formatos aceptados:</p>
+                                                    <p>JPG, PNG, WebP o PDF (máximo 5MB por archivo)</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="bg-dark-50/50 rounded-xl p-5 border border-dark-100">
+                                        <!-- Radio Group: Institución o emisor -->
+                                        <div class="mb-5">
+                                            <label class="block text-xs font-semibold text-dark-900 mb-3">Institución o
+                                                emisor *</label>
+                                            <input type="hidden" name="cert_noncode_origen"
+                                                :value="cert_noncode_origen">
+                                            <div class="flex gap-3">
+                                                <label class="flex-1 cursor-pointer">
+                                                    <input type="radio" name="cert_noncode_origen_radio" value="dicsys"
+                                                        x-model="cert_noncode_origen" class="sr-only peer">
+                                                    <div
+                                                        class="px-4 py-3 border-2 rounded-xl transition-all peer-checked:border-primary-500 peer-checked:bg-primary-500 peer-checked:text-white border-dark-200 bg-white text-dark-700 hover:border-primary-300 hover:bg-primary-50">
+                                                        <div class="flex items-center gap-2">
+                                                            <i data-lucide="building-2" class="w-4 h-4"></i>
+                                                            <span class="font-semibold text-sm">DICSYS/UTN</span>
+                                                        </div>
+                                                        <p class="text-xs mt-1 opacity-90">Formación interna</p>
+                                                    </div>
+                                                </label>
+                                                <label class="flex-1 cursor-pointer">
+                                                    <input type="radio" name="cert_noncode_origen_radio" value="externa"
+                                                        x-model="cert_noncode_origen" class="sr-only peer">
+                                                    <div
+                                                        class="px-4 py-3 border-2 rounded-xl transition-all peer-checked:border-primary-500 peer-checked:bg-primary-500 peer-checked:text-white border-dark-200 bg-white text-dark-700 hover:border-primary-300 hover:bg-primary-50">
+                                                        <div class="flex items-center gap-2">
+                                                            <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                                                            <span class="font-semibold text-sm">Externa</span>
+                                                        </div>
+                                                        <p class="text-xs mt-1 opacity-90">Institución externa</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <!-- Layout Horizontal: 2 Columnas (Certificado | Plan de Estudio) -->
+                                        <!-- Cuando Externa está seleccionado: 2 columnas. Cuando no: 1 columna centrada -->
+                                        <div class="grid gap-6 transition-all duration-300"
+                                            :class="cert_noncode_origen === 'externa' ? 'lg:grid-cols-2' : 'grid-cols-1'">
+                                            <!-- COLUMNA IZQUIERDA: Certificado -->
+                                            <div class="space-y-4"
+                                                :class="cert_noncode_origen === 'externa' ? '' : 'max-w-2xl mx-auto w-full'">
+                                                <h5 class="text-sm font-bold text-dark-900 flex items-center gap-2">
+                                                    <i data-lucide="award" class="w-4 h-4 text-primary-500"></i>
+                                                    Certificado
+                                                </h5>
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-dark-700 mb-2">Fecha
+                                                        de finalización *</label>
+                                                    <input type="date" name="cert_noncode_fecha"
+                                                        value="{{ (cert.cert_noncode_fecha or '') }}"
+                                                        x-init="$el.max = new Date().toISOString().split('T')[0]"
+                                                        class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        class="block text-xs font-semibold text-dark-700 mb-2">Archivo
+                                                        del Certificado *</label>
+                                                    {% if cert.cert_noncode_imagen %}
+                                                    <div id="cert_noncode_imagen-container"
+                                                        class="flex flex-col items-center gap-2">
+                                                        <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                            @click="lightboxSrc = '{{ cert.cert_noncode_imagen|storage_url }}'; lightboxAlt = 'Certificado NoN-Code'; lightboxIsPdf = '{{ cert.cert_noncode_imagen|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                            {% if cert.cert_noncode_imagen.endswith('.pdf') %}
+                                                            <img src="{{ cert.cert_noncode_imagen|storage_thumb }}"
+                                                                alt="Certificado NoN-Code"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% else %}
+                                                            <img src="{{ cert.cert_noncode_imagen|storage_url }}"
+                                                                alt="Certificado NoN-Code"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% endif %}
+                                                            <div
+                                                                class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                                <i data-lucide="maximize-2"
+                                                                    class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                                </i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex gap-2">
+                                                            <label
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                                </i>Cambiar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_noncode_imagen') }}"
+                                                                    hx-target="#cert_noncode_imagen-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                            <button type="button"
+                                                                hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_noncode_imagen') }}"
+                                                                hx-target="#cert_noncode_imagen-container"
+                                                                hx-swap="outerHTML"
+                                                                hx-confirm="¿Eliminar este certificado?"
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                                <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                                </i>Eliminar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {% else %}
+                                                    <div id="cert_noncode_imagen-container">
+                                                        <div
+                                                            class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                            <i data-lucide="image"
+                                                                class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors">
+                                                            </i>
+                                                            <div class="text-center">
+                                                                <p class="text-sm font-medium text-dark-700 mb-1">
+                                                                    Arrastrá tu archivo aquí o</p>
+                                                                <label
+                                                                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                    <i data-lucide="upload" class="w-4 h-4 mr-2">
+                                                                    </i>Examinar
+                                                                    <input type="file" name="archivo"
+                                                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                                                        class="hidden"
+                                                                        hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_noncode_imagen') }}"
+                                                                        hx-target="#cert_noncode_imagen-container"
+                                                                        hx-swap="outerHTML"
+                                                                        hx-encoding="multipart/form-data"
+                                                                        hx-trigger="change">
+                                                                </label>
+                                                            </div>
+                                                            <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx
+                                                                5MB</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+
+                                            <!-- COLUMNA DERECHA: Plan de Estudio -->
+                                            <div class="space-y-4" x-show="cert_noncode_origen === 'externa'"
+                                                x-transition:enter="transition ease-out duration-300"
+                                                x-transition:enter-start="opacity-0 translate-x-4"
+                                                x-transition:enter-end="opacity-100 translate-x-0"
+                                                x-transition:leave="transition ease-in duration-200"
+                                                x-transition:leave-start="opacity-100 translate-x-0"
+                                                x-transition:leave-end="opacity-0 translate-x-4"
+                                                @transitionend="if (typeof lucide !== 'undefined') lucide.createIcons()"
+                                                x-cloak>
+                                                <h5 class="text-sm font-bold text-dark-900 flex items-center gap-2">
+                                                    <i data-lucide="file-text" class="w-4 h-4 text-dark-600"></i>
+                                                    Plan de Estudio / Programa
+                                                </h5>
+                                                <div class="bg-dark-50/50 border border-dark-200 rounded-lg p-3 mb-3">
+                                                    <p class="text-dark-600 text-xs flex items-start gap-2">
+                                                        <i data-lucide="info"
+                                                            class="w-3.5 h-3.5 text-dark-500 mt-0.5 flex-shrink-0"></i>
+                                                        <span>Requerido para formaciones externas. Subí el plan de
+                                                            estudio o programa del curso.</span>
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        class="block text-xs font-semibold text-dark-700 mb-2">Archivo
+                                                        del Plan de Estudio *</label>
+                                                    {% if cert.cert_noncode_plan %}
+                                                    <div id="cert_noncode_plan-container"
+                                                        class="flex flex-col items-center gap-2">
+                                                        <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                            @click="lightboxSrc = '{{ cert.cert_noncode_plan|storage_url }}'; lightboxAlt = 'Plan de Estudio NoN-Code'; lightboxIsPdf = '{{ cert.cert_noncode_plan|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                            {% if cert.cert_noncode_plan.endswith('.pdf') %}
+                                                            <img src="{{ cert.cert_noncode_plan|storage_thumb }}"
+                                                                alt="Plan de Estudio NoN-Code"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% else %}
+                                                            <img src="{{ cert.cert_noncode_plan|storage_url }}"
+                                                                alt="Plan de Estudio NoN-Code"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% endif %}
+                                                            <div
+                                                                class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                                <i data-lucide="maximize-2"
+                                                                    class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                                </i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex gap-2">
+                                                            <label
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                                </i>Cambiar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_noncode_plan') }}"
+                                                                    hx-target="#cert_noncode_plan-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                            <button type="button"
+                                                                hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_noncode_plan') }}"
+                                                                hx-target="#cert_noncode_plan-container"
+                                                                hx-swap="outerHTML"
+                                                                hx-confirm="¿Eliminar este plan de estudio?"
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                                <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                                </i>Eliminar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {% else %}
+                                                    <div id="cert_noncode_plan-container">
+                                                        <div
+                                                            class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                            <i data-lucide="file-text"
+                                                                class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors"></i>
+                                                            <div class="text-center">
+                                                                <p class="text-sm font-medium text-dark-700 mb-1">
+                                                                    Arrastrá tu archivo aquí o</p>
+                                                                <label
+                                                                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                    <i data-lucide="upload"
+                                                                        class="w-4 h-4 mr-2"></i>Examinar
+                                                                    <input type="file" name="archivo"
+                                                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                                                        class="hidden"
+                                                                        hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_noncode_plan') }}"
+                                                                        hx-target="#cert_noncode_plan-container"
+                                                                        hx-swap="outerHTML"
+                                                                        hx-encoding="multipart/form-data"
+                                                                        hx-trigger="change">
+                                                                </label>
+                                                            </div>
+                                                            <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx
+                                                                5MB</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /PASO 1 -->
+
+                                <!-- === PASO 2: n8n === -->
+                                <div x-show="wizardStep === 2" x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 translate-x-4"
+                                    x-transition:enter-end="opacity-100 translate-x-0">
+                                    <div class="bg-dark-50/50 rounded-xl p-5 border border-dark-100">
+                                        <!-- Radio Group: Institución o emisor -->
+                                        <div class="mb-5">
+                                            <label class="block text-xs font-semibold text-dark-900 mb-3">Institución o
+                                                emisor *</label>
+                                            <input type="hidden" name="cert_n8n_origen" :value="cert_n8n_origen">
+                                            <div class="flex gap-3">
+                                                <label class="flex-1 cursor-pointer">
+                                                    <input type="radio" name="cert_n8n_origen_radio" value="dicsys"
+                                                        x-model="cert_n8n_origen" class="sr-only peer">
+                                                    <div
+                                                        class="px-4 py-3 border-2 rounded-xl transition-all peer-checked:border-primary-500 peer-checked:bg-primary-500 peer-checked:text-white border-dark-200 bg-white text-dark-700 hover:border-primary-300 hover:bg-primary-50">
+                                                        <div class="flex items-center gap-2">
+                                                            <i data-lucide="building-2" class="w-4 h-4"></i>
+                                                            <span class="font-semibold text-sm">DICSYS/UTN</span>
+                                                        </div>
+                                                        <p class="text-xs mt-1 opacity-90">Formación interna</p>
+                                                    </div>
+                                                </label>
+                                                <label class="flex-1 cursor-pointer">
+                                                    <input type="radio" name="cert_n8n_origen_radio" value="externa"
+                                                        x-model="cert_n8n_origen" class="sr-only peer">
+                                                    <div
+                                                        class="px-4 py-3 border-2 rounded-xl transition-all peer-checked:border-primary-500 peer-checked:bg-primary-500 peer-checked:text-white border-dark-200 bg-white text-dark-700 hover:border-primary-300 hover:bg-primary-50">
+                                                        <div class="flex items-center gap-2">
+                                                            <i data-lucide="graduation-cap" class="w-4 h-4"></i>
+                                                            <span class="font-semibold text-sm">Externa</span>
+                                                        </div>
+                                                        <p class="text-xs mt-1 opacity-90">Institución externa</p>
+                                                    </div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <!-- Layout Horizontal: 2 Columnas (Certificado | Plan de Estudio) -->
+                                        <!-- Cuando Externa está seleccionado: 2 columnas. Cuando no: 1 columna centrada -->
+                                        <div class="grid gap-6 transition-all duration-300"
+                                            :class="cert_n8n_origen === 'externa' ? 'lg:grid-cols-2' : 'grid-cols-1'">
+                                            <!-- COLUMNA IZQUIERDA: Certificado -->
+                                            <div class="space-y-4"
+                                                :class="cert_n8n_origen === 'externa' ? '' : 'max-w-2xl mx-auto w-full'">
+                                                <h5 class="text-sm font-bold text-dark-900 flex items-center gap-2">
+                                                    <i data-lucide="award" class="w-4 h-4 text-primary-500"></i>
+                                                    Certificado
+                                                </h5>
+                                                <div>
+                                                    <label class="block text-xs font-semibold text-dark-700 mb-2">Fecha
+                                                        de finalización *</label>
+                                                    <input type="date" name="cert_n8n_fecha"
+                                                        value="{{ (cert.cert_n8n_fecha or '') }}"
+                                                        x-init="$el.max = new Date().toISOString().split('T')[0]"
+                                                        class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        class="block text-xs font-semibold text-dark-700 mb-2">Archivo
+                                                        del Certificado *</label>
+                                                    {% if cert.cert_n8n_imagen %}
+                                                    <div id="cert_n8n_imagen-container"
+                                                        class="flex flex-col items-center gap-2">
+                                                        <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                            @click="lightboxSrc = '{{ cert.cert_n8n_imagen|storage_url }}'; lightboxAlt = 'Certificado n8n'; lightboxIsPdf = '{{ cert.cert_n8n_imagen|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                            {% if cert.cert_n8n_imagen.endswith('.pdf') %}
+                                                            <img src="{{ cert.cert_n8n_imagen|storage_thumb }}"
+                                                                alt="Certificado n8n"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% else %}
+                                                            <img src="{{ cert.cert_n8n_imagen|storage_url }}"
+                                                                alt="Certificado n8n"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% endif %}
+                                                            <div
+                                                                class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                                <i data-lucide="maximize-2"
+                                                                    class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                                </i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex gap-2">
+                                                            <label
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                                </i>Cambiar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_n8n_imagen') }}"
+                                                                    hx-target="#cert_n8n_imagen-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                            <button type="button"
+                                                                hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_n8n_imagen') }}"
+                                                                hx-target="#cert_n8n_imagen-container"
+                                                                hx-swap="outerHTML"
+                                                                hx-confirm="¿Eliminar este certificado?"
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                                <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                                </i>Eliminar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {% else %}
+                                                    <div id="cert_n8n_imagen-container">
+                                                        <div
+                                                            class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                            <i data-lucide="image"
+                                                                class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors">
+                                                            </i>
+                                                            <div class="text-center">
+                                                                <p class="text-sm font-medium text-dark-700 mb-1">
+                                                                    Arrastrá tu archivo aquí o</p>
+                                                                <label
+                                                                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                    <i data-lucide="upload" class="w-4 h-4 mr-2">
+                                                                    </i>Examinar
+                                                                    <input type="file" name="archivo"
+                                                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                                                        class="hidden"
+                                                                        hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_n8n_imagen') }}"
+                                                                        hx-target="#cert_n8n_imagen-container"
+                                                                        hx-swap="outerHTML"
+                                                                        hx-encoding="multipart/form-data"
+                                                                        hx-trigger="change">
+                                                                </label>
+                                                            </div>
+                                                            <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx
+                                                                5MB</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+
+                                            <!-- COLUMNA DERECHA: Plan de Estudio -->
+                                            <div class="space-y-4" x-show="cert_n8n_origen === 'externa'"
+                                                x-transition:enter="transition ease-out duration-300"
+                                                x-transition:enter-start="opacity-0 translate-x-4"
+                                                x-transition:enter-end="opacity-100 translate-x-0"
+                                                x-transition:leave="transition ease-in duration-200"
+                                                x-transition:leave-start="opacity-100 translate-x-0"
+                                                x-transition:leave-end="opacity-0 translate-x-4"
+                                                @transitionend="if (typeof lucide !== 'undefined') lucide.createIcons()"
+                                                x-cloak>
+                                                <h5 class="text-sm font-bold text-dark-900 flex items-center gap-2">
+                                                    <i data-lucide="file-text" class="w-4 h-4 text-dark-600"></i>
+                                                    Plan de Estudio / Programa
+                                                </h5>
+                                                <div class="bg-dark-50/50 border border-dark-200 rounded-lg p-3 mb-3">
+                                                    <p class="text-dark-600 text-xs flex items-start gap-2">
+                                                        <i data-lucide="info"
+                                                            class="w-3.5 h-3.5 text-dark-500 mt-0.5 flex-shrink-0"></i>
+                                                        <span>Requerido para formaciones externas. Subí el plan de
+                                                            estudio o programa del curso.</span>
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <label
+                                                        class="block text-xs font-semibold text-dark-700 mb-2">Archivo
+                                                        del Plan de Estudio *</label>
+                                                    {% if cert.cert_n8n_plan %}
+                                                    <div id="cert_n8n_plan-container"
+                                                        class="flex flex-col items-center gap-2">
+                                                        <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                            @click="lightboxSrc = '{{ cert.cert_n8n_plan|storage_url }}'; lightboxAlt = 'Plan de Estudio n8n'; lightboxIsPdf = '{{ cert.cert_n8n_plan|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                            {% if cert.cert_n8n_plan.endswith('.pdf') %}
+                                                            <img src="{{ cert.cert_n8n_plan|storage_thumb }}"
+                                                                alt="Plan de Estudio n8n"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% else %}
+                                                            <img src="{{ cert.cert_n8n_plan|storage_url }}"
+                                                                alt="Plan de Estudio n8n"
+                                                                class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                            {% endif %}
+                                                            <div
+                                                                class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                                <i data-lucide="maximize-2"
+                                                                    class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                                </i>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex gap-2">
+                                                            <label
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                                </i>Cambiar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_n8n_plan') }}"
+                                                                    hx-target="#cert_n8n_plan-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                            <button type="button"
+                                                                hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_n8n_plan') }}"
+                                                                hx-target="#cert_n8n_plan-container" hx-swap="outerHTML"
+                                                                hx-confirm="¿Eliminar este plan de estudio?"
+                                                                class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                                <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                                </i>Eliminar
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {% else %}
+                                                    <div id="cert_n8n_plan-container">
+                                                        <div
+                                                            class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                            <i data-lucide="file-text"
+                                                                class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors"></i>
+                                                            <div class="text-center">
+                                                                <p class="text-sm font-medium text-dark-700 mb-1">
+                                                                    Arrastrá tu archivo aquí o</p>
+                                                                <label
+                                                                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                    <i data-lucide="upload"
+                                                                        class="w-4 h-4 mr-2"></i>Examinar
+                                                                    <input type="file" name="archivo"
+                                                                        accept=".jpg,.jpeg,.png,.webp,.pdf"
+                                                                        class="hidden"
+                                                                        hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_n8n_plan') }}"
+                                                                        hx-target="#cert_n8n_plan-container"
+                                                                        hx-swap="outerHTML"
+                                                                        hx-encoding="multipart/form-data"
+                                                                        hx-trigger="change">
+                                                                </label>
+                                                            </div>
+                                                            <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx
+                                                                5MB</p>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /PASO 2 -->
+
+                                <!-- === PASO 3: Ruta 1 GCP === -->
+                                <div x-show="wizardStep === 3" x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 translate-x-4"
+                                    x-transition:enter-end="opacity-100 translate-x-0">
+                                    <div class="bg-dark-50/50 rounded-xl p-5 border border-dark-100">
+                                        <p class="text-dark-600 text-sm mb-4">Subí la imagen del certificado y la fecha
+                                            de finalización</p>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label
+                                                    class="block text-xs font-semibold text-dark-700 mb-2">Certificado
+                                                    *</label>
+                                                {% if cert.cert_ruta1_imagen %}
+                                                <div id="cert_ruta1_imagen-container"
+                                                    class="flex flex-col items-center gap-2">
+                                                    <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                        @click="lightboxSrc = '{{ cert.cert_ruta1_imagen|storage_url }}'; lightboxAlt = 'Certificado Ruta 1 GCP'; lightboxIsPdf = '{{ cert.cert_ruta1_imagen|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                        {% if cert.cert_ruta1_imagen.endswith('.pdf') %}
+                                                        <img src="{{ cert.cert_ruta1_imagen|storage_thumb }}"
+                                                            alt="Certificado Ruta 1 GCP"
+                                                            class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                        {% else %}
+                                                        <img src="{{ cert.cert_ruta1_imagen|storage_url }}"
+                                                            alt="Certificado Ruta 1 GCP"
+                                                            class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                        {% endif %}
+                                                        <div
+                                                            class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                            <i data-lucide="maximize-2"
+                                                                class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                            </i>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex gap-2">
+                                                        <label
+                                                            class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                            <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                            </i>Cambiar
+                                                            <input type="file" name="archivo"
+                                                                accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_ruta1_imagen') }}"
+                                                                hx-target="#cert_ruta1_imagen-container"
+                                                                hx-swap="outerHTML" hx-encoding="multipart/form-data"
+                                                                hx-trigger="change">
+                                                        </label>
+                                                        <button type="button"
+                                                            hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_ruta1_imagen') }}"
+                                                            hx-target="#cert_ruta1_imagen-container" hx-swap="outerHTML"
+                                                            hx-confirm="¿Eliminar este certificado?"
+                                                            class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                            <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                            </i>Eliminar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {% else %}
+                                                <div id="cert_ruta1_imagen-container">
+                                                    <div
+                                                        class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                        <i data-lucide="image"
+                                                            class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors">
+                                                        </i>
+                                                        <div class="text-center">
+                                                            <p class="text-sm font-medium text-dark-700 mb-1">Arrastrá
+                                                                tu archivo aquí o</p>
+                                                            <label
+                                                                class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-4 h-4 mr-2">
+                                                                </i>Examinar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_ruta1_imagen') }}"
+                                                                    hx-target="#cert_ruta1_imagen-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                        </div>
+                                                        <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx 5MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-semibold text-dark-700 mb-2">Fecha de
+                                                    finalización</label>
+                                                <input type="date" name="cert_ruta1_fecha"
+                                                    value="{{ (cert.cert_ruta1_fecha or '') }}"
+                                                    x-init="$el.max = new Date().toISOString().split('T')[0]"
+                                                    class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /PASO 3 -->
+
+                                <!-- === PASO 4: Ruta 2 GCP === -->
+                                <div x-show="wizardStep === 4" x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 translate-x-4"
+                                    x-transition:enter-end="opacity-100 translate-x-0">
+                                    <div class="bg-dark-50/50 rounded-xl p-5 border border-dark-100">
+                                        <p class="text-dark-600 text-sm mb-4">Subí la imagen del certificado y la fecha
+                                            de finalización</p>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label
+                                                    class="block text-xs font-semibold text-dark-700 mb-2">Certificado
+                                                    *</label>
+                                                {% if cert.cert_ruta2_imagen %}
+                                                <div id="cert_ruta2_imagen-container"
+                                                    class="flex flex-col items-center gap-2">
+                                                    <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                        @click="lightboxSrc = '{{ cert.cert_ruta2_imagen|storage_url }}'; lightboxAlt = 'Certificado Ruta 2 GCP'; lightboxIsPdf = '{{ cert.cert_ruta2_imagen|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                        {% if cert.cert_ruta2_imagen.endswith('.pdf') %}
+                                                        <img src="{{ cert.cert_ruta2_imagen|storage_thumb }}"
+                                                            alt="Certificado Ruta 2 GCP"
+                                                            class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                        {% else %}
+                                                        <img src="{{ cert.cert_ruta2_imagen|storage_url }}"
+                                                            alt="Certificado Ruta 2 GCP"
+                                                            class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                        {% endif %}
+                                                        <div
+                                                            class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                            <i data-lucide="maximize-2"
+                                                                class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                            </i>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex gap-2">
+                                                        <label
+                                                            class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                            <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                            </i>Cambiar
+                                                            <input type="file" name="archivo"
+                                                                accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_ruta2_imagen') }}"
+                                                                hx-target="#cert_ruta2_imagen-container"
+                                                                hx-swap="outerHTML" hx-encoding="multipart/form-data"
+                                                                hx-trigger="change">
+                                                        </label>
+                                                        <button type="button"
+                                                            hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_ruta2_imagen') }}"
+                                                            hx-target="#cert_ruta2_imagen-container" hx-swap="outerHTML"
+                                                            hx-confirm="¿Eliminar este certificado?"
+                                                            class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                            <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                            </i>Eliminar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {% else %}
+                                                <div id="cert_ruta2_imagen-container">
+                                                    <div
+                                                        class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                        <i data-lucide="image"
+                                                            class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors">
+                                                        </i>
+                                                        <div class="text-center">
+                                                            <p class="text-sm font-medium text-dark-700 mb-1">Arrastrá
+                                                                tu archivo aquí o</p>
+                                                            <label
+                                                                class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-4 h-4 mr-2">
+                                                                </i>Examinar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_ruta2_imagen') }}"
+                                                                    hx-target="#cert_ruta2_imagen-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                        </div>
+                                                        <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx 5MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-semibold text-dark-700 mb-2">Fecha de
+                                                    finalización</label>
+                                                <input type="date" name="cert_ruta2_fecha"
+                                                    value="{{ (cert.cert_ruta2_fecha or '') }}"
+                                                    x-init="$el.max = new Date().toISOString().split('T')[0]"
+                                                    class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /PASO 4 -->
+
+                                <!-- === PASO 5: Ruta 3 GCP === -->
+                                <div x-show="wizardStep === 5" x-transition:enter="transition ease-out duration-200"
+                                    x-transition:enter-start="opacity-0 translate-x-4"
+                                    x-transition:enter-end="opacity-100 translate-x-0">
+                                    <div class="bg-dark-50/50 rounded-xl p-5 border border-dark-100">
+                                        <p class="text-dark-600 text-sm mb-4">Subí la imagen del certificado y la fecha
+                                            de finalización</p>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <label
+                                                    class="block text-xs font-semibold text-dark-700 mb-2">Certificado
+                                                    *</label>
+                                                {% if cert.cert_ruta3_imagen %}
+                                                <div id="cert_ruta3_imagen-container"
+                                                    class="flex flex-col items-center gap-2">
+                                                    <div class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50 relative cursor-pointer group/img"
+                                                        @click="lightboxSrc = '{{ cert.cert_ruta3_imagen|storage_url }}'; lightboxAlt = 'Certificado Ruta 3 GCP'; lightboxIsPdf = '{{ cert.cert_ruta3_imagen|storage_url }}'.endsWith('.pdf'); lightboxOpen = true">
+                                                        {% if cert.cert_ruta3_imagen.endswith('.pdf') %}
+                                                        <img src="{{ cert.cert_ruta3_imagen|storage_thumb }}"
+                                                            alt="Certificado Ruta 3 GCP"
+                                                            class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                        {% else %}
+                                                        <img src="{{ cert.cert_ruta3_imagen|storage_url }}"
+                                                            alt="Certificado Ruta 3 GCP"
+                                                            class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                                                        {% endif %}
+                                                        <div
+                                                            class="absolute inset-0 bg-dark-900/0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                                                            <i data-lucide="maximize-2"
+                                                                class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg">
+                                                            </i>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex gap-2">
+                                                        <label
+                                                            class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                            <i data-lucide="upload" class="w-3 h-3 mr-1">
+                                                            </i>Cambiar
+                                                            <input type="file" name="archivo"
+                                                                accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_ruta3_imagen') }}"
+                                                                hx-target="#cert_ruta3_imagen-container"
+                                                                hx-swap="outerHTML" hx-encoding="multipart/form-data"
+                                                                hx-trigger="change">
+                                                        </label>
+                                                        <button type="button"
+                                                            hx-delete="{{ url_for('innovacion.mi_path_cert_delete', campo='cert_ruta3_imagen') }}"
+                                                            hx-target="#cert_ruta3_imagen-container" hx-swap="outerHTML"
+                                                            hx-confirm="¿Eliminar este certificado?"
+                                                            class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                                            <i data-lucide="trash-2" class="w-3 h-3 mr-1">
+                                                            </i>Eliminar
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                {% else %}
+                                                <div id="cert_ruta3_imagen-container">
+                                                    <div
+                                                        class="w-full aspect-[4/3] max-h-64 rounded-xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-3 p-6 hover:border-primary-400 hover:bg-primary-50/30 transition-all cursor-pointer group">
+                                                        <i data-lucide="image"
+                                                            class="w-12 h-12 text-dark-300 group-hover:text-primary-500 transition-colors">
+                                                        </i>
+                                                        <div class="text-center">
+                                                            <p class="text-sm font-medium text-dark-700 mb-1">Arrastrá
+                                                                tu archivo aquí o</p>
+                                                            <label
+                                                                class="inline-flex items-center px-4 py-2 text-sm font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                                                <i data-lucide="upload" class="w-4 h-4 mr-2">
+                                                                </i>Examinar
+                                                                <input type="file" name="archivo"
+                                                                    accept=".jpg,.jpeg,.png,.webp,.pdf" class="hidden"
+                                                                    hx-post="{{ url_for('innovacion.mi_path_cert_upload', campo='cert_ruta3_imagen') }}"
+                                                                    hx-target="#cert_ruta3_imagen-container"
+                                                                    hx-swap="outerHTML"
+                                                                    hx-encoding="multipart/form-data"
+                                                                    hx-trigger="change">
+                                                            </label>
+                                                        </div>
+                                                        <p class="text-xs text-dark-500">JPG, PNG, WebP o PDF. Máx 5MB
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {% endif %}
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-semibold text-dark-700 mb-2">Fecha de
+                                                    finalización</label>
+                                                <input type="date" name="cert_ruta3_fecha"
+                                                    value="{{ (cert.cert_ruta3_fecha or '') }}"
+                                                    x-init="$el.max = new Date().toISOString().split('T')[0]"
+                                                    class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <!-- /PASO 5 -->
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                            {% if cert and cert.tipo_certificacion in ('training', 'iniciativa', 'finalista') %}
+                            <div class="flex gap-2">
+                                <button type="button" x-show="wizardStep > 1"
+                                    @click="wizardStep--; $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); })"
+                                    class="px-4 py-2.5 border border-dark-200 text-dark-600 rounded-xl hover:bg-dark-100 font-medium flex items-center transition-all text-sm">
+                                    <i data-lucide="chevron-left" class="w-4 h-4 mr-1"></i> Anterior
+                                </button>
+                                <button type="button" x-show="wizardStep < wizardTotalSteps"
+                                    @click="if (validarPasoActual()) { guardarMiPath($root, () => { wizardStep++; $nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }); }); }"
+                                    class="px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center transition-all text-sm">
+                                    Siguiente <i data-lucide="chevron-right" class="w-4 h-4 ml-1">
+                                    </i>
+                                </button>
+                                <button type="button" x-show="wizardStep === wizardTotalSteps"
+                                    @click="guardarMiPath($root, null)"
+                                    class="px-4 py-2.5 border border-primary-200 text-primary-700 bg-primary-50 rounded-xl hover:bg-primary-100 font-semibold flex items-center transition-all text-sm">
+                                    <i data-lucide="save" class="w-4 h-4 mr-1"></i> Guardar
+                                </button>
+                            </div>
+                            {% else %}
+                            <div></div>
+                            {% endif %}
+                            <button type="submit" :disabled="porcentaje < 100"
+                                @click="if (porcentaje < 100 || !validarTodoElPath()) { $event.preventDefault(); $event.stopPropagation(); }"
+                                :class="porcentaje >= 100
+                                        ? 'px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center transition-all'
+                                        : 'px-6 py-2.5 border border-dark-200 text-dark-400 bg-dark-50 rounded-xl font-medium flex items-center transition-all cursor-not-allowed opacity-60'">
+                                <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4"
+                                    fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                        stroke-width="4">
+                                    </circle>
+                                    <path class="opacity-75" fill="currentColor"
+                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z">
+                                    </path>
+                                </svg>
+                                <i data-lucide="save" class="w-4 h-4 mr-2">
+                                </i>Finalizar Path
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- SIDEBAR DERECHO (sticky) -->
+            <div class="order-2 w-64 flex-shrink-0 space-y-5 sticky top-4">
+
+                <!-- Logros Card -->
+                <div class="bg-white rounded-2xl border border-dark-100 p-5">
+                    <h3 class="font-bold text-dark-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="award" class="w-4 h-4 text-amber-600">
+                        </i> Logros
+                        <button type="button" class="ml-auto text-dark-400 hover:text-dark-600 transition-colors"
+                            title="Estos son reconocimientos que has recibido por el equipo de innovación"
+                            @click="Alpine.store('toasts').info('Estos son reconocimientos que has recibido por el equipo de innovación')">
+                            <i data-lucide="info" class="w-4 h-4"></i>
+                        </button>
+                    </h3>
+                    {% if mis_eventos %}
+                    <div class="flex flex-col gap-3">
+                        {% for evento in mis_eventos %}
+                        <div
+                            class="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 w-full">
+                            <div
+                                class="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="medal" class="w-4 h-4 text-white">
+                                </i>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="font-semibold text-dark-900 text-xs leading-tight truncate">{{ evento.nombre
+                                    }}</p>
+                                <span class="text-amber-600 text-[10px] font-medium">{{ evento.fecha|fecha_es }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i data-lucide="calendar-x" class="w-8 h-8 text-dark-200 mx-auto mb-2">
+                        </i>
+                        <p class="text-dark-500 text-xs">Sin eventos aún</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    {% else %}
+    <!-- Sin certificación -->
+    <div x-data="{ selectedTipo: '' }">
+        <div class="mb-6">
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Path de Certificación AI</h1>
+        </div>
+
+        <!-- LAYOUT 2 COLUMNAS -->
+        <div class="flex gap-6 items-start">
+            <!-- COLUMNA PRINCIPAL (izquierda, ~70%) -->
+            <div class="flex-1">
+                <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                    <div class="p-6 border-b border-dark-100">
+                        <!-- Header con Flexbox: Textos a la izquierda, Link a la derecha -->
+                        <div class="flex items-start justify-between gap-4">
+                            <!-- Grupo Izquierdo: Título + Subtítulo -->
+                            <div>
+                                <h2 class="text-xl font-bold text-dark-900 mb-1">¡Hola {{ user.nombre if user.nombre
+                                    else 'Usuario' }}! Iniciá tu Path de certificación</h2>
+                                <p class="text-dark-500 text-sm">Elegí el tipo de certificación que vas a seguir</p>
+                            </div>
+
+                            <!-- Grupo Derecho: Link minimalista -->
+                            <a href="https://dicsys.notion.site/Track-2-Teams-2bcb8570e45980d48fe7c6f93edf326c?pvs=74"
+                                target="_blank" rel="noopener"
+                                class="inline-flex items-center gap-1.5 text-primary-600 hover:text-primary-700 text-sm font-medium transition-colors flex-shrink-0">
+                                <i data-lucide="external-link" class="w-4 h-4">
+                                </i>
+                                <span class="hidden sm:inline">Ver guía general</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div id="form-error">
+                    </div>
+                    <form hx-post="{{ url_for('innovacion.mi_path_iniciar') }}" hx-target="#form-error"
+                        hx-indicator="#wizard-spinner" method="POST">
+                        <input type="hidden" name="tipo_certificacion" :value="selectedTipo">
+                        <div class="p-6">
+                            <div class="grid grid-cols-1 gap-3">
+                                {% set path_links = {
+                                'training':
+                                'https://dicsys.notion.site/1-Path-Training-Formaci-n-349b8570e4598039a3d7e4aa1e9491d4?pvs=74',
+                                'iniciativa':
+                                'https://dicsys.notion.site/2-Path-Iniciativa-Caso-de-Uso-349b8570e45980ad84a7c99804cd7a95?pvs=25',
+                                'finalista':
+                                'https://dicsys.notion.site/3-Finalizaste-del-Challenge-349b8570e459807e9466f8bacd250210'
+                                } %}
+                                {% for tipo in tipos %}
+                                <div class="rounded-xl border transition-all"
+                                    :class="selectedTipo === '{{ tipo.key }}' ? 'border-primary-500 bg-primary-50 ring-2 ring-primary-500' : 'border-dark-200 hover:border-primary-300 hover:bg-dark-50'">
+                                    <button type="button" @click="selectedTipo = '{{ tipo.key }}'"
+                                        class="w-full p-4 text-left flex items-center justify-between">
+                                        <div class="flex items-center flex-1 min-w-0">
+                                            <div class="w-10 h-10 rounded-xl flex items-center justify-center mr-4 flex-shrink-0"
+                                                :class="selectedTipo === '{{ tipo.key }}' ? 'bg-primary-500 text-white' : 'bg-dark-100 text-dark-500'">
+                                                <i data-lucide="{{ tipo.icono or 'award' }}" class="w-5 h-5">
+                                                </i>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
+                                                <p class="font-semibold text-dark-900">{{ tipo.nombre }}</p>
+                                                {% if tipo.descripcion %}<p class="text-dark-700 text-sm">{{
+                                                    tipo.descripcion }}</p>{% endif %}
+                                            </div>
+                                        </div>
+                                        {% if tipo.key in path_links %}
+                                        <a href="{{ path_links[tipo.key] }}" target="_blank" rel="noopener" @click.stop
+                                            class="flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 hover:underline ml-4 flex-shrink-0">
+                                            <i data-lucide="info" class="w-3.5 h-3.5">
+                                            </i>
+                                            Más información sobre este path
+                                            <i data-lucide="external-link" class="w-3 h-3">
+                                            </i>
+                                        </a>
+                                        {% endif %}
+                                    </button>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            <div class="mt-6 flex justify-center">
+                                <button type="submit"
+                                    @click="if (!selectedTipo) { event.preventDefault(); Alpine.store('toasts').warning('Debes seleccionar una de las 3 opciones'); }"
+                                    class="px-6 py-2.5 rounded-xl font-semibold flex items-center transition-all shadow-soft"
+                                    :class="selectedTipo ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white hover:from-primary-600 hover:to-primary-700' : 'bg-primary-500 text-white hover:bg-primary-600'">
+                                    <svg id="wizard-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4"
+                                        fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                            stroke-width="4">
+                                        </circle>
+                                        <path class="opacity-75" fill="currentColor"
+                                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z">
+                                        </path>
+                                    </svg>
+                                    <i data-lucide="rocket" class="w-4 h-4 mr-2">
+                                    </i> Iniciar Path de Certificación
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- COLUMNA LATERAL (derecha, ~30%) -->
+            {% if mis_eventos %}
+            <div class="w-80 flex-shrink-0">
+                <div class="bg-white rounded-2xl border border-dark-100 p-5 sticky top-4">
+                    <h3 class="font-bold text-dark-900 mb-3 flex items-center gap-2">
+                        <i data-lucide="award" class="w-4 h-4 text-amber-600">
+                        </i> Tus Logros
+                        <button type="button" class="ml-auto text-dark-400 hover:text-dark-600 transition-colors"
+                            title="Estos son reconocimientos que has recibido por el equipo de innovación"
+                            @click="Alpine.store('toasts').info('Estos son reconocimientos que has recibido por el equipo de innovación')">
+                            <i data-lucide="info" class="w-4 h-4"></i>
+                        </button>
+                    </h3>
+                    <div class="space-y-3">
+                        {% for evento in mis_eventos %}
+                        <div
+                            class="flex items-center gap-3 p-2 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50">
+                            <div
+                                class="w-9 h-9 bg-gradient-to-br from-amber-400 to-orange-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                <i data-lucide="medal" class="w-4 h-4 text-white">
+                                </i>
+                            </div>
+                            <div class="min-w-0">
+                                <p class="font-semibold text-dark-900 text-xs leading-tight truncate">{{ evento.nombre
+                                    }}</p>
+                                <span class="text-amber-600 text-[10px] font-medium">{{ evento.fecha|fecha_es }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% endif %}{# cert #}
+
+    {% endif %}{# tiene_empleado #}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Guardado de borrador del wizard (Siguiente / Guardar): postea el form
+    // self-service sin recargar la página. onSuccess (opcional) avanza el paso.
+    async function guardarMiPath(rootEl, onSuccess) {
+        const form = rootEl.querySelector('form[hx-post]');
+        if (!form) return;
+        const fd = new FormData(form);
+        fd.append('_stay', '1');
+        try {
+            const resp = await fetch(form.getAttribute('hx-post'), {
+                method: 'POST', body: fd, headers: { 'HX-Request': 'true' }
+            });
+            if (resp.ok) {
+                if (window.Alpine && Alpine.store('toasts')) Alpine.store('toasts').success('Progreso guardado');
+                if (typeof onSuccess === 'function') onSuccess();
+            } else if (window.Alpine && Alpine.store('toasts')) {
+                Alpine.store('toasts').error('No se pudo guardar el progreso');
+            }
+        } catch (e) {
+            if (window.Alpine && Alpine.store('toasts')) Alpine.store('toasts').error('No se pudo guardar el progreso');
+        }
+    }
+</script>
+{% if cert and cert.tipo_certificacion == 'finalista' %}
+<script>
+    function miPathData() {
+        const BASE_URL = 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/';
+        const repo_presentacion_inicial = '{{ (cert.repo_presentacion or "") }}';
+        const repo_demo_inicial = '{{ (cert.repo_demo or "") }}';
+
+        // Extraer el path base desde las URLs completas si existen
+        let path_base_inicial = '';
+        if (repo_presentacion_inicial) {
+            path_base_inicial = repo_presentacion_inicial.replace(BASE_URL, '').replace('/presentacion', '');
+        } else if (repo_demo_inicial) {
+            path_base_inicial = repo_demo_inicial.replace(BASE_URL, '').replace('/implementacion', '');
+        }
+
+        return {
+            wizardStep: 1,
+            wizardTotalSteps: 2,
+            wizardLabels: ['Configuración', 'Detalles'],
+            totalSteps: 2,
+            get currentStepLabel() {
+                const labels = {
+                    1: 'Configurá el path de tu Challenge',
+                    2: 'Completá los detalles del Challenge'
+                };
+                return labels[this.wizardStep] || '';
+            },
+            repo_base_path: path_base_inicial,
+            repo_base_full: path_base_inicial ? BASE_URL + path_base_inicial : BASE_URL,
+            get repo_presentacion() {
+                return this.repo_base_path ? BASE_URL + this.repo_base_path + '/presentacion' : '';
+            },
+            get repo_demo() {
+                return this.repo_base_path ? BASE_URL + this.repo_base_path + '/implementacion' : '';
+            },
+            tematica: '{{ (cert.tematica or "") }}',
+            tecnologias: {{ cert.tecnologias | tojson if cert.tecnologias else '[]' }},
+    fecha_presentacion: '{{ (cert.fecha_presentacion or "") }}',
+        nuevoTag: '',
+            tecnologiasSugeridas: [],
+                showSuggestions: false,
+                    selectedSuggestionIndex: -1,
+                        tematicasSugeridas: [],
+                            showTematicaSuggestions: false,
+                                selectedTematicaSuggestionIndex: -1,
+                                    camposRequeridos: ['repo_base_path', 'tematica', 'tecnologias', 'fecha_presentacion'],
+                                        campoLabels: {
+        'repo_base_path': 'Path del Challenge',
+            'tematica': 'Temática',
+                'tecnologias': 'Tecnologías',
+                    'fecha_presentacion': 'Fecha de Presentación'
+    },
+    init() {
+        // Cargar tecnologías sugeridas desde el backend
+        console.log('[Finalista] Cargando tecnologías...');
+        fetch('/api/v1/innovacion/tecnologias')
+            .then(response => {
+                console.log('[Finalista] Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                this.tecnologiasSugeridas = data;
+                console.log('[Finalista] Tecnologías cargadas:', this.tecnologiasSugeridas.length);
+            })
+            .catch(e => {
+                console.error('[Finalista] Error cargando tecnologías:', e);
+            });
+
+        // Cargar temáticas sugeridas desde el backend
+        console.log('[Finalista] Cargando temáticas...');
+        fetch('/api/v1/innovacion/tematicas')
+            .then(response => {
+                console.log('[Finalista] Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                this.tematicasSugeridas = data;
+                console.log('[Finalista] Temáticas cargadas:', this.tematicasSugeridas.length);
+            })
+            .catch(e => {
+                console.error('[Finalista] Error cargando temáticas:', e);
+            });
+    },
+
+        get filteredSuggestions() {
+        if (!this.nuevoTag || this.nuevoTag.trim().length < 1) return [];
+        const query = this.nuevoTag.toLowerCase();
+        return this.tecnologiasSugeridas
+            .filter(t => t.toLowerCase().includes(query) && !this.tecnologias.includes(t))
+            .slice(0, 8);
+    },
+        get completados() {
+        let c = 0;
+        if (this.repo_base_path && this.repo_base_path.trim()) c++;
+        if (this.tematica && this.tematica.trim()) c++;
+        if (this.tecnologias && this.tecnologias.length > 0) c++;
+        if (this.fecha_presentacion) c++;
+        return c;
+    },
+        get total() { return this.camposRequeridos.length; },
+        get porcentaje() { return this.total > 0 ? Math.round((this.completados / this.total) * 100) : 0; },
+    campoCompletado(campo) {
+        if (campo === 'tecnologias') return this.tecnologias && this.tecnologias.length > 0;
+        if (campo === 'fecha_presentacion') return !!this.fecha_presentacion;
+        if (campo === 'repo_base_path') return this.repo_base_path && this.repo_base_path.trim();
+        const v = this[campo];
+        return v && v.trim && v.trim().length > 0;
+    },
+    onInputChange() {
+        console.log('[Finalista] Input changed:', this.nuevoTag, 'Filtered:', this.filteredSuggestions.length);
+        this.showSuggestions = this.filteredSuggestions.length > 0;
+        this.selectedSuggestionIndex = -1;
+    },
+    onInputKeydown(event) {
+        if (!this.showSuggestions || this.filteredSuggestions.length === 0) return;
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this.selectedSuggestionIndex = Math.min(
+                this.selectedSuggestionIndex + 1,
+                this.filteredSuggestions.length - 1
+            );
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this.selectedSuggestionIndex = Math.max(this.selectedSuggestionIndex - 1, -1);
+        } else if (event.key === 'Enter' && this.selectedSuggestionIndex >= 0) {
+            event.preventDefault();
+            this.selectSuggestion(this.filteredSuggestions[this.selectedSuggestionIndex]);
+        } else if (event.key === 'Escape') {
+            this.showSuggestions = false;
+        }
+    },
+    selectSuggestion(tech) {
+        console.log('[Finalista] Seleccionando:', tech);
+        if (!this.tecnologias.includes(tech)) {
+            this.tecnologias.push(tech);
+        }
+        this.nuevoTag = '';
+        this.showSuggestions = false;
+        this.selectedSuggestionIndex = -1;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+    addTag() {
+        const t = this.nuevoTag.trim();
+        if (t && !this.tecnologias.includes(t)) {
+            this.tecnologias.push(t);
+        }
+        this.nuevoTag = '';
+        this.showSuggestions = false;
+        this.selectedSuggestionIndex = -1;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+    removeTag(i) {
+        this.tecnologias.splice(i, 1);
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+        // Funciones para autocompletado de temáticas
+        get filteredTematicaSuggestions() {
+        if (!this.tematica || this.tematica.trim().length < 1) return [];
+        const query = this.tematica.toLowerCase();
+        return this.tematicasSugeridas
+            .filter(t => t.toLowerCase().includes(query))
+            .slice(0, 8);
+    },
+    onTematicaInputChange() {
+        console.log('[Finalista] Temática input changed:', this.tematica, 'Filtered:', this.filteredTematicaSuggestions.length);
+        this.showTematicaSuggestions = this.filteredTematicaSuggestions.length > 0;
+        this.selectedTematicaSuggestionIndex = -1;
+    },
+    onTematicaInputKeydown(event) {
+        if (!this.showTematicaSuggestions || this.filteredTematicaSuggestions.length === 0) return;
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this.selectedTematicaSuggestionIndex = Math.min(
+                this.selectedTematicaSuggestionIndex + 1,
+                this.filteredTematicaSuggestions.length - 1
+            );
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this.selectedTematicaSuggestionIndex = Math.max(this.selectedTematicaSuggestionIndex - 1, -1);
+        } else if (event.key === 'Enter' && this.selectedTematicaSuggestionIndex >= 0) {
+            event.preventDefault();
+            this.selectTematicaSuggestion(this.filteredTematicaSuggestions[this.selectedTematicaSuggestionIndex]);
+        } else if (event.key === 'Escape') {
+            this.showTematicaSuggestions = false;
+        }
+    },
+    selectTematicaSuggestion(tematica) {
+        console.log('[Finalista] Seleccionando temática:', tematica);
+        this.tematica = tematica;
+        this.showTematicaSuggestions = false;
+        this.selectedTematicaSuggestionIndex = -1;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+    validarPasoActual() {
+        // Validación por paso para path Finalista
+        if (this.wizardStep === 1) {
+            // Paso 1: Configuración - validar repo_base_path
+            if (!this.repo_base_path || !this.repo_base_path.trim()) {
+                Alpine.store('toasts').warning('Completá el campo "Path del Challenge" antes de continuar');
+                return false;
+            }
+        } else if (this.wizardStep === 2) {
+            // Paso 2: Detalles - validar tematica, tecnologias, fecha_presentacion
+            const camposFaltantes = [];
+            if (!this.tematica || !this.tematica.trim()) camposFaltantes.push('Temática');
+            if (!this.tecnologias || this.tecnologias.length === 0) camposFaltantes.push('Tecnologías');
+            if (!this.fecha_presentacion) camposFaltantes.push('Fecha de Presentación');
+
+            if (camposFaltantes.length > 0) {
+                Alpine.store('toasts').warning('Falta: ' + camposFaltantes.join(', '));
+                return false;
+            }
+        }
+        return true;
+    },
+    validarTodoElPath() {
+        // Validación completa de TODOS los campos antes de finalizar
+        const camposFaltantes = [];
+
+        // Validar todos los campos requeridos del path Finalista
+        if (!this.repo_base_path || !this.repo_base_path.trim()) {
+            camposFaltantes.push('Path del Challenge');
+        }
+        if (!this.tematica || !this.tematica.trim()) {
+            camposFaltantes.push('Temática');
+        }
+        if (!this.tecnologias || this.tecnologias.length === 0) {
+            camposFaltantes.push('Tecnologías');
+        }
+        if (!this.fecha_presentacion) {
+            camposFaltantes.push('Fecha de Presentación');
+        }
+
+        if (camposFaltantes.length > 0) {
+            Alpine.store('toasts').error('⚠️ Completá: ' + camposFaltantes.join(', '));
+            return false;
+        }
+
+        return true;
+    }
+    }
+}
+</script>
+{% elif cert and cert.tipo_certificacion == 'iniciativa' %}
+<script>
+    function miPathData() {
+        const BASE_URL = 'https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/';
+        const repo_inicial = '{{ (cert.repo_presentacion or cert.repo_demo or "") }}';
+
+        // Extraer el path base sin /descripcion ni /implementacion
+        const extractBasePath = (fullUrl) => {
+            if (!fullUrl) return '';
+            return fullUrl
+                .replace(BASE_URL, '')
+                .replace('/descripcion', '')
+                .replace('/implementacion', '');
+        };
+
+        const basePathInicial = extractBasePath(repo_inicial);
+
+        return {
+            wizardStep: 1,
+            wizardTotalSteps: 2,
+            wizardLabels: ['Configuración', 'Detalles'],
+            totalSteps: 2,
+            get currentStepLabel() {
+                const labels = {
+                    1: 'Configurá tu caso de uso',
+                    2: 'Agregá detalles del proyecto'
+                };
+                return labels[this.wizardStep] || '';
+            },
+            // Path del caso de uso (sin la URL base)
+            repo_base_path: basePathInicial || '',
+            // URL completa del repositorio base (para compatibilidad)
+            get repo_base_full() {
+                return this.repo_base_path ? BASE_URL + this.repo_base_path : BASE_URL;
+            },
+            tematica: '{{ (cert.tematica or "") }}',
+            tecnologias: {{ cert.tecnologias | tojson if cert.tecnologias else '[]' }},
+    fecha_presentacion: '{{ (cert.fecha_presentacion or "") }}',
+        nuevoTag: '',
+            tecnologiasSugeridas: [],
+                showSuggestions: false,
+                    selectedSuggestionIndex: -1,
+                        tematicasSugeridas: [],
+                            showTematicaSuggestions: false,
+                                selectedTematicaSuggestionIndex: -1,
+                                    camposRequeridos: ['repo_base_path', 'tematica', 'tecnologias'],
+                                        campoLabels: {
+        'repo_base_path': 'Path del Caso de Uso',
+            'tematica': 'Temática',
+                'tecnologias': 'Tecnologías'
+    },
+    init() {
+        // Cargar tecnologías sugeridas desde el backend
+        console.log('[Iniciativa] Cargando tecnologías...');
+        fetch('/api/v1/innovacion/tecnologias')
+            .then(response => {
+                console.log('[Iniciativa] Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                this.tecnologiasSugeridas = data;
+                console.log('[Iniciativa] Tecnologías cargadas:', this.tecnologiasSugeridas.length);
+            })
+            .catch(e => {
+                console.error('[Iniciativa] Error cargando tecnologías:', e);
+            });
+
+        // Cargar temáticas sugeridas desde el backend
+        console.log('[Iniciativa] Cargando temáticas...');
+        fetch('/api/v1/innovacion/tematicas')
+            .then(response => {
+                console.log('[Iniciativa] Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                this.tematicasSugeridas = data;
+                console.log('[Iniciativa] Temáticas cargadas:', this.tematicasSugeridas.length);
+            })
+            .catch(e => {
+                console.error('[Iniciativa] Error cargando temáticas:', e);
+            });
+    },
+        get repo_presentacion() {
+        // Construir automáticamente la URL de descripción
+        if (!this.repo_base_path || !this.repo_base_path.trim()) return '';
+        const base = this.repo_base_path.trim().replace(/\/$/, ''); // Remover / final si existe
+        return `https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/${base}/descripcion`;
+    },
+        get repo_demo() {
+        // Construir automáticamente la URL de implementación
+        if (!this.repo_base_path || !this.repo_base_path.trim()) return '';
+        const base = this.repo_base_path.trim().replace(/\/$/, ''); // Remover / final si existe
+        return `https://github.com/Dicsys-SA/innovacion-casos-uso/tree/main/${base}/implementacion`;
+    },
+        get filteredSuggestions() {
+        if (!this.nuevoTag || this.nuevoTag.trim().length < 1) return [];
+        const query = this.nuevoTag.toLowerCase();
+        return this.tecnologiasSugeridas
+            .filter(t => t.toLowerCase().includes(query) && !this.tecnologias.includes(t))
+            .slice(0, 8);
+    },
+        get completados() {
+        let c = 0;
+        if (this.repo_base_path && this.repo_base_path.trim()) c++;
+        if (this.tematica && this.tematica.trim()) c++;
+        if (this.tecnologias && this.tecnologias.length > 0) c++;
+        return c;
+    },
+        get total() { return this.camposRequeridos.length; },
+        get porcentaje() { return this.total > 0 ? Math.round((this.completados / this.total) * 100) : 0; },
+    campoCompletado(campo) {
+        if (campo === 'tecnologias') return this.tecnologias && this.tecnologias.length > 0;
+        if (campo === 'repo_base_path') return this.repo_base_path && this.repo_base_path.trim().length > 0;
+        const v = this[campo];
+        return v && v.trim && v.trim().length > 0;
+    },
+    onInputChange() {
+        console.log('[Iniciativa] Input changed:', this.nuevoTag, 'Filtered:', this.filteredSuggestions.length);
+        this.showSuggestions = this.filteredSuggestions.length > 0;
+        this.selectedSuggestionIndex = -1;
+    },
+    onInputKeydown(event) {
+        if (!this.showSuggestions || this.filteredSuggestions.length === 0) return;
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this.selectedSuggestionIndex = Math.min(
+                this.selectedSuggestionIndex + 1,
+                this.filteredSuggestions.length - 1
+            );
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this.selectedSuggestionIndex = Math.max(this.selectedSuggestionIndex - 1, -1);
+        } else if (event.key === 'Enter' && this.selectedSuggestionIndex >= 0) {
+            event.preventDefault();
+            this.selectSuggestion(this.filteredSuggestions[this.selectedSuggestionIndex]);
+        } else if (event.key === 'Escape') {
+            this.showSuggestions = false;
+        }
+    },
+    selectSuggestion(tech) {
+        console.log('[Iniciativa] Seleccionando:', tech);
+        if (!this.tecnologias.includes(tech)) {
+            this.tecnologias.push(tech);
+        }
+        this.nuevoTag = '';
+        this.showSuggestions = false;
+        this.selectedSuggestionIndex = -1;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+    addTag() {
+        const t = this.nuevoTag.trim();
+        if (t && !this.tecnologias.includes(t)) {
+            this.tecnologias.push(t);
+        }
+        this.nuevoTag = '';
+        this.showSuggestions = false;
+        this.selectedSuggestionIndex = -1;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+    removeTag(i) {
+        this.tecnologias.splice(i, 1);
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+        // Funciones para autocompletado de temáticas
+        get filteredTematicaSuggestions() {
+        if (!this.tematica || this.tematica.trim().length < 1) return [];
+        const query = this.tematica.toLowerCase();
+        return this.tematicasSugeridas
+            .filter(t => t.toLowerCase().includes(query))
+            .slice(0, 8);
+    },
+    onTematicaInputChange() {
+        console.log('[Iniciativa] Temática input changed:', this.tematica, 'Filtered:', this.filteredTematicaSuggestions.length);
+        this.showTematicaSuggestions = this.filteredTematicaSuggestions.length > 0;
+        this.selectedTematicaSuggestionIndex = -1;
+    },
+    onTematicaInputKeydown(event) {
+        if (!this.showTematicaSuggestions || this.filteredTematicaSuggestions.length === 0) return;
+
+        if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            this.selectedTematicaSuggestionIndex = Math.min(
+                this.selectedTematicaSuggestionIndex + 1,
+                this.filteredTematicaSuggestions.length - 1
+            );
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            this.selectedTematicaSuggestionIndex = Math.max(this.selectedTematicaSuggestionIndex - 1, -1);
+        } else if (event.key === 'Enter' && this.selectedTematicaSuggestionIndex >= 0) {
+            event.preventDefault();
+            this.selectTematicaSuggestion(this.filteredTematicaSuggestions[this.selectedTematicaSuggestionIndex]);
+        } else if (event.key === 'Escape') {
+            this.showTematicaSuggestions = false;
+        }
+    },
+    selectTematicaSuggestion(tematica) {
+        console.log('[Iniciativa] Seleccionando temática:', tematica);
+        this.tematica = tematica;
+        this.showTematicaSuggestions = false;
+        this.selectedTematicaSuggestionIndex = -1;
+        this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+    },
+    validarPasoActual() {
+        // Validación por paso para path Iniciativa
+        if (this.wizardStep === 1) {
+            // Paso 1: Descripción - validar repo_base_path
+            if (!this.repo_base_path || !this.repo_base_path.trim()) {
+                Alpine.store('toasts').warning('Completá el campo "Path del Caso de Uso" antes de continuar');
+                return false;
+            }
+        } else if (this.wizardStep === 2) {
+            // Paso 2: Detalles - validar tematica y tecnologias
+            const camposFaltantes = [];
+            if (!this.tematica || !this.tematica.trim()) camposFaltantes.push('Temática');
+            if (!this.tecnologias || this.tecnologias.length === 0) camposFaltantes.push('Tecnologías');
+
+            if (camposFaltantes.length > 0) {
+                Alpine.store('toasts').warning('Falta: ' + camposFaltantes.join(', '));
+                return false;
+            }
+        }
+        return true;
+    },
+    validarTodoElPath() {
+        // Validación completa de TODOS los campos antes de finalizar
+        const camposFaltantes = [];
+
+        // Validar todos los campos requeridos del path Iniciativa
+        if (!this.repo_base_path || !this.repo_base_path.trim()) {
+            camposFaltantes.push('Repositorio Base');
+        }
+        if (!this.tematica || !this.tematica.trim()) {
+            camposFaltantes.push('Temática');
+        }
+        if (!this.tecnologias || this.tecnologias.length === 0) {
+            camposFaltantes.push('Tecnologías');
+        }
+
+        if (camposFaltantes.length > 0) {
+            Alpine.store('toasts').error('⚠️ Completá: ' + camposFaltantes.join(', '));
+            return false;
+        }
+
+        return true;
+    }
+    }
+}
+</script>
+{% elif cert and cert.tipo_certificacion == 'training' %}
+<script>
+    function miPathData() {
+        return {
+            wizardStep: 1,
+            wizardTotalSteps: 5,
+            wizardLabels: ['NoN-Code', 'n8n', 'Ruta 1', 'Ruta 2', 'Ruta 3'],
+            totalSteps: 5,
+            get currentStepLabel() {
+                const labels = {
+                    1: 'Subí tu certificado NoN-Code',
+                    2: 'Subí tu certificado n8n',
+                    3: 'Subí tu certificado Ruta 1 GCP',
+                    4: 'Subí tu certificado Ruta 2 GCP',
+                    5: 'Subí tu certificado Ruta 3 GCP'
+                };
+                return labels[this.wizardStep] || '';
+            },
+            cert_noncode_origen: '{{ (cert.cert_noncode_origen or "dicsys") }}',
+            cert_n8n_origen: '{{ (cert.cert_n8n_origen or "dicsys") }}',
+            cert_noncode_imagen: {{ 'true' if cert.cert_noncode_imagen else 'false' }},
+            cert_noncode_plan: {{ 'true' if cert.cert_noncode_plan else 'false' }},
+            cert_n8n_imagen: {{ 'true' if cert.cert_n8n_imagen else 'false' }},
+            cert_n8n_plan: {{ 'true' if cert.cert_n8n_plan else 'false' }},
+            cert_ruta1_imagen: {{ 'true' if cert.cert_ruta1_imagen else 'false' }},
+            cert_ruta2_imagen: {{ 'true' if cert.cert_ruta2_imagen else 'false' }},
+            cert_ruta3_imagen: {{ 'true' if cert.cert_ruta3_imagen else 'false' }},
+    campoLabels: {
+        'cert_noncode_imagen': 'Certificado de NoN-Code',
+            'cert_n8n_imagen': 'Certificado de n8n',
+                'cert_ruta1_imagen': 'Certificado de Ruta 1 GCP',
+                    'cert_ruta2_imagen': 'Certificado de Ruta 2 GCP',
+                        'cert_ruta3_imagen': 'Certificado de Ruta 3 GCP',
+                            'cert_noncode_plan': 'Plan de Estudio de NoN-Code',
+                                'cert_n8n_plan': 'Plan de Estudio de n8n'
+    },
+        get camposRequeridos() {
+        let campos = ['cert_noncode_imagen', 'cert_n8n_imagen', 'cert_ruta1_imagen', 'cert_ruta2_imagen', 'cert_ruta3_imagen'];
+        if (this.cert_noncode_origen === 'externa') campos.push('cert_noncode_plan');
+        if (this.cert_n8n_origen === 'externa') campos.push('cert_n8n_plan');
+        return campos;
+    },
+        get completados() {
+        let c = 0;
+        for (const campo of this.camposRequeridos) {
+            if (this[campo]) c++;
+        }
+        return c;
+    },
+        get total() { return this.camposRequeridos.length; },
+        get porcentaje() { return this.total > 0 ? Math.round((this.completados / this.total) * 100) : 0; },
+    campoCompletado(campo) {
+        return !!this[campo];
+    },
+    validarPasoActual() {
+        // Validación por paso para path Training
+        const camposPorPaso = {
+            1: ['cert_noncode_imagen'],
+            2: ['cert_n8n_imagen'],
+            3: ['cert_ruta1_imagen'],
+            4: ['cert_ruta2_imagen'],
+            5: ['cert_ruta3_imagen']
+        };
+
+        // Agregar validación de planes de estudio si es externa
+        if (this.wizardStep === 1 && this.cert_noncode_origen === 'externa') {
+            camposPorPaso[1].push('cert_noncode_plan');
+        }
+        if (this.wizardStep === 2 && this.cert_n8n_origen === 'externa') {
+            camposPorPaso[2].push('cert_n8n_plan');
+        }
+
+        const camposRequeridos = camposPorPaso[this.wizardStep] || [];
+        const camposFaltantes = [];
+
+        for (const campo of camposRequeridos) {
+            if (!this[campo]) {
+                camposFaltantes.push(this.campoLabels[campo] || campo);
+            }
+        }
+
+        if (camposFaltantes.length > 0) {
+            Alpine.store('toasts').warning('Falta: ' + camposFaltantes.join(', '));
+            return false;
+        }
+
+        return true;
+    },
+    validarTodoElPath() {
+        // Validación completa de TODOS los campos antes de finalizar
+        const camposFaltantes = [];
+
+        // Validar todos los certificados obligatorios
+        if (!this.cert_noncode_imagen) {
+            camposFaltantes.push('Certificado de NoN-Code');
+        }
+        if (this.cert_noncode_origen === 'externa' && !this.cert_noncode_plan) {
+            camposFaltantes.push('Plan de Estudio de NoN-Code');
+        }
+        if (!this.cert_n8n_imagen) {
+            camposFaltantes.push('Certificado de n8n');
+        }
+        if (this.cert_n8n_origen === 'externa' && !this.cert_n8n_plan) {
+            camposFaltantes.push('Plan de Estudio de n8n');
+        }
+        if (!this.cert_ruta1_imagen) {
+            camposFaltantes.push('Certificado de Ruta 1 GCP');
+        }
+        if (!this.cert_ruta2_imagen) {
+            camposFaltantes.push('Certificado de Ruta 2 GCP');
+        }
+        if (!this.cert_ruta3_imagen) {
+            camposFaltantes.push('Certificado de Ruta 3 GCP');
+        }
+
+        if (camposFaltantes.length > 0) {
+            Alpine.store('toasts').error('⚠️ Completá: ' + camposFaltantes.join(', '));
+            return false;
+        }
+
+        return true;
+    }
+    }
+}
+</script>
+{% else %}
+<script>function miPathData() { return {}; }</script>
+{% endif %}
+{% endblock %}

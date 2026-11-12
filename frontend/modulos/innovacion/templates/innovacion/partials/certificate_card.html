@@ -1,0 +1,401 @@
+<!-- Certificado Visual - Partial reutilizable -->
+<!-- Requiere variable `cert` con: empleado_nombre, tipo_nombre, tipo_certificacion, tematica, tecnologias, fecha_aprobacion, fecha_registro, fecha_en_progreso, fecha_en_presentacion, id -->
+
+<!-- Canvas para animación de celebración -->
+<canvas id="celebration-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9998;"></canvas>
+
+<style>
+    /* === Escalado responsivo del certificado === */
+    .cert-scale-wrap {
+        /* min-width:0 + max-width:100% para que nunca exceda el padre,
+           incluso si está dentro de un flex/grid que no propaga min-width. */
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin: 0 auto;
+        position: relative;
+        overflow: hidden;
+        /* contain:layout aísla el sub-árbol del cálculo intrínseco del padre */
+        contain: layout size;
+    }
+    .cert-scale-inner {
+        /* position:absolute → el inner NO contribuye al ancho del padre.
+           El wrap manda en el ancho disponible, el inner solo se renderiza encima. */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 900px;
+        height: 675px;
+        transform-origin: top left;
+        will-change: transform;
+    }
+    .cert-scale-inner > .certificate-card {
+        width: 900px !important;
+        height: 675px !important;
+        max-width: none !important;
+        aspect-ratio: auto !important;
+        margin: 0 !important;
+    }
+    /* Modo estático: sin escalado, el certificado se renderiza a 900x675
+       y respeta el zoom nativo del browser */
+    .cert-scale-wrap--static {
+        width: 900px;
+        max-width: 900px;
+        height: 675px;
+        overflow: visible;
+        contain: none;
+    }
+    .cert-scale-wrap--static .cert-scale-inner {
+        position: static;
+        transform: none !important;
+    }
+</style>
+
+<div id="cert-scale-wrap-{{ cert.id[:8] }}" class="cert-scale-wrap{% if cert_no_scale %} cert-scale-wrap--static{% endif %}">
+    <div class="cert-scale-inner">
+
+<div class="certificate-card bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200/80 mx-auto" style="aspect-ratio: 4/3; max-width: 900px;">
+    <!-- Barra superior -->
+    <div class="h-1.5 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800"></div>
+
+    <div class="relative px-10 py-7 sm:px-12 sm:py-8 h-full flex flex-col">
+
+        <!-- Logo absoluto esquina superior izquierda -->
+        <div class="absolute top-5 left-[26px] sm:top-6 overflow-hidden" style="width:140px;height:140px;">
+            <img src="/static/certificates/ai_professional.svg" alt="Certified AI Professional" class="w-full h-full object-contain">
+        </div>
+
+        <!-- QR absoluto esquina superior derecha -->
+        <div class="absolute top-5 right-6 sm:top-6 sm:right-8 flex flex-col items-center">
+            <div id="cert-qr-{{ cert.id[:8] }}" class="w-[72px] h-[72px]"></div>
+            <p class="text-[7px] text-slate-400 mt-0.5 uppercase tracking-wider">Scan to verify</p>
+        </div>
+
+        <!-- Título centrado (con padding para no pisar logo/QR) -->
+        <div class="text-center pt-2 mb-2">
+            <img src="/static/logo-dicsys-ai-azul.svg" alt="Dicsys.AI" class="h-5 w-20 mx-auto mb-1">
+            <h1 class="font-serif text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight leading-tight">AI Professional</h1>
+            <p class="font-serif text-base sm:text-lg text-slate-400 tracking-wide">Certificate</p>
+        </div>
+
+        <!-- Espacio para que el contenido arranque debajo del logo (140px + padding) -->
+        <div class="mt-8 sm:mt-6"></div>
+
+        <!-- Línea fina -->
+        <div class="w-20 h-px bg-slate-300 mx-auto mb-5"></div>
+
+        <!-- Certifica que -->
+        <div class="text-center mb-3">
+            <p class="text-slate-400 text-[10px] uppercase tracking-[0.2em] font-medium mb-2">This certifies that</p>
+            <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight">
+                {{ cert.empleado_nombre or 'Nombre del Empleado' }}
+            </h2>
+            <div class="w-56 h-px bg-slate-200 mx-auto mt-2"></div>
+        </div>
+
+        <!-- Programa -->
+        <div class="text-center">
+            <p class="text-slate-500 text-xs">Has successfully completed the certification program</p>
+        </div>
+
+        <!-- Separación (3 saltos de línea + 1 extra) antes de las fechas -->
+        <div class="h-16"></div>
+
+        <!-- Fechas de hitos -->
+        <div class="grid grid-cols-4 gap-2 mb-5">
+            <div class="text-center py-2 px-1 border border-slate-100 rounded-lg">
+                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Registered</p>
+                <p class="text-[11px] font-semibold text-slate-700">{% if cert.fecha_registro %}{{ cert.fecha_registro[:10] }}{% else %}—{% endif %}</p>
+            </div>
+            <div class="text-center py-2 px-1 border border-slate-100 rounded-lg">
+                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">In Progress</p>
+                <p class="text-[11px] font-semibold text-slate-700">{% if cert.fecha_en_progreso %}{{ cert.fecha_en_progreso[:10] }}{% else %}—{% endif %}</p>
+            </div>
+            <div class="text-center py-2 px-1 border border-slate-100 rounded-lg">
+                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Submitted</p>
+                <p class="text-[11px] font-semibold text-slate-700">{% if cert.fecha_en_presentacion %}{{ cert.fecha_en_presentacion[:10] }}{% else %}—{% endif %}</p>
+            </div>
+            <div class="text-center py-2 px-1 border border-slate-800 rounded-lg bg-slate-800">
+                <p class="text-[8px] font-bold text-slate-300 uppercase tracking-wider mb-0.5">Approved</p>
+                <p class="text-[11px] font-semibold text-white">{% if cert.fecha_aprobacion %}{{ cert.fecha_aprobacion }}{% else %}—{% endif %}</p>
+            </div>
+        </div>
+
+        <!-- Spacer flexible -->
+        <div class="flex-1"></div>
+
+        <!-- Firmas -->
+        <div class="grid grid-cols-4 gap-5 mb-3">
+            <div class="text-center">
+                <div class="h-[108px] flex items-end justify-center mb-1">
+                    <img src="/static/certificates/f1.jpg" alt="Firma Diego Casali" class="h-[90px] max-w-full object-contain">
+                </div>
+                <div class="w-full max-w-[120px] h-px bg-slate-300 mx-auto mb-1"></div>
+                <p class="text-[10px] font-bold text-slate-700 uppercase tracking-wide">Diego Casali</p>
+                <p class="text-[9px] text-slate-400">Directorio</p>
+            </div>
+            <div class="text-center">
+                <div class="h-[108px] flex items-end justify-center mb-1">
+                    <img src="/static/certificates/f2.jpg" alt="Firma Diego Galvan" class="h-[90px] max-w-full object-contain">
+                </div>
+                <div class="w-full max-w-[120px] h-px bg-slate-300 mx-auto mb-1"></div>
+                <p class="text-[10px] font-bold text-slate-700 uppercase tracking-wide">Diego Galvan</p>
+                <p class="text-[9px] text-slate-400">Directorio</p>
+            </div>
+            <div class="text-center">
+                <div class="h-[108px] flex items-end justify-center mb-1">
+                    <img src="/static/certificates/f3.jpg" alt="Firma Federico Vega" class="h-[90px] max-w-full object-contain">
+                </div>
+                <div class="w-full max-w-[120px] h-px bg-slate-300 mx-auto mb-1"></div>
+                <p class="text-[10px] font-bold text-slate-700 uppercase tracking-wide">Federico Vega</p>
+                <p class="text-[9px] text-slate-400">Jefe de Producción</p>
+            </div>
+            <div class="text-center">
+                <div class="h-[108px] flex items-end justify-center mb-1">
+                    <img src="/static/certificates/f4.jpg" alt="Firma José Mamani" class="h-[90px] max-w-full object-contain">
+                </div>
+                <div class="w-full max-w-[120px] h-px bg-slate-300 mx-auto mb-1"></div>
+                <p class="text-[10px] font-bold text-slate-700 uppercase tracking-wide">José Mamani</p>
+                <p class="text-[9px] text-slate-400">Líder de Innovación</p>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-end justify-between pt-2 border-t border-slate-100">
+            <div>
+                <p class="text-[8px] font-bold text-slate-400 uppercase tracking-[0.15em]">Credential ID</p>
+                <p class="font-mono text-[10px] text-slate-500 mt-0.5">{{ cert.id }}</p>
+            </div>
+            <p class="text-[9px] text-slate-400">Issued by DICSYS S.A.</p>
+        </div>
+    </div>
+
+    <!-- Barra inferior -->
+    <div class="h-1.5 bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800"></div>
+</div>
+
+        </div>
+    </div>
+
+<!-- QR Code Generator -->
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+(function() {
+    var url = window.location.origin + '/certificates/{{ cert.id }}';
+    var ids = ['cert-qr-{{ cert.id[:8] }}'];
+    function renderAll() {
+        ids.forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el && !el.hasChildNodes()) {
+                new QRCode(el, {
+                    text: url,
+                    width: 72,
+                    height: 72,
+                    colorDark: '#1e293b',
+                    colorLight: '#ffffff',
+                    correctLevel: QRCode.CorrectLevel.M
+                });
+            }
+        });
+    }
+    renderAll();
+    // Re-render al togglear modo (Alpine puede crear/destruir nodos por x-show, pero acá usamos display:none, así que basta con render inicial)
+    document.addEventListener('alpine:initialized', renderAll);
+})();
+</script>
+
+<!-- Escalado responsivo del certificado (vanilla JS, funciona con o sin Alpine) -->
+{% if not cert_no_scale %}
+<script>
+(function() {
+    var wrap = document.getElementById('cert-scale-wrap-{{ cert.id[:8] }}');
+    if (!wrap) return;
+    var inner = wrap.querySelector('.cert-scale-inner');
+    if (!inner) return;
+    function apply() {
+        var w = Math.max(100, wrap.clientWidth - 1);
+        var top = wrap.getBoundingClientRect().top;
+        var marginBottom = 24;
+        var availH = Math.max(200, window.innerHeight - top - marginBottom);
+        var raw = Math.min(w / 900, availH / 675);
+        var scale = Math.floor(raw * 10000) / 10000;
+        inner.style.transform = 'scale(' + scale + ')';
+        wrap.style.height = Math.floor(675 * scale) + 'px';
+        // Centrado horizontal: cuando el alto limita la escala, la tarjeta escalada
+        // es más angosta que el wrap; sin esto quedaría pegada a la izquierda.
+        inner.style.left = Math.max(0, Math.floor((wrap.clientWidth - 900 * scale) / 2)) + 'px';
+    }
+    apply();
+    if (window.ResizeObserver) {
+        new ResizeObserver(apply).observe(wrap);
+    }
+    window.addEventListener('resize', apply);
+    window.addEventListener('scroll', apply, { passive: true });
+})();
+</script>
+{% endif %}
+
+<!-- Celebración: Confetti + Fuegos Artificiales -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var canvas = document.getElementById('celebration-canvas');
+    if (!canvas) return;
+    var ctx = canvas.getContext('2d');
+    var particles = [];
+    var animationId = null;
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    function loop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        particles = particles.filter(function(p) { return p.life > 0; });
+        particles.forEach(function(p) { p.update(); p.draw(ctx); });
+        if (particles.length > 0) {
+            animationId = requestAnimationFrame(loop);
+        } else {
+            animationId = null;
+        }
+    }
+    function startLoop() { if (!animationId) { loop(); } }
+
+    // Confetti
+    function Confetti() {
+        this.x = Math.random() * canvas.width;
+        this.y = -20;
+        this.w = Math.random() * 12 + 6;
+        this.h = Math.random() * 6 + 4;
+        this.color = ['#f43f5e','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#06b6d4','#eab308'][Math.floor(Math.random()*8)];
+        this.vx = (Math.random() - 0.5) * 4;
+        this.vy = Math.random() * 3 + 2;
+        this.rotation = Math.random() * 360;
+        this.rotSpeed = (Math.random() - 0.5) * 12;
+        this.life = 300;
+        this.wobble = Math.random() * 10;
+        this.wobbleSpeed = Math.random() * 0.1 + 0.03;
+    }
+    Confetti.prototype.update = function() {
+        this.x += this.vx + Math.sin(this.wobble) * 0.5;
+        this.y += this.vy;
+        this.vy += 0.02;
+        this.rotation += this.rotSpeed;
+        this.wobble += this.wobbleSpeed;
+        this.life--;
+        if (this.y > canvas.height + 20) this.life = 0;
+    };
+    Confetti.prototype.draw = function(ctx) {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.rotation * Math.PI / 180);
+        ctx.globalAlpha = Math.min(1, this.life / 50);
+        ctx.fillStyle = this.color;
+        ctx.fillRect(-this.w/2, -this.h/2, this.w, this.h);
+        ctx.restore();
+    };
+
+    // Firework Trail
+    function FireworkTrail(x, targetY) {
+        this.x = x;
+        this.y = canvas.height;
+        this.targetY = targetY;
+        this.vy = -12 - Math.random() * 4;
+        this.life = 200;
+        this.exploded = false;
+        this.trail = [];
+    }
+    FireworkTrail.prototype.update = function() {
+        if (!this.exploded) {
+            this.trail.push({x: this.x, y: this.y, a: 1});
+            this.y += this.vy;
+            this.vy += 0.15;
+            if (this.vy >= 0 || this.y <= this.targetY) {
+                this.exploded = true;
+                var hue = Math.random() * 360;
+                var count = 80 + Math.floor(Math.random() * 40);
+                for (var i = 0; i < count; i++) {
+                    var angle = (Math.PI * 2 / count) * i + (Math.random() - 0.5) * 0.3;
+                    var speed = Math.random() * 6 + 2;
+                    particles.push(new Spark(this.x, this.y, Math.cos(angle)*speed, Math.sin(angle)*speed, hue));
+                }
+                this.life = 0;
+            }
+        }
+        this.trail.forEach(function(t) { t.a -= 0.04; });
+        this.trail = this.trail.filter(function(t) { return t.a > 0; });
+        this.life--;
+    };
+    FireworkTrail.prototype.draw = function(ctx) {
+        this.trail.forEach(function(t) {
+            ctx.beginPath();
+            ctx.arc(t.x, t.y, 2, 0, Math.PI*2);
+            ctx.fillStyle = 'rgba(255,255,255,' + t.a + ')';
+            ctx.fill();
+        });
+    };
+
+    // Spark
+    function Spark(x, y, vx, vy, hue) {
+        this.x = x; this.y = y;
+        this.vx = vx; this.vy = vy;
+        this.hue = hue + (Math.random()-0.5)*30;
+        this.life = 120 + Math.random()*60;
+        this.maxLife = this.life;
+        this.size = Math.random() * 3 + 1;
+        this.trail = [];
+    }
+    Spark.prototype.update = function() {
+        this.trail.push({x:this.x, y:this.y});
+        if (this.trail.length > 6) this.trail.shift();
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vx *= 0.97;
+        this.vy *= 0.97;
+        this.vy += 0.06;
+        this.life--;
+    };
+    Spark.prototype.draw = function(ctx) {
+        var alpha = this.life / this.maxLife;
+        for (var i = 0; i < this.trail.length; i++) {
+            var ta = (i / this.trail.length) * alpha * 0.4;
+            ctx.beginPath();
+            ctx.arc(this.trail[i].x, this.trail[i].y, this.size * 0.5, 0, Math.PI*2);
+            ctx.fillStyle = 'hsla(' + this.hue + ',100%,70%,' + ta + ')';
+            ctx.fill();
+        }
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+        ctx.fillStyle = 'hsla(' + this.hue + ',100%,70%,' + alpha + ')';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size * 3, 0, Math.PI*2);
+        ctx.fillStyle = 'hsla(' + this.hue + ',100%,70%,' + (alpha * 0.15) + ')';
+        ctx.fill();
+    };
+
+    // Auto-launch celebration
+    // Confetti
+    for (var wave = 0; wave < 5; wave++) {
+        (function(w) {
+            setTimeout(function() {
+                for (var i = 0; i < 70; i++) particles.push(new Confetti());
+                startLoop();
+            }, w * 200);
+        })(wave);
+    }
+    // Fireworks
+    for (var fw = 0; fw < 9; fw++) {
+        (function(f) {
+            setTimeout(function() {
+                var x = canvas.width * 0.1 + Math.random() * canvas.width * 0.8;
+                var targetY = canvas.height * 0.08 + Math.random() * canvas.height * 0.4;
+                particles.push(new FireworkTrail(x, targetY));
+                startLoop();
+            }, 300 + f * 400);
+        })(fw);
+    }
+});
+</script>

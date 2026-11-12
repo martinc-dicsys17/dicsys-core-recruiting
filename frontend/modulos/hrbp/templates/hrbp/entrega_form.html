@@ -1,0 +1,82 @@
+{% extends "core/base.html" %}
+
+{% block title %}Nueva Entrega - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('hrbp.entregas_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">Nueva Entrega</h1>
+            <p class="text-dark-500 text-sm">Registra la entrega de un item a un empleado</p>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="form-error"></div>
+        
+        <form hx-post="{{ url_for('hrbp.entregas_create') }}" 
+              hx-target="#form-error" 
+              hx-indicator="#submit-spinner" 
+              method="POST"
+              x-data="{ selectedItem: null }">
+            
+            <div class="p-8 space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Item a Entregar *</label>
+                    <select name="item_tipo_id" required x-model="selectedItem"
+                            class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <option value="">Seleccionar item...</option>
+                        {% for item in items %}
+                        <option value="{{ item.id }}" data-stock="{{ item.stock_actual }}">
+                            {{ item.nombre }} (Stock: {{ item.stock_actual }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Empleado *</label>
+                    <select name="empleado_id" required
+                            class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <option value="">Seleccionar empleado...</option>
+                        {% for emp in empleados %}
+                        <option value="{{ emp.id }}">{{ emp.nombre }} {% if emp.codigo %}({{ emp.codigo }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Cantidad *</label>
+                        <input type="number" name="cantidad" value="1" min="1" required
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Observaciones</label>
+                    <textarea name="observaciones" rows="3" placeholder="Notas adicionales sobre la entrega..."
+                              class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all"></textarea>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="px-8 py-5 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('hrbp.entregas_list') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+                <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                    <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <i data-lucide="gift" class="w-4 h-4 mr-2"></i>
+                    Registrar Entrega
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

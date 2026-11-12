@@ -1,0 +1,171 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if desafio else 'Nuevo' }} Desafío - Star Miles{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('starmiles.admin_desafios') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar' if desafio else 'Nuevo' }} Desafío</h1>
+            <p class="text-dark-500 text-sm">{{ 'Modifica la información' if desafio else 'Completa el formulario' }}</p>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="form-error"></div>
+        
+        <form hx-post="{{ url_for('starmiles.admin_desafio_editar', id=desafio.id) if desafio else url_for('starmiles.admin_desafio_crear') }}" 
+              hx-target="#form-error" method="POST">
+            
+            <div class="p-8 space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                        <input type="text" name="nombre" value="{{ desafio.nombre if desafio else '' }}" required
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Categoría</label>
+                        <select name="categoria_id" class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                            <option value="">Sin categoría</option>
+                            {% for cat in categorias %}
+                            <option value="{{ cat.id }}" {{ 'selected' if desafio and desafio.categoria_id == cat.id else '' }}>{{ cat.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Star Miles *</label>
+                        <input type="number" name="star_miles" value="{{ desafio.star_miles if desafio else '' }}" required min="1"
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Descripción</label>
+                        <textarea name="descripcion" rows="3"
+                                  class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">{{ desafio.descripcion if desafio else '' }}</textarea>
+                    </div>
+                    
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Alcance</label>
+                        <input type="text" name="alcance" value="{{ desafio.alcance if desafio else '' }}" placeholder="Ej: Todos los empleados, Área de ventas..."
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha Inicio</label>
+                        <input type="date" name="fecha_inicio" value="{{ desafio.fecha_inicio if desafio else '' }}"
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha Vencimiento</label>
+                        <input type="date" name="fecha_vencimiento" value="{{ desafio.fecha_vencimiento if desafio else '' }}"
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    
+                    <div class="md:col-span-2" x-data="imageUploader('{{ (desafio.imagen_url or '') if desafio else '' }}')">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Imagen</label>
+                        <input type="hidden" name="imagen_url" :value="imageUrl">
+                        
+                        <!-- Preview -->
+                        <div x-show="imageUrl" class="mb-3 relative inline-block">
+                            <img :src="imageUrl" class="h-32 rounded-xl border border-dark-200 object-cover">
+                            <button type="button" @click="removeImage()" class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600">
+                                <i data-lucide="x" class="w-3 h-3"></i>
+                            </button>
+                        </div>
+                        
+                        <!-- Upload -->
+                        <div x-show="!uploading">
+                            <label class="flex items-center justify-center w-full px-4 py-3 bg-dark-50 border-2 border-dashed border-dark-200 rounded-xl cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-all">
+                                <i data-lucide="upload" class="w-5 h-5 text-dark-400 mr-2"></i>
+                                <span class="text-dark-500 text-sm" x-text="imageUrl ? 'Cambiar imagen' : 'Subir imagen'"></span>
+                                <input type="file" accept="image/*" class="hidden" @change="uploadFile($event)">
+                            </label>
+                        </div>
+                        <div x-show="uploading" x-cloak class="text-sm text-dark-500 flex items-center">
+                            <svg class="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            Subiendo...
+                        </div>
+                        <div x-show="error" x-cloak class="mt-2 text-sm text-red-600" x-text="error"></div>
+                    </div>
+                    
+                    <div>
+                        <label class="flex items-center space-x-3 cursor-pointer">
+                            <input type="checkbox" name="activo" {{ 'checked' if not desafio or desafio.activo else '' }}
+                                   class="w-5 h-5 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                            <span class="text-sm font-semibold text-dark-700">Activo</span>
+                        </label>
+                    </div>
+                    <div>
+                        <label class="flex items-start space-x-3 cursor-pointer">
+                            <input type="checkbox" name="inscripcion_unica_por_empleado" {{ 'checked' if desafio and desafio.inscripcion_unica_por_empleado else '' }}
+                                   class="mt-0.5 w-5 h-5 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                            <span>
+                                <span class="block text-sm font-semibold text-dark-700">Una inscripcion por empleado</span>
+                                <span class="block text-xs text-dark-500">Bloquea nuevas inscripciones si el empleado ya tiene una pendiente, aprobada o completada en este desafio.</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="px-8 py-5 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('starmiles.admin_desafios') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+                <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                    <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                    {{ 'Guardar' if desafio else 'Crear' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function imageUploader(initialUrl) {
+    return {
+        imageUrl: initialUrl || '',
+        uploading: false,
+        error: '',
+        async uploadFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            this.error = '';
+            this.uploading = true;
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('context', 'desafio');
+                const resp = await fetch('{{ url_for("starmiles.upload_imagen_proxy") }}', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await resp.json();
+                if (resp.ok && data.url) {
+                    this.imageUrl = data.url;
+                } else {
+                    this.error = data.detail || data.error || 'Error al subir imagen';
+                }
+            } catch (e) {
+                this.error = 'Error de conexión al subir imagen';
+            } finally {
+                this.uploading = false;
+                event.target.value = '';
+            }
+        },
+        removeImage() {
+            this.imageUrl = '';
+        }
+    }
+}
+</script>
+{% endblock %}

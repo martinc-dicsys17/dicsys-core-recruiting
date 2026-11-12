@@ -1,0 +1,341 @@
+{% extends "core/base.html" %}
+
+{% set TIPOS = {'proveedor': 'Proveedor', 'herramienta': 'Herramienta', 'sin_clasificar': 'Sin clasificar'} %}
+
+{% block title %}{{ item.nombre }} - {{ config.APP_NAME }}{% endblock %}
+
+{% macro dato(etiqueta, valor) -%}
+<div>
+    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">{{ etiqueta }}</p>
+    <p class="text-dark-900 font-medium whitespace-pre-line break-words">{{ valor or '-' }}</p>
+</div>
+{%- endmacro %}
+
+{% from 'administracion/partials/proveedores_macros.html' import respuesta, telefono_whatsapp, selector_vista, direccion, ubicacion, badge, pestanas, tamano_documento, COLORES_DOCUMENTO %}
+
+{% block content %}
+{# Vista de solo lectura. Editar, adjuntar la política/NDA, oficinas, contactos y documentos: botón Editar. #}
+<div class="max-w-5xl mx-auto animate-fade-in" x-data="vistaProveedor()">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div class="flex items-center">
+            <a href="{{ url_for('administracion.proveedores_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver a Proveedores">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div class="w-16 h-16 rounded-2xl bg-primary-50 border border-primary-100 flex items-center justify-center mr-4 flex-shrink-0">
+                <i data-lucide="{{ 'wrench' if item.tipo == 'herramienta' else 'truck' }}" class="w-8 h-8 text-primary-500"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-dark-900">{{ item.nombre }}</h1>
+                <div class="flex flex-wrap items-center gap-3 mt-1">
+                    {% if item.razon_social %}<span class="text-dark-500 text-sm">{{ item.razon_social }}</span><span class="text-dark-300">·</span>{% endif %}
+                    <span class="text-dark-500 text-sm">{{ TIPOS.get(item.tipo, item.tipo) }}</span>
+                    <span class="text-dark-300">·</span>
+                    {% if item.activo %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg">Activo</span>
+                    {% else %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 rounded-lg" title="Se ve y conserva su historial, pero no entra en evaluaciones nuevas">Inactivo</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <a href="{{ url_for('administracion.proveedores_edit', proveedor_id=item.id) }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="edit-2" class="w-4 h-4 mr-2"></i>Editar
+        </a>
+    </div>
+
+    <!-- Tabs, con el estilo de /perfil -->
+    {{ pestanas([('datos', 'Datos', 'info'), ('oficinas', 'Oficinas', 'map-pin'), ('contactos', 'Contactos', 'users'),
+                 ('documentos', 'Documentos', 'folder-open'), ('evaluaciones', 'Evaluaciones', 'clipboard-check')]) }}
+
+    <!-- Datos -->
+    <div x-show="tab === 'datos'" class="space-y-6">
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2 text-primary-500"></i>Datos generales</h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                {{ dato('Nombre', item.nombre) }}
+                {{ dato('Razón social', item.razon_social) }}
+                {{ dato('Tipo', TIPOS.get(item.tipo, item.tipo)) }}
+                {{ dato('CUIT', item.cuit) }}
+                {{ dato('Tipo de IVA', item.responsabilidad_afip) }}
+                {{ dato('Nro. Ingresos Brutos', item.nro_ingresos_brutos) }}
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Usuario referente</p>
+                    {% if item.referente %}
+                    <p class="text-dark-900 font-medium">{{ item.referente.nombre }}</p>
+                    {% else %}
+                    <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-amber-100 text-amber-700">Sin definir</span>
+                    <p class="text-xs text-dark-400 mt-1">Nadie puede evaluarlo hasta que se asigne.</p>
+                    {% endif %}
+                </div>
+                <div class="md:col-span-2">{{ dato('Servicio / bien provisto', item.servicio_provisto) }}</div>
+                <div class="md:col-span-2 lg:col-span-3">{{ dato('Tipo de información que manejan', item.tipo_informacion) }}</div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="phone" class="w-5 h-5 mr-2 text-primary-500"></i>Contacto</h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                {{ dato('Email', item.email) }}
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Teléfono (WhatsApp)</p>
+                    {{ telefono_whatsapp(item.telefono_whatsapp) }}
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Página web</p>
+                    {% if item.pagina_web %}<a href="{{ item.pagina_web }}" target="_blank" rel="noopener noreferrer" class="text-primary-600 hover:text-primary-700 hover:underline font-medium break-all">{{ item.pagina_web }}</a>{% else %}<p class="text-dark-900">-</p>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="shield-check" class="w-5 h-5 mr-2 text-primary-500"></i>Seguridad y acuerdos</h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                {{ dato('Acuerdo de servicio firmado', item.acuerdo_servicio) }}
+                <div class="md:col-span-2">{{ dato('Política de seguridad / NDA', item.politica_nda) }}</div>
+                <div class="md:col-span-3">
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Archivo adjunto</p>
+                    {% if item.politica_nda_archivo_nombre %}
+                    <a href="{{ url_for('administracion.proveedores_nda', proveedor_id=item.id) }}" class="inline-flex items-center text-primary-600 hover:text-primary-700 hover:underline font-medium">
+                        <i data-lucide="paperclip" class="w-4 h-4 mr-1"></i>{{ item.politica_nda_archivo_nombre }}
+                    </a>
+                    {% elif item.acuerdo_servicio == 'Si' %}
+                    {# Alta del Sheet con acuerdo firmado: el archivo se pide al editar #}
+                    <span class="px-2 py-1 text-xs font-semibold rounded-lg bg-red-100 text-red-700">Falta el adjunto del acuerdo</span>
+                    {% else %}
+                    <p class="text-dark-900">-</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="message-square" class="w-5 h-5 mr-2 text-primary-500"></i>Observaciones</h2>
+            </div>
+            <div class="p-6 whitespace-pre-line break-words {{ 'text-dark-900' if item.observaciones else 'text-dark-400' }}">
+                {{- item.observaciones or 'Sin observaciones.' -}}
+            </div>
+        </div>
+    </div>
+
+    <!-- Oficinas: tabla o cards -->
+    <div x-show="tab === 'oficinas'" x-cloak class="space-y-4">
+        {% if item.oficinas %}
+        <div class="flex justify-end">{{ selector_vista() }}</div>
+        <div x-show="vista === 'tabla'" class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-dark-50 border-b border-dark-100">
+                        {% for columna in ['Oficina', 'Dirección', 'Localidad', 'Provincia', 'País', 'CP'] %}
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase whitespace-nowrap">{{ columna }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100">
+                    {% for o in item.oficinas %}
+                    <tr class="hover:bg-dark-50/50">
+                        <td class="px-4 py-3">
+                            <p class="font-semibold text-dark-900">{{ o.nombre_oficina or 'Oficina' }}</p>
+                            {% if o.es_legal %}<div class="mt-1">{{ badge('Domicilio legal') }}</div>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-dark-700">{{ direccion(o) }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-600">{{ o.localidad or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-600">{{ o.provincia or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-600">{{ o.pais or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-600 whitespace-nowrap">{{ o.codigo_postal or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div x-show="vista === 'cards'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for o in item.oficinas %}
+            <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-start gap-4">
+                <div class="w-11 h-11 rounded-xl bg-primary-50 border border-primary-100 flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="{{ 'landmark' if o.es_legal else 'map-pin' }}" class="w-5 h-5 text-primary-500"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-semibold text-dark-900">{{ o.nombre_oficina or 'Oficina' }}</p>
+                        {% if o.es_legal %}{{ badge('Domicilio legal') }}{% endif %}
+                    </div>
+                    <p class="text-sm text-dark-700 mt-1">{{ direccion(o) }}</p>
+                    <p class="text-sm text-dark-500">{{ ubicacion(o) }}</p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-2xl border border-dark-100">
+            <p class="px-6 py-10 text-center text-dark-500">No tiene oficinas cargadas.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Contactos: tabla o cards -->
+    <div x-show="tab === 'contactos'" x-cloak class="space-y-4">
+        {% if item.contactos %}
+        <div class="flex justify-end">{{ selector_vista() }}</div>
+        <div x-show="vista === 'tabla'" class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-dark-50 border-b border-dark-100">
+                        {% for columna in ['Contacto', 'Cargo', 'Oficina', 'Email', 'Teléfono'] %}
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase whitespace-nowrap">{{ columna }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100">
+                    {% for c in item.contactos %}
+                    <tr class="hover:bg-dark-50/50">
+                        <td class="px-4 py-3">
+                            <p class="font-semibold text-dark-900">{{ [c.nombre, c.apellido]|select|join(' ') }}</p>
+                            {% if c.es_principal %}<div class="mt-1">{{ badge('Principal') }}</div>{% endif %}
+                            {% if c.notas %}<p class="text-xs text-dark-400 mt-1">{{ c.notas }}</p>{% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-sm text-dark-600">{{ c.cargo or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-600">{{ c.oficina or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-700 whitespace-nowrap">{{ c.email or '-' }}</td>
+                        <td class="px-4 py-3 text-sm text-dark-700 whitespace-nowrap">{{ c.telefono or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div x-show="vista === 'cards'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for c in item.contactos %}
+            <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-start gap-4">
+                <div class="w-11 h-11 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-white flex items-center justify-center font-semibold flex-shrink-0">
+                    {{ ((c.nombre or '?')[:1] ~ (c.apellido or '')[:1])|upper }}
+                </div>
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <p class="font-semibold text-dark-900">{{ [c.nombre, c.apellido]|select|join(' ') }}</p>
+                        {% if c.es_principal %}{{ badge('Principal') }}{% endif %}
+                    </div>
+                    <p class="text-sm text-dark-500">{{ [c.cargo, c.oficina]|select|join(' · ') or '-' }}</p>
+                    <div class="mt-3 space-y-1 text-sm text-dark-700">
+                        {% if c.email %}<p class="flex items-center gap-2"><i data-lucide="mail" class="w-4 h-4 text-dark-400 flex-shrink-0"></i><span class="break-all">{{ c.email }}</span></p>{% endif %}
+                        {% if c.telefono %}<p class="flex items-center gap-2"><i data-lucide="phone" class="w-4 h-4 text-dark-400 flex-shrink-0"></i>{{ c.telefono }}</p>{% endif %}
+                    </div>
+                    {% if c.notas %}<p class="text-xs text-dark-400 mt-2">{{ c.notas }}</p>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-2xl border border-dark-100">
+            <p class="px-6 py-10 text-center text-dark-500">No tiene contactos cargados.</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Documentos: miniatura y descarga con el nombre original (subir y eliminar, en Editar) -->
+    <div x-show="tab === 'documentos'" x-cloak>
+        {% if item.documentos %}
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {% for d in item.documentos %}
+            {% set descarga = url_for('administracion.proveedores_documento_descargar', proveedor_id=item.id, documento_id=d.id) %}
+            <a href="{{ descarga }}" title="Descargar {{ d.nombre }}" x-data="{ sinMiniatura: {{ 'false' if d.con_miniatura else 'true' }} }"
+               class="bg-white rounded-2xl border border-dark-100 overflow-hidden flex flex-col hover:border-primary-300 transition-colors">
+                <div class="aspect-[4/3] bg-dark-50 border-b border-dark-100 overflow-hidden">
+                    {% if d.con_miniatura %}
+                    <img x-show="!sinMiniatura" src="{{ url_for('administracion.proveedores_documento_miniatura', proveedor_id=item.id, documento_id=d.id) }}"
+                         alt="{{ d.nombre }}" loading="lazy" @error="sinMiniatura = true" class="w-full h-full object-cover object-top">
+                    {% endif %}
+                    <span x-show="sinMiniatura" {% if d.con_miniatura %}x-cloak{% endif %} class="w-full h-full flex flex-col items-center justify-center gap-1">
+                        <i data-lucide="file" class="w-10 h-10 text-dark-300"></i>
+                        <span class="text-sm font-bold {{ COLORES_DOCUMENTO.get(d.extension, 'text-dark-500') }}">{{ d.extension[1:]|upper or 'ARCHIVO' }}</span>
+                    </span>
+                </div>
+                <div class="p-3 min-w-0">
+                    <p class="text-sm font-medium text-dark-900 truncate" title="{{ d.nombre }}">{{ d.nombre }}</p>
+                    <p class="text-xs text-dark-400">{{ tamano_documento(d.tamano) }} · {{ d.subido_at|fecha_es }}</p>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="bg-white rounded-2xl border border-dark-100 px-4 py-8 text-center text-dark-500">Todavía no hay documentos.</p>
+        {% endif %}
+    </div>
+
+    <!-- Evaluaciones -->
+    <div x-show="tab === 'evaluaciones'" x-cloak class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        {% if item.historial %}
+        <table class="w-full">
+            <thead>
+                <tr class="bg-dark-50 border-b border-dark-100">
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Período</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Evaluador</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Incidentes</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Mal manejo</th>
+                    <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Evaluado</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-dark-100">
+                {% for h in item.historial %}
+                <tr class="{{ 'bg-red-50/40' if h.con_hallazgo else '' }}">
+                    <td class="px-4 py-3 font-semibold text-dark-900">{{ h.periodo }}</td>
+                    <td class="px-4 py-3 text-dark-600">{{ h.evaluador or 'Sin definir' }}</td>
+                    <td class="px-4 py-3">{{ respuesta(h.incidentes) }}</td>
+                    <td class="px-4 py-3">{{ respuesta(h.mal_manejo) }}</td>
+                    <td class="px-4 py-3 text-dark-600 text-sm">{{ h.evaluado_at|fecha_es if h.evaluado_at else 'Pendiente' }}</td>
+                </tr>
+                {% set evidencias = [('Incidentes', h.evidencia_incidentes), ('Mal manejo', h.evidencia_mal_manejo)]|selectattr('1')|list %}
+                {% if evidencias %}
+                <tr x-data="{ abierta: false }" class="{{ 'bg-red-50/40' if h.con_hallazgo else '' }}">
+                    <td></td>
+                    <td colspan="4" class="px-4 pb-3">
+                        <button type="button" @click="abierta = !abierta" :aria-expanded="abierta"
+                                class="text-xs font-medium text-primary-600 hover:text-primary-700"
+                                x-text="abierta ? 'Ocultar evidencia' : 'Mostrar evidencia'">Mostrar evidencia</button>
+                        <div x-show="abierta" x-cloak class="mt-2 space-y-1 text-xs text-dark-600">
+                            {% for etiqueta, texto in evidencias %}
+                            <p class="whitespace-pre-line break-words"><span class="font-semibold">{{ etiqueta }}:</span> {{ texto|urlize(target='_blank', rel='noopener noreferrer') }}</p>
+                            {% endfor %}
+                        </div>
+                    </td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="px-6 py-10 text-center text-dark-500">Todavía no participó de ninguna evaluación.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/libphonenumber-js@1.13.14/bundle/libphonenumber-min.js"></script>
+<script>
+// WhatsApp con el formato de su país (+54 9 351 123 4567), como en la edición
+document.addEventListener('DOMContentLoaded', () => {
+    const L = globalThis.libphonenumber;
+    if (!L) return;
+    document.querySelectorAll('[data-telefono]').forEach(e => { e.textContent = new L.AsYouType().input(`+${e.dataset.telefono}`); });
+});
+
+// La elección Tabla / Cards de oficinas y contactos se recuerda (la comparten la vista y la edición)
+function vistaProveedor() {
+    let vista = 'tabla';
+    try { vista = localStorage.getItem('proveedores_vista_listas') || vista; } catch (e) { /* sin storage */ }
+    return {
+        tab: 'datos',
+        vista,
+        init() {
+            this.$watch('vista', valor => { try { localStorage.setItem('proveedores_vista_listas', valor); } catch (e) { /* sin storage */ } });
+        },
+    };
+}
+</script>
+{% endblock %}

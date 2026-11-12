@@ -1,0 +1,305 @@
+<form
+    :action="editMode ? '{{ url_for('soporte.stock_editar', item_id='__ID__') }}'.replace('__ID__', editId) : '{{ url_for('soporte.stock_crear') }}'"
+    method="POST" class="space-y-6">
+
+    <!-- Hidden field para specs dinámicas -->
+    <input type="hidden" name="req_spec" :value="tipos_activos.find(t => t.id === form.tipo_id)?.requiere_especificaciones ? 'true' : 'false'">
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <!-- Información Básica -->
+        <div class="space-y-4">
+            <h3 class="text-sm font-semibold text-primary-600 uppercase tracking-wider">Básico</h3>
+
+            <div>
+                <label class="block text-sm font-medium text-dark-700 mb-1.5">Nombre del Equipo *</label>
+                <input type="text" name="nombre" x-model="form.nombre" required minlength="3" maxlength="200"
+                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                    placeholder="Ej: Notebook Dell Latitude 5540">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-dark-700 mb-1.5">Tipo de Activo *</label>
+                <select name="tipo_id" x-model="form.tipo_id" required
+                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm">
+                    <option value="" disabled>Seleccione un tipo...</option>
+                    <template x-for="tipo in tipos_activos" :key="tipo.id">
+                        <option :value="tipo.id" x-text="tipo.nombre"></option>
+                    </template>
+                </select>
+            </div>
+
+            <!-- Atributos base si requiere especificaciones o tipo general -->
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Campo Marca con Autocomplete -->
+                <div class="relative" @click.away="openSearchMarcas = false">
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">Marca</label>
+                    
+                    <input type="hidden" name="marca_id" :value="form.marca_id">
+                    
+                    <!-- Input de búsqueda (cuando NO hay marca seleccionada) -->
+                    <div x-show="!form.marca_id" class="relative">
+                        <input type="text" x-model="searchMarcaQuery" 
+                            @input.debounce.300ms="buscarMarcas()"
+                            @focus="if(searchMarcaQuery.length >= 1) buscarMarcas()"
+                            placeholder="Buscar marca..."
+                            class="w-full px-4 py-2.5 bg-white border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 transition-all text-sm pr-10">
+                        <div class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                            <div x-show="isLoadingMarcas" class="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+                            <svg x-show="!isLoadingMarcas" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-dark-400">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <path d="m21 21-4.3-4.3"></path>
+                            </svg>
+                        </div>
+                    </div>
+                    
+                    <!-- Badge de marca seleccionada -->
+                    <div x-show="form.marca_id" x-cloak
+                        class="w-full px-4 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm font-medium text-primary-800 flex justify-between items-center cursor-pointer"
+                        @click="form.marca_id = ''; form.marca = ''; searchMarcaQuery = ''">
+                        <div class="flex items-center space-x-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary-600">
+                                <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
+                                <path d="M7 7h.01"></path>
+                            </svg>
+                            <span x-text="form.marca"></span>
+                        </div>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-primary-600 hover:text-primary-800">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="m15 9-6 6"></path>
+                            <path d="m9 9 6 6"></path>
+                        </svg>
+                    </div>
+
+                    <!-- Dropdown de resultados -->
+                    <div x-show="openSearchMarcas && (marcas_busqueda.length > 0 || isLoadingMarcas)" x-cloak
+                        class="absolute z-50 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                        <div class="p-2 space-y-1">
+                            <!-- Loading state -->
+                            <div x-show="isLoadingMarcas" class="px-3 py-4 text-center">
+                                <div class="animate-spin inline-block w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+                                <p class="text-xs text-dark-500 mt-2">Buscando...</p>
+                            </div>
+                            
+                            <!-- Resultados -->
+                            <div x-show="!isLoadingMarcas">
+                                <template x-for="marca in marcas_busqueda" :key="marca.id">
+                                    <button type="button" @click="selectMarca(marca)"
+                                        class="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-primary-50 hover:text-primary-700 transition-colors flex items-center space-x-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M12 2H2v10l9.29 9.29c.94.94 2.48.94 3.42 0l6.58-6.58c.94-.94.94-2.48 0-3.42L12 2Z"></path>
+                                            <path d="M7 7h.01"></path>
+                                        </svg>
+                                        <span x-text="marca.nombre" class="font-medium"></span>
+                                    </button>
+                                </template>
+                                
+                                <!-- Sin resultados -->
+                                <div x-show="marcas_busqueda.length === 0 && searchMarcaQuery.length >= 1" 
+                                    class="px-3 py-4 text-xs text-dark-400 text-center">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mx-auto mb-1 text-dark-300">
+                                        <path d="m13.5 8.5-5 5"></path>
+                                        <path d="m8.5 8.5 5 5"></path>
+                                        <circle cx="11" cy="11" r="8"></circle>
+                                        <path d="m21 21-4.3-4.3"></path>
+                                    </svg>
+                                    <p>No se encontraron marcas</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">Modelo</label>
+                    <input type="text" name="modelo" x-model="form.modelo" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                        placeholder="Ej: Latitude 5540">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">Número de Serie</label>
+                    <input type="text" name="numero_serie" x-model="form.numero_serie" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm uppercase"
+                        placeholder="S/N del fabricante">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">
+                        Nº Inventario *
+                        <span class="text-xs text-dark-500 font-normal">(formato: NOT-001, MON-012, etc.)</span>
+                    </label>
+                    <input type="text" 
+                        name="numero_inventario"
+                        x-model="form.numero_inventario" 
+                        required
+                        maxlength="50"
+                        class="w-full px-4 py-2.5 bg-white border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm font-mono uppercase"
+                        placeholder="Ej: NOT-001">
+                </div>
+            </div>
+        </div>
+
+        <!-- Especificaciones Técnicas (Dinámicas según Tipo) -->
+        <div class="space-y-4" x-show="tipos_activos.find(t => t.id === form.tipo_id)?.requiere_especificaciones">
+            <h3 class="text-sm font-semibold text-primary-600 uppercase tracking-wider">Especificaciones</h3>
+
+            <div>
+                <label class="block text-sm font-medium text-dark-700 mb-1.5">Procesador</label>
+                <input type="text" name="procesador" x-model="form.procesador" maxlength="150"
+                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                    placeholder="Ej: Intel Core i7-1365U">
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="flex flex-col justify-end">
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5 whitespace-nowrap truncate"
+                        title="Memoria">Memoria</label>
+                    <input type="text" name="memoria" x-model="form.memoria" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                        placeholder="Ej: 16 GB DDR5">
+                </div>
+                <div class="flex flex-col justify-end">
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5 whitespace-nowrap truncate"
+                        title="Disco Principal">Disco Principal</label>
+                    <input type="text" name="disco_principal" x-model="form.disco_principal" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                        placeholder="Ej: 512 GB SSD">
+                </div>
+                <div class="flex flex-col justify-end">
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5 whitespace-nowrap truncate"
+                        title="Disco Secundario">Disco Secundario</label>
+                    <input type="text" name="disco_secundario" x-model="form.disco_secundario" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                        placeholder="Ej: 1 TB HDD">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">MAC Ethernet</label>
+                    <input type="text" name="mac_ethernet" x-model="form.mac_ethernet" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                        placeholder="00:00:00:00:00:00">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">MAC WiFi</label>
+                    <input type="text" name="mac_wifi" x-model="form.mac_wifi" maxlength="100"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                        placeholder="00:00:00:00:00:00">
+                </div>
+            </div>
+        </div>
+
+        <!-- Estado y Asignación (Para todo Activo Físico) -->
+        <div class="space-y-4 col-span-1 md:col-span-2">
+            <h3 class="text-sm font-semibold text-primary-600 uppercase tracking-wider">Estado y Asignación</h3>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">Estado</label>
+                    <select name="estado" x-model="form.estado"
+                        class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm">
+                        <option value="disponible">🟢 Disponible</option>
+                        <option value="asignado">🔵 Asignado</option>
+                        <option value="en_reparacion">🟠 En Reparación</option>
+                        <option value="dado_de_baja">⚫ Dado de Baja</option>
+                    </select>
+                </div>
+
+                <div class="relative" @click.away="openSearchEmpleados = false">
+                    <label class="block text-sm font-medium text-dark-700 mb-1.5">Asignado a</label>
+                    
+                    <!-- Buscar empleado titular del activo -->
+                    <input type="hidden" name="asignado_id" :value="form.asignado_id">
+                    <input type="hidden" name="asignado_a" :value="form.asignado_a">
+
+                    <div class="relative">
+                        <template x-if="!form.asignado_id">
+                            <div class="relative">
+                                <input type="text" x-model="searchEmpleadoQuery" 
+                                    @input.debounce.300ms="buscarEmpleados()"
+                                    @focus="if(searchEmpleadoQuery.length >= 2) buscarEmpleados()"
+                                    placeholder="Buscar empleado por nombre (mín. 2 caracteres)..."
+                                    class="w-full px-4 py-2.5 bg-white border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 transition-all text-sm pr-10"
+                                    :class="!form.asignado_id ? 'border-amber-300' : ''">
+                                <div class="absolute right-3 top-1/2 -translate-y-1/2">
+                                    <template x-if="isLoadingEmpleados">
+                                        <div class="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+                                    </template>
+                                    <template x-if="!isLoadingEmpleados">
+                                        <i data-lucide="search" class="w-4 h-4 text-dark-400"></i>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                        <template x-if="form.asignado_id">
+                            <div class="w-full px-4 py-2.5 bg-primary-50 border border-primary-200 rounded-xl text-sm font-medium text-primary-800 flex justify-between items-center cursor-pointer"
+                                @click="form.asignado_id = ''; form.asignado_a = ''; searchEmpleadoQuery = ''">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-6 h-6 bg-primary-600 rounded-full flex items-center justify-center">
+                                        <span class="text-xs font-bold text-white" x-text="form.asignado_a.charAt(0).toUpperCase()"></span>
+                                    </div>
+                                    <span x-text="form.asignado_a"></span>
+                                </div>
+                                <i data-lucide="x-circle" class="w-4 h-4 text-primary-600 hover:text-primary-800"></i>
+                            </div>
+                        </template>
+
+                        <template x-if="!form.asignado_id">
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 text-dark-400 pointer-events-none">
+                                <i data-lucide="search" class="w-4 h-4"></i>
+                            </div>
+                        </template>
+                    </div>
+
+                    <div x-show="openSearchEmpleados && (empleados_lista.length > 0 || isLoadingEmpleados)" x-cloak
+                        class="absolute z-50 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
+                        <div class="p-2 space-y-1">
+                            <template x-if="isLoadingEmpleados">
+                                <div class="px-3 py-4 text-center">
+                                    <div class="animate-spin inline-block w-5 h-5 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+                                    <p class="text-xs text-dark-500 mt-2">Buscando...</p>
+                                </div>
+                            </template>
+                            <template x-if="!isLoadingEmpleados">
+                                <div>
+                                    <template x-for="emp in empleados_lista" :key="emp.id">
+                                        <button type="button" @click="selectEmpleado(emp)"
+                                            class="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-primary-50 hover:text-primary-700 transition-colors">
+                                            <span x-text="emp.nombre" class="font-medium"></span>
+                                            <span x-text="' — Código: ' + (emp.codigo || 'N/A')"
+                                                class="text-xs text-dark-500"></span>
+                                        </button>
+                                    </template>
+                                    <template x-if="empleados_lista.length === 0 && searchEmpleadoQuery.length >= 2">
+                                        <div class="px-3 py-4 text-xs text-dark-400 text-center">
+                                            <i data-lucide="search-x" class="w-4 h-4 mx-auto mb-1 text-dark-300"></i>
+                                            <p>No se encontraron empleados</p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-dark-700 mb-1.5">Notas adicionales</label>
+                <textarea name="notas" x-model="form.notas" rows="3" maxlength="500"
+                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all text-sm"
+                    placeholder="Detalles sobre el estado físico..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex items-center space-x-3 pt-6 border-t border-dark-100 mt-4">
+        <button type="button" @click="showModal = false"
+            class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+        <button type="submit"
+            class="flex-1 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+            <span x-text="editMode ? 'Guardar Cambios' : 'Registrar Item'"></span>
+        </button>
+    </div>
+</form>

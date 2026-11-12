@@ -1,0 +1,145 @@
+{% extends "core/base.html" %}
+{% block title %}LLM Usage - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1 flex items-center gap-2">
+                <i data-lucide="sparkles" class="w-7 h-7 text-primary-500"></i>LLM Usage
+            </h1>
+            <p class="text-dark-500">Resumen de uso y costos de modelos de lenguaje por mes y módulo</p>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-3 mt-4 md:mt-0">
+            <form method="post" action="{{ url_for('llm.example_call') }}">
+                <button type="submit"
+                        class="flex items-center justify-center px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all font-medium w-full sm:w-auto">
+                    <i data-lucide="play" class="w-4 h-4 mr-2"></i>Ejecutar llamada de ejemplo
+                </button>
+            </form>
+            <a href="{{ url_for('llm.requests_list') }}"
+               class="flex items-center justify-center px-4 py-2.5 bg-white border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-all font-medium">
+                <i data-lucide="table-2" class="w-4 h-4 mr-2"></i>Ver detalle completo
+            </a>
+        </div>
+    </div>
+
+    <!-- Tarjetas de totales -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-sm text-dark-500 mb-1">Requests totales</p>
+            <p class="text-2xl font-bold text-dark-900">{{ '{:,}'.format(total_requests) }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-sm text-dark-500 mb-1">Tokens totales</p>
+            <p class="text-2xl font-bold text-dark-900">{{ '{:,}'.format(total_tokens) }}</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-sm text-dark-500 mb-1">Costo total</p>
+            <p class="text-2xl font-bold text-emerald-600">${{ '%.4f'|format(total_costo_usd|float) }}</p>
+        </div>
+    </div>
+
+    <!-- Filtro de período -->
+    <form method="get" class="bg-white rounded-2xl border border-dark-100 p-4 mb-6 flex items-center gap-3">
+        <label class="text-sm text-dark-600 font-medium">Período</label>
+        <select name="periodo"
+                class="px-4 py-2 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-dark-700 min-w-40">
+            <option value="">Todos</option>
+            {% for periodo_opcion in periodos_disponibles %}
+            <option value="{{ periodo_opcion }}" {% if periodo_opcion == periodo %}selected{% endif %}>{{ periodo_opcion }}</option>
+            {% endfor %}
+        </select>
+        <button type="submit"
+                class="px-4 py-2 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-all text-sm font-medium">
+            Filtrar
+        </button>
+        {% if periodo %}
+        <a href="{{ url_for('llm.usage') }}" class="text-sm text-dark-500 hover:text-dark-700">Limpiar</a>
+        {% endif %}
+    </form>
+
+    <!-- Acordeón por mes -->
+    <div class="space-y-3">
+        {% for p in periodos %}
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden"
+             x-data="{ open: {{ 'true' if loop.first else 'false' }} }">
+            <!-- Cabecera del mes -->
+            <button @click="open = !open"
+                    class="w-full flex items-center justify-between px-6 py-4 hover:bg-dark-50/50 transition-colors">
+                <div class="flex items-center gap-3">
+                    <i data-lucide="calendar" class="w-5 h-5 text-primary-500"></i>
+                    <span class="font-bold text-dark-900 text-lg">{{ p.periodo }}</span>
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-dark-100 text-dark-600 rounded-lg">
+                        {{ p.modulos|length }} módulos
+                    </span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="hidden sm:block text-right">
+                        <span class="text-sm text-dark-500">{{ '{:,}'.format(p.requests) }} req · {{ '{:,}'.format(p.tokens_total) }} tokens</span>
+                    </div>
+                    <span class="font-bold text-emerald-600">${{ '%.4f'|format(p.costo_usd|float) }}</span>
+                    <i data-lucide="chevron-down" class="w-5 h-5 text-dark-400 transition-transform"
+                       :class="open ? 'rotate-180' : ''"></i>
+                </div>
+            </button>
+
+            <!-- Detalle por módulo -->
+            <div x-show="open" x-cloak x-collapse>
+                <div class="overflow-x-auto border-t border-dark-100">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-dark-50 text-xs font-semibold text-dark-500 uppercase">
+                                <th class="px-6 py-3 text-left">Módulo</th>
+                                <th class="px-6 py-3 text-right">Requests</th>
+                                <th class="px-6 py-3 text-right">Tokens in</th>
+                                <th class="px-6 py-3 text-right">Tokens out</th>
+                                <th class="px-6 py-3 text-right">Cache</th>
+                                <th class="px-6 py-3 text-right">Total</th>
+                                <th class="px-6 py-3 text-right">Costo USD</th>
+                                <th class="px-6 py-3 text-right">Detalle</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-dark-100">
+                            {% for m in p.modulos %}
+                            <tr class="hover:bg-dark-50/50 transition-colors text-sm">
+                                <td class="px-6 py-3 font-medium text-dark-900">{{ m.modulo }}</td>
+                                <td class="px-6 py-3 text-right text-dark-600">{{ '{:,}'.format(m.requests) }}</td>
+                                <td class="px-6 py-3 text-right text-dark-600">{{ '{:,}'.format(m.tokens_input) }}</td>
+                                <td class="px-6 py-3 text-right text-dark-600">{{ '{:,}'.format(m.tokens_output) }}</td>
+                                <td class="px-6 py-3 text-right text-dark-600">{{ '{:,}'.format(m.tokens_cache) }}</td>
+                                <td class="px-6 py-3 text-right font-medium text-dark-700">{{ '{:,}'.format(m.tokens_total) }}</td>
+                                <td class="px-6 py-3 text-right font-semibold text-emerald-600">${{ '%.4f'|format(m.costo_usd|float) }}</td>
+                                <td class="px-6 py-3 text-right">
+                                    <a href="{{ url_for('llm.requests_list', modulo=m.modulo, periodo=p.periodo) }}"
+                                       class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700 font-medium">
+                                        Ver <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="bg-white rounded-2xl border border-dark-100 px-6 py-16 text-center">
+            <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="sparkles" class="w-10 h-10 text-dark-300"></i>
+            </div>
+            <p class="text-dark-900 font-semibold mb-1">No hay uso registrado</p>
+            <p class="text-dark-500 text-sm">Cuando algún módulo invoque la LLM, vas a ver el resumen acá.</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('htmx:afterSwap', () => lucide.createIcons());
+</script>
+{% endblock %}

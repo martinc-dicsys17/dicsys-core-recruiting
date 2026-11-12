@@ -1,0 +1,172 @@
+{% extends "core/base.html" %}
+{% block title %}Empresas - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ showDeleteModal: false, deleteId: null, filtroActivo: '{{ filtro_activo }}', viewMode: localStorage.getItem('empresas_viewMode') || 'table' }"
+     x-init="$watch('viewMode', v => localStorage.setItem('empresas_viewMode', v))">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Empresas</h1>
+            <p class="text-dark-500">Gestión de empresas del sistema</p>
+        </div>
+        <a href="{{ url_for('empresa.empresas_create') }}"
+           class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Empresa
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" name="buscar" placeholder="Buscar por razón social o CUIT..."
+                       value="{{ buscar }}"
+                       hx-get="{{ url_for('empresa.empresas_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#empresas-table"
+                       hx-include="[name='activo']"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            <select name="activo"
+                    hx-get="{{ url_for('empresa.empresas_list') }}"
+                    hx-trigger="change"
+                    hx-target="#empresas-table"
+                    hx-include="[name='buscar']"
+                    class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-dark-700">
+                <option value="">Todos los estados</option>
+                <option value="activo" {% if filtro_activo == 'activo' %}selected{% endif %}>Activas</option>
+                <option value="inactivo" {% if filtro_activo == 'inactivo' %}selected{% endif %}>Inactivas</option>
+            </select>
+
+            <!-- Conteo -->
+            <div class="flex items-center text-sm text-dark-500 whitespace-nowrap ml-auto">
+                <i data-lucide="building-2" class="w-4 h-4 mr-2"></i>
+                <span>{{ total }} empresas</span>
+            </div>
+
+            <!-- Toggle Vista -->
+            <div class="flex items-center bg-dark-100 rounded-xl p-1">
+                <button @click="viewMode = 'table'"
+                        :class="viewMode === 'table' ? 'bg-white shadow-sm text-dark-900' : 'text-dark-500 hover:text-dark-700'"
+                        class="flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                        aria-label="Vista lista">
+                    <i data-lucide="list" class="w-4 h-4 mr-1.5"></i>Lista
+                </button>
+                <button @click="viewMode = 'cards'"
+                        :class="viewMode === 'cards' ? 'bg-white shadow-sm text-dark-900' : 'text-dark-500 hover:text-dark-700'"
+                        class="flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                        aria-label="Vista cards">
+                    <i data-lucide="layout-grid" class="w-4 h-4 mr-1.5"></i>Cards
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vista Tabla -->
+    <div x-show="viewMode === 'table'" class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="empresas-table"
+             hx-get="{{ url_for('empresa.empresas_list') }}"
+             hx-trigger="empresaDeleted from:body, empresaEstadoCambiado from:body">
+            {% include "empresa/partials/table.html" %}
+        </div>
+    </div>
+
+    <!-- Vista Cards -->
+    <div x-show="viewMode === 'cards'" x-cloak>
+        <div id="empresas-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for item in items %}
+            <div class="bg-white rounded-2xl border border-dark-100 p-6 hover:shadow-soft transition-all group">
+                <div class="flex items-start justify-between mb-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl border border-dark-200 bg-dark-50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                            {% if item.logo %}
+                            <img src="{{ item.logo }}" alt="Logo de {{ item.razon_social }}" class="max-w-full max-h-full object-contain p-1">
+                            {% else %}
+                            <i data-lucide="building-2" class="w-6 h-6 text-dark-400"></i>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <a href="{{ url_for('empresa.empresas_view', id=item.id) }}"
+                               class="font-bold text-dark-900 hover:text-primary-600 transition-colors">{{ item.razon_social }}</a>
+                            {% if item.nombre_fantasia %}
+                            <p class="text-sm text-dark-400 italic">"{{ item.nombre_fantasia }}"</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% if item.activo %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg flex-shrink-0">Activa</span>
+                    {% else %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-dark-100 text-dark-500 rounded-lg flex-shrink-0">Inactiva</span>
+                    {% endif %}
+                </div>
+
+                <div class="space-y-2 text-sm text-dark-600 mb-4">
+                    <p class="flex items-center gap-2"><i data-lucide="hash" class="w-3.5 h-3.5 text-dark-400"></i><span class="font-mono">{{ item.cuit }}</span></p>
+                    <p class="flex items-center gap-2"><i data-lucide="landmark" class="w-3.5 h-3.5 text-dark-400"></i>{{ item.responsabilidad_afip }}</p>
+                    {% if item.telefono %}
+                    <p class="flex items-center gap-2"><i data-lucide="phone" class="w-3.5 h-3.5 text-dark-400"></i>{{ item.telefono }}</p>
+                    {% endif %}
+                    {% if item.email_contacto %}
+                    <p class="flex items-center gap-2"><i data-lucide="mail" class="w-3.5 h-3.5 text-dark-400"></i>{{ item.email_contacto }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="flex items-center justify-end gap-1 pt-3 border-t border-dark-100">
+                    <a href="{{ url_for('empresa.empresas_view', id=item.id) }}"
+                       class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                       aria-label="Ver empresa">
+                        <i data-lucide="eye" class="w-4 h-4"></i>
+                    </a>
+                    <a href="{{ url_for('empresa.empresas_edit', id=item.id) }}"
+                       class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                       aria-label="Editar empresa">
+                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    </a>
+                    <button @click="deleteId = '{{ item.id }}'; showDeleteModal = true"
+                            class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            aria-label="Eliminar empresa">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            {% else %}
+            <div class="col-span-full text-center py-16">
+                <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="building-2" class="w-10 h-10 text-dark-300"></i>
+                </div>
+                <p class="text-dark-900 font-semibold mb-1">No hay empresas</p>
+                <a href="{{ url_for('empresa.empresas_create') }}" class="text-primary-600 hover:text-primary-700 font-medium">Crear la primera →</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar empresa?</h3>
+                <p class="text-dark-500 mb-6">Esta acción marcará la empresa como eliminada.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false"
+                        class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">
+                    Cancelar
+                </button>
+                <button @click="htmx.ajax('DELETE', '/empresa/' + deleteId + '/eliminar', {target: '#empresas-table'}); showDeleteModal = false"
+                        class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

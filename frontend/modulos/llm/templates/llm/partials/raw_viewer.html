@@ -1,0 +1,22 @@
+<div class="flex items-center justify-between px-6 py-4 border-b border-dark-100 bg-white sticky top-0">
+    <div>
+        <p class="text-xs uppercase tracking-wide text-dark-400">{{ tipo|upper }}</p>
+        <p class="text-sm text-dark-700 font-mono">{{ request_id }}</p>
+    </div>
+    <button type="button"
+            class="px-3 py-2 text-sm border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors"
+            onclick="navigator.clipboard.writeText(document.getElementById('llm-raw-content').innerText)">
+        Copiar JSON
+    </button>
+</div>
+<div class="p-4 md:p-6 bg-white">
+    <div class="rounded-2xl border border-dark-200 bg-dark-50 overflow-hidden shadow-soft">
+        <div class="flex items-center gap-2 px-4 py-3 border-b border-dark-200 bg-white/80">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-300"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-300"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-300"></span>
+            <span class="ml-3 text-xs font-medium text-dark-500">Payload JSON</span>
+        </div>
+        <pre id="llm-raw-content" class="overflow-auto p-5 md:p-6 text-[13px] md:text-sm leading-6 font-mono whitespace-pre text-dark-800 tabular-nums">{{ contenido }}</pre>
+    </div>
+</div>

@@ -1,0 +1,131 @@
+{% extends "core/base.html" %}
+{% block title %}Detalle LLM - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in"
+    x-data="{
+       showFiltros: {{ 'true' if filtros.modulo or filtros.model_name or filtros.status or filtros.fecha_desde or filtros.fecha_hasta else 'false' }},
+       showRawModal: false,
+       rawModalTitle: 'Raw'
+    }"
+    @open-llm-raw-modal.window="showRawModal = true; rawModalTitle = $event.detail.title">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1 flex items-center gap-2">
+                <i data-lucide="table-2" class="w-7 h-7 text-primary-500"></i>Detalle de requests LLM
+            </h1>
+            <p class="text-dark-500">Registro completo de invocaciones (core_llm_requests)</p>
+        </div>
+        <a href="{{ url_for('llm.usage') }}"
+           class="flex items-center px-4 py-2.5 bg-white border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-all font-medium mt-4 md:mt-0">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>Volver al resumen
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" name="buscar" placeholder="Buscar por módulo o modelo..."
+                       value="{{ filtros.buscar }}"
+                       hx-get="{{ url_for('llm.requests_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#llm-table"
+                       hx-include="#llm-filtros"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+            </div>
+            <button @click="showFiltros = !showFiltros"
+                    class="flex items-center px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl hover:bg-dark-100 text-dark-700 font-medium">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4 mr-2"></i>Filtros avanzados
+            </button>
+            <div class="flex items-center text-sm text-dark-500 whitespace-nowrap ml-auto">
+                <i data-lucide="hash" class="w-4 h-4 mr-2"></i><span>{{ total }} registros</span>
+            </div>
+        </div>
+
+        <!-- Filtros avanzados -->
+        <div id="llm-filtros" x-show="showFiltros" x-collapse x-cloak class="mt-4 pt-4 border-t border-dark-100">
+            <input type="hidden" name="buscar" value="{{ filtros.buscar }}">
+            <input type="hidden" name="orden_por" value="{{ orden_por }}">
+            <input type="hidden" name="orden_dir" value="{{ orden_dir }}">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+                 hx-get="{{ url_for('llm.requests_list') }}"
+                 hx-trigger="change"
+                 hx-target="#llm-table"
+                 hx-include="#llm-filtros">
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 mb-1">Módulo</label>
+                    <input type="text" name="modulo" value="{{ filtros.modulo }}"
+                           class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 mb-1">Modelo</label>
+                    <input type="text" name="model_name" value="{{ filtros.model_name }}"
+                           class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 mb-1">Período (mes)</label>
+                    <input type="month" name="periodo" value="{{ filtros.periodo }}"
+                           class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 mb-1">Estado</label>
+                    <select name="status"
+                            class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                        <option value="">Todos</option>
+                        <option value="ok" {% if filtros.status == 'ok' %}selected{% endif %}>OK</option>
+                        <option value="error" {% if filtros.status == 'error' %}selected{% endif %}>Error</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 mb-1">Desde</label>
+                    <input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}"
+                           class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 mb-1">Hasta</label>
+                    <input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}"
+                           class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                </div>
+            </div>
+            <div class="mt-3">
+                <a href="{{ url_for('llm.requests_list') }}" class="text-sm text-dark-500 hover:text-dark-700">Limpiar filtros</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="llm-table">
+            {% include "llm/partials/table.html" %}
+        </div>
+    </div>
+
+    <div x-show="showRawModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showRawModal = false"></div>
+        <div x-show="showRawModal" x-transition class="relative z-10 w-full max-w-5xl max-h-[85vh] bg-white rounded-2xl shadow-soft border border-dark-100 overflow-hidden flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-dark-100 bg-dark-50/70">
+                <div>
+                    <h2 class="text-lg font-semibold text-dark-900" x-text="rawModalTitle"></h2>
+                    <p class="text-sm text-dark-500">Visualización del payload raw dentro de la UI</p>
+                </div>
+                <button type="button" @click="showRawModal = false" class="p-2 text-dark-400 hover:text-dark-700 hover:bg-dark-100 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="llm-raw-modal-content" class="flex-1 overflow-auto bg-dark-50 text-dark-900">
+                <div class="p-6 text-sm text-dark-500">Seleccioná un request o response para visualizar su contenido.</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('htmx:afterSwap', () => lucide.createIcons());
+</script>
+{% endblock %}

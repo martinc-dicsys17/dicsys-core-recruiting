@@ -1,0 +1,33 @@
+# Herramientas de calidad del repo completo (F05). No es un proyecto de uv: las dependencias de cada servicio están en
+# backend/pyproject.toml y frontend/pyproject.toml, que no tienen [tool.ruff] y por eso usan esta configuración.
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+# backend se importa como paquete (from backend.modules...); el frontend corre desde frontend/ (from modulos...)
+src = [".", "frontend"]
+# Solo Python: los ejemplos de código de la documentación quedan como están
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+# B (bugbear) y UP (pyupgrade) se suman de a poco, cuando el código quede limpio para cada una
+select = ["E", "F", "I"]
+ignore = [
+    # El largo lo resuelve el formateador; lo que queda largo son textos y comentarios
+    "E501",
+    # En SQLAlchemy, Modelo.activo == True y Modelo.campo == None arman el WHERE: el `is` que pide la regla lo rompe
+    "E711",
+    "E712",
+]
+
+[tool.ruff.lint.isort]
+# `from x import a as b, c as d` queda en una sola línea, como está escrito el código
+combine-as-imports = true
+
+[tool.ruff.lint.per-file-ignores]
+# Importa los modelos para registrarlos en Base.metadata (Alembic y create_all)
+"backend/models_registry.py" = ["F401"]
+
+[tool.coverage.run]
+# La cobertura que CI sube como artefacto (F05-P02) es la del código de la app, no la de los tests
+omit = ["*/tests/*"]

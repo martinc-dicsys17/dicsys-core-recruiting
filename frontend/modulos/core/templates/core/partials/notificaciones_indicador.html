@@ -1,0 +1,5 @@
+{% if total_no_leidas %}
+<span class="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-red-500 text-white text-[10px] leading-4 text-center font-bold rounded-full">
+    {{ '99+' if total_no_leidas > 99 else total_no_leidas }}
+</span>
+{% endif %}

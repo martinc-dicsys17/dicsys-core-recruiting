@@ -1,0 +1,626 @@
+{% extends "core/base.html" %}
+{% from 'administracion/partials/proveedores_macros.html' import pestanas %}
+
+{# Pie de cada pestaña de configuración: un solo Guardar para toda la configuración #}
+{% macro pie_configuracion() -%}
+<div class="px-6 py-4 border-t border-dark-100 flex flex-wrap items-center justify-between gap-3">
+    <p class="text-xs text-dark-400"
+       x-text="configuracion?.actualizado_por ? `Última modificación: ${configuracion.actualizado_por} · ${fechaHora(configuracion.actualizado_at)}` : 'Todavía no se guardó la configuración'"></p>
+    <button type="submit" :disabled="guardandoConfig"
+            class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft disabled:opacity-50"
+            x-text="guardandoConfig ? 'Guardando…' : 'Guardar configuración'"></button>
+</div>
+{%- endmacro %}
+
+{% macro encabezado(icono, titulo, detalle) -%}
+<div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+    <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="{{ icono }}" class="w-5 h-5 mr-2 text-primary-500"></i>{{ titulo }}</h2>
+    {% if detalle %}<p class="text-sm text-dark-500 mt-1">{{ detalle }}</p>{% endif %}
+</div>
+{%- endmacro %}
+
+{% block title %}Configuración - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+{# Admin de la evaluación (D-76): campañas, importación del Sheet, avisos y seguimiento. #}
+<div class="animate-fade-in" x-data="configEvaluaciones('{{ url_for('administracion.config_evaluaciones_proveedores') }}', '{{ tab or 'evaluaciones' }}')" x-init="iniciar()">
+    <div class="mb-6">
+        <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-dark-900 mb-1">Configuración</h1>
+        <p class="text-dark-500">Campañas de evaluación de proveedores, importación del Google Sheet, avisos y seguimiento</p>
+    </div>
+
+    {{ pestanas([('evaluaciones', 'Evaluaciones', 'calendar-range'), ('autogeneracion', 'Auto-generación', 'calendar-clock'),
+                 ('seguimiento', 'Seguimiento', 'activity'), ('fuente', 'Fuente de datos', 'database'),
+                 ('recordatorios', 'Recordatorios', 'bell'), ('canales', 'Canales', 'send')],
+                estado='pestana', al_elegir='cambiarPestana') }}
+
+    <div x-show="error" x-cloak class="p-4 mb-4 rounded-xl bg-red-50 text-red-800 border border-red-200" x-text="error"></div>
+
+    <!-- ═══ Evaluaciones ═══ -->
+    <section x-show="pestana === 'evaluaciones'" class="space-y-4">
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <table class="w-full text-sm">
+                <thead class="bg-dark-50 text-left text-xs font-semibold text-dark-500 uppercase tracking-wide">
+                    <tr><th class="px-4 py-3">Período</th><th class="px-4 py-3">Apertura</th><th class="px-4 py-3">Cierre</th>
+                        <th class="px-4 py-3">Estado</th><th class="px-4 py-3">Avance</th><th class="px-4 py-3">Hallazgos</th><th class="px-4 py-3"></th></tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100">
+                    <template x-for="e in evaluaciones" :key="e.id">
+                        <tr>
+                            <td class="px-4 py-3 font-semibold text-dark-900" x-text="e.periodo"></td>
+                            <td class="px-4 py-3" x-text="fecha(e.fecha_apertura)"></td>
+                            <td class="px-4 py-3" x-text="fecha(e.fecha_cierre)"></td>
+                            <td class="px-4 py-3"><span class="px-2 py-0.5 text-xs font-semibold rounded-full" :class="claseEstado(e.estado)" x-text="textoEstado(e.estado)"></span></td>
+                            <td class="px-4 py-3" x-text="`${e.metricas.evaluados}/${e.metricas.total}` + (e.metricas.sin_evaluador ? ` · ${e.metricas.sin_evaluador} sin evaluador` : '')"></td>
+                            <td class="px-4 py-3" x-text="e.metricas.con_hallazgo"></td>
+                            <td class="px-4 py-3 text-right whitespace-nowrap">
+                                <button type="button" x-show="e.estado !== 'reemplazada'" @click="fechas = {id: e.id, fecha_apertura: e.fecha_apertura, fecha_cierre: e.fecha_cierre}"
+                                        class="px-3 py-1.5 text-sm rounded-lg border border-dark-200 hover:border-primary-400">Cambiar fechas</button>
+                                <button type="button" @click="porEliminar = e" :aria-label="`Eliminar la evaluación ${e.periodo}`"
+                                        class="ml-1 px-3 py-1.5 text-sm rounded-lg border border-red-200 text-red-600 hover:bg-red-50">Eliminar</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <p x-show="!evaluaciones.length" class="px-4 py-8 text-center text-dark-500">Todavía no hay evaluaciones.</p>
+        </div>
+
+        <form x-show="fechas.id" x-cloak @submit.prevent="guardarFechas()" class="bg-white rounded-2xl border border-primary-200 p-5 flex flex-col md:flex-row md:items-end gap-3">
+            <p class="md:flex-1 text-sm text-dark-600">Cambiar las fechas de la evaluación vigente. Ampliar el cierre la vuelve a abrir.</p>
+            <label class="text-sm">Apertura<input type="date" x-model="fechas.fecha_apertura" required class="campo"></label>
+            <label class="text-sm">Cierre<input type="date" x-model="fechas.fecha_cierre" required class="campo"></label>
+            <button type="button" @click="fechas = {id: null}" class="px-4 py-2.5 rounded-xl border border-dark-200">Cancelar</button>
+            <button type="submit" class="px-4 py-2.5 rounded-xl bg-primary-600 text-white">Guardar fechas</button>
+        </form>
+
+        <form @submit.prevent="crearEvaluacion()" class="bg-white rounded-2xl border border-dark-100 p-5 space-y-3">
+            <p class="font-semibold text-dark-800">Nueva evaluación</p>
+            <p class="text-sm text-dark-500">Reemplaza a la evaluación vigente (que queda finalizada) y arranca sin proveedores: se suman importando el Google Sheet o con «Agregar proveedor» en Evaluación de Proveedores.</p>
+            <div class="flex flex-col md:flex-row md:items-end gap-3">
+                <label class="text-sm">Período<input x-model="nueva.periodo" required maxlength="20" placeholder="2027" class="campo"></label>
+                <label class="text-sm">Apertura<input type="date" x-model="nueva.fecha_apertura" required class="campo"></label>
+                <label class="text-sm">Cierre<input type="date" x-model="nueva.fecha_cierre" required class="campo"></label>
+                <button type="submit" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft">Crear evaluación</button>
+            </div>
+        </form>
+    </section>
+
+    <!-- ═══ Auto-generación: la evaluación de cada año se crea sola al llegar la fecha de inicio ═══ -->
+    <section x-show="pestana === 'autogeneracion'" x-cloak>
+        <form x-show="auto" @submit.prevent="guardarAutogeneracion()" class="bg-white rounded-2xl border border-dark-100 overflow-hidden max-w-3xl">
+            {{ encabezado('calendar-clock', 'Auto-generación de evaluaciones', 'Cada año, al llegar la fecha de inicio, se crea la evaluación del año con todos los proveedores activos (cada uno con su usuario referente como evaluador) y reemplaza a la vigente. Una sola vez por año.') }}
+            <div class="p-6 space-y-5 text-sm">
+                <label class="flex items-center gap-2 font-medium text-dark-800">
+                    <input type="checkbox" x-model="formAuto.activa" class="w-4 h-4 rounded"> Crear la evaluación automáticamente cada año
+                </label>
+                <p class="text-dark-600">Período: <span class="font-semibold">el año en curso</span> (este año, <span x-text="anioActual()"></span>).</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <template x-for="limite in [{clave: 'inicio', titulo: 'Fecha de inicio'}, {clave: 'fin', titulo: 'Fecha de fin'}]" :key="limite.clave">
+                        <fieldset>
+                            <legend class="font-medium text-dark-700 mb-1"><span x-text="limite.titulo"></span> <span class="text-dark-400 font-normal">(día y mes, sin año)</span></legend>
+                            <div class="flex gap-2">
+                                <select x-model.number="formAuto[`${limite.clave}_dia`]" :required="formAuto.activa" :aria-label="`${limite.titulo}: día`" class="campo w-24">
+                                    <option value="">Día</option>
+                                    <template x-for="d in 31" :key="d"><option :value="d" x-text="d"></option></template>
+                                </select>
+                                <select x-model.number="formAuto[`${limite.clave}_mes`]" :required="formAuto.activa" :aria-label="`${limite.titulo}: mes`" class="campo">
+                                    <option value="">Mes</option>
+                                    <template x-for="(nombre, i) in MESES" :key="i"><option :value="i + 1" x-text="nombre"></option></template>
+                                </select>
+                            </div>
+                        </fieldset>
+                    </template>
+                </div>
+                <p x-show="textoProxima()" class="p-3 rounded-xl bg-primary-50 border border-primary-100 text-primary-800" x-text="textoProxima()"></p>
+                <p class="text-xs text-dark-400">Si la fecha de fin es anterior a la de inicio, el cierre cae al año siguiente. Si la evaluación del año ya existe, o se elimina después de crearse, no se crea otra.</p>
+            </div>
+            <div class="px-6 py-4 border-t border-dark-100 flex justify-end">
+                <button type="submit" :disabled="guardandoAuto"
+                        class="px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft disabled:opacity-50"
+                        x-text="guardandoAuto ? 'Guardando…' : 'Guardar auto-generación'"></button>
+            </div>
+        </form>
+    </section>
+
+    <!-- ═══ Seguimiento ═══ -->
+    <section x-show="pestana === 'seguimiento'" class="space-y-4">
+        <template x-if="seguimiento && !seguimiento.evaluacion">
+            <p class="bg-white rounded-2xl border border-dark-100 p-8 text-center text-dark-500">No hay una evaluación vigente.</p>
+        </template>
+        <template x-if="seguimiento && seguimiento.evaluacion">
+            <div class="space-y-4">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <p class="text-sm text-dark-600">
+                        Canales activos: <span class="font-semibold" x-text="seguimiento.canales.length ? seguimiento.canales.map(c => CANALES[c]).join(', ') : 'ninguno (configuralos en Configuración)'"></span>
+                    </p>
+                    <div class="flex gap-2">
+                        <button type="button" @click="alternarTodos()" class="px-3 py-2 text-sm rounded-xl border border-dark-200"
+                                x-text="todosMarcados() ? 'Quitar selección' : `Seleccionar todos con pendientes (${enviables().length})`"></button>
+                        <button type="button" @click="confirmando = true" :disabled="!seleccion.length || !seguimiento.canales.length || seguimiento.evaluacion.estado !== 'abierta'"
+                                class="px-4 py-2 text-sm rounded-xl bg-primary-600 text-white disabled:opacity-50"
+                                x-text="`Enviar avisos (${seleccion.length})`"></button>
+                    </div>
+                </div>
+                <p x-show="seguimiento.evaluacion.estado !== 'abierta'" class="text-sm text-amber-700">Solo se puede avisar con la evaluación abierta.</p>
+
+                <div x-show="resultados.length" class="bg-white rounded-2xl border border-dark-100 p-4 space-y-1 text-sm" role="status">
+                    <p class="font-semibold text-dark-800">Resultado del envío</p>
+                    <template x-for="(r, i) in resultados" :key="i">
+                        <p :class="r.enviado ? 'text-emerald-700' : 'text-red-600'"
+                           x-text="`${r.evaluador}${r.canal !== '-' ? ' · ' + (CANALES[r.canal] || r.canal) : ''}: ${r.enviado ? 'enviado' + (r.destino ? ' a ' + r.destino : '') : 'no se envió — ' + r.detalle}`"></p>
+                    </template>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead class="bg-dark-50 text-left text-xs font-semibold text-dark-500 uppercase tracking-wide">
+                            <tr><th class="px-4 py-3"></th><th class="px-4 py-3">Evaluador</th><th class="px-4 py-3">Email</th><th class="px-4 py-3">Avance</th><th class="px-4 py-3">Pendientes</th><th class="px-4 py-3"></th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-dark-100">
+                            <template x-for="s in seguimiento.evaluadores" :key="s.evaluador.id">
+                                <tr>
+                                    <td class="px-4 py-3"><input type="checkbox" :disabled="!s.pendientes.length" :checked="seleccion.includes(s.evaluador.id)"
+                                                                 @change="alternar(s.evaluador.id)" :aria-label="`Avisar a ${s.evaluador.nombre}`" class="w-4 h-4 rounded text-primary-600"></td>
+                                    <td class="px-4 py-3 font-medium text-dark-900" x-text="s.evaluador.nombre"></td>
+                                    <td class="px-4 py-3 text-dark-600">
+                                        <span x-show="s.email" x-text="s.email"></span>
+                                        <span x-show="!s.email" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Sin email</span>
+                                    </td>
+                                    <td class="px-4 py-3" x-text="`${s.evaluados}/${s.total}`"></td>
+                                    <td class="px-4 py-3">
+                                        <span x-show="!s.pendientes.length" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700">Al día</span>
+                                        <span x-show="s.pendientes.length" class="text-dark-700" x-text="s.pendientes.slice(0, 3).join(', ') + (s.pendientes.length > 3 ? ` +${s.pendientes.length - 3} más` : '')" :title="s.pendientes.join('\n')"></span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button type="button" x-show="s.mensaje" @click="vistaPrevia = s" class="px-3 py-1.5 text-sm rounded-lg border border-dark-200 hover:border-primary-400">Ver mensaje</button>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div x-show="seguimiento.sin_evaluador.length" class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-sm text-amber-800">
+                    <p class="font-semibold mb-1">Sin usuario referente (nadie los puede evaluar)</p>
+                    <p x-text="seguimiento.sin_evaluador.join(', ')"></p>
+                    <a href="{{ url_for('administracion.proveedores_list') }}" class="text-primary-700 underline">Asignarlos en Proveedores</a>
+                </div>
+
+                <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                    <p class="px-4 pt-4 font-semibold text-dark-800">Historial de avisos</p>
+                    <table class="w-full text-sm">
+                        <thead class="text-left text-xs text-dark-500 uppercase"><tr><th class="px-4 py-2">Fecha</th><th class="px-4 py-2">Motivo</th><th class="px-4 py-2">Canal</th><th class="px-4 py-2">Destino</th><th class="px-4 py-2">Pendientes</th><th class="px-4 py-2">Resultado</th></tr></thead>
+                        <tbody class="divide-y divide-dark-100">
+                            <template x-for="(a, i) in historialAvisos" :key="i">
+                                <tr>
+                                    <td class="px-4 py-2 whitespace-nowrap" x-text="fechaHora(a.fecha_hora)"></td>
+                                    <td class="px-4 py-2" x-text="MOTIVOS[a.motivo]"></td>
+                                    <td class="px-4 py-2" x-text="CANALES[a.canal]"></td>
+                                    <td class="px-4 py-2 text-dark-600" x-text="a.destino"></td>
+                                    <td class="px-4 py-2" x-text="a.pendientes"></td>
+                                    <td class="px-4 py-2" :class="a.enviado ? 'text-emerald-700' : 'text-red-600'" x-text="a.enviado ? 'Enviado' : (a.error || 'Error')"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    <p x-show="!historialAvisos.length" class="px-4 py-6 text-center text-dark-500 text-sm">Todavía no se envió ningún aviso en esta evaluación.</p>
+                </div>
+            </div>
+        </template>
+    </section>
+
+    <!-- ═══ Configuración, en tres pestañas: un solo Guardar para todo ═══ -->
+    <section x-show="pestana === 'fuente'" x-cloak class="space-y-4">
+        <form x-show="configuracion" @submit.prevent="guardarConfiguracion()" class="bg-white rounded-2xl border border-dark-100 overflow-hidden max-w-3xl">
+            {{ encabezado('file-spreadsheet', 'Google Sheet', 'De dónde se importan los proveedores de cada evaluación. Solo se lee: nada se escribe en el Sheet.') }}
+            <div class="p-6 space-y-4">
+                <label class="block text-sm font-medium text-dark-700">Link del Sheet
+                    <input x-model="formConfig.sheet_url" maxlength="500" placeholder="https://docs.google.com/spreadsheets/d/..." class="campo"></label>
+                <label class="block text-sm font-medium text-dark-700">Hoja
+                    <input x-model="formConfig.sheet_hoja" required maxlength="100" class="campo"></label>
+                <div x-show="configuracion?.cuenta_sheets" class="rounded-xl bg-blue-50 border border-blue-200 p-4 text-sm text-blue-900 space-y-2">
+                    <p>Para que se pueda leer, compartí el Sheet (o la carpeta que lo contiene) como <span class="font-semibold">Lector</span> con la cuenta de servicio:</p>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <code class="px-2 py-1 rounded-lg bg-white border border-blue-200 break-all" x-text="configuracion?.cuenta_sheets"></code>
+                        <button type="button" @click="copiar(configuracion.cuenta_sheets)"
+                                class="px-3 py-1 text-xs font-medium rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-100">Copiar</button>
+                    </div>
+                </div>
+            </div>
+            {{ pie_configuracion() }}
+        </form>
+
+        <!-- Importación: lee el Sheet guardado y arma la vista previa; nada se escribe hasta confirmar -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden max-w-3xl">
+            {{ encabezado('download', 'Importar a la evaluación activa', 'Lee la hoja del Sheet guardado y la cruza con el registro y la nómina. Nada se escribe hasta confirmar.') }}
+            <div class="px-6 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3 text-sm">
+                <p class="text-dark-600" x-show="configuracion?.sheet_url && !sinGuardar()">Hoja <span class="font-semibold" x-text="configuracion?.sheet_hoja"></span> del Sheet configurado.</p>
+                <p class="text-amber-700" x-show="!configuracion?.sheet_url">Falta el link del Sheet: cargalo arriba y guardá.</p>
+                <p class="text-amber-700" x-show="configuracion?.sheet_url && sinGuardar()">Hay cambios sin guardar en el link o la hoja: guardá antes de cargar el Sheet.</p>
+                {# La vista previa y la confirmación van en su propia página #}
+                <a x-show="configuracion?.sheet_url && !sinGuardar()" href="{{ url_for('administracion.config_evaluaciones_proveedores_importar') }}"
+                   class="flex-shrink-0 flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft">
+                    <i data-lucide="download" class="w-4 h-4 mr-2"></i>Cargar Sheet
+                </a>
+                <span x-show="!configuracion?.sheet_url || sinGuardar()" aria-disabled="true"
+                      class="flex-shrink-0 flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium opacity-50 cursor-not-allowed">
+                    <i data-lucide="download" class="w-4 h-4 mr-2"></i>Cargar Sheet
+                </span>
+            </div>
+        </div>
+
+    </section>
+
+    <section x-show="pestana === 'recordatorios'" x-cloak>
+        <form x-show="configuracion" @submit.prevent="guardarConfiguracion()" class="bg-white rounded-2xl border border-dark-100 overflow-hidden max-w-3xl">
+            {{ encabezado('bell', 'Recordatorios', 'Solo a quienes tienen pendientes y con la evaluación abierta. Un aviso por día como máximo.') }}
+            <div class="p-6 space-y-4 text-sm">
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="formConfig.aviso_apertura" class="w-4 h-4 rounded"> Avisar el día de apertura</label>
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="formConfig.aviso_previo_cierre" class="w-4 h-4 rounded"> Avisar el día anterior al cierre</label>
+                <fieldset class="flex flex-wrap items-center gap-4">
+                    <legend class="sr-only">Recordar</legend>
+                    <span class="font-medium text-dark-700">Recordar:</span>
+                    <label class="flex items-center gap-2"><input type="radio" value="" x-model="formConfig.recordar" class="w-4 h-4"> No</label>
+                    <label class="flex items-center gap-2"><input type="radio" value="1" x-model="formConfig.recordar" class="w-4 h-4"> Cada 1 día</label>
+                    <label class="flex items-center gap-2"><input type="radio" value="2" x-model="formConfig.recordar" class="w-4 h-4"> Cada 2 días</label>
+                </fieldset>
+                <label class="flex items-center gap-2 font-medium text-dark-700">Hora de envío (Argentina)
+                    <input type="time" x-model="formConfig.hora_envio" required class="campo w-36"></label>
+            </div>
+            {{ pie_configuracion() }}
+        </form>
+    </section>
+
+    <section x-show="pestana === 'canales'" x-cloak class="space-y-4">
+        <form x-show="configuracion" @submit.prevent="guardarConfiguracion()" class="bg-white rounded-2xl border border-dark-100 overflow-hidden max-w-3xl">
+            {{ encabezado('send', 'Canales', 'Por dónde salen los recordatorios y los avisos manuales del Seguimiento.') }}
+            <div class="p-6 space-y-4 text-sm">
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="formConfig.canal_email" class="w-4 h-4 rounded"> Email personal (al email corporativo del evaluador)</label>
+                <label class="block pl-6 font-medium text-dark-700">CC (separados por coma)
+                    <input x-model="formConfig.email_cc" placeholder="seguridad@dicsys.com, it@dicsys.com" class="campo"></label>
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="formConfig.canal_webex_personal" class="w-4 h-4 rounded"> Webex personal (mensaje directo al evaluador)</label>
+                <label class="flex items-center gap-2"><input type="checkbox" x-model="formConfig.canal_webex_canal" class="w-4 h-4 rounded"> Webex en canal (resumen de pendientes)</label>
+                <label class="block pl-6 font-medium text-dark-700">ID del room de Webex
+                    <input x-model="formConfig.webex_room_id" maxlength="255" :required="formConfig.canal_webex_canal" class="campo"></label>
+            </div>
+            {{ pie_configuracion() }}
+        </form>
+
+        <!-- Prueba: el aviso de un evaluador, marcado [Prueba], por los canales tildados arriba -->
+        <div x-show="configuracion" class="bg-white rounded-2xl border border-dark-100 overflow-hidden max-w-3xl">
+            {{ encabezado('flask-conical', 'Probar canales', 'Le manda de verdad al evaluador elegido su aviso, marcado [Prueba], por los canales tildados arriba (aunque no estén guardados). Si «Webex en canal» está tildado, también publica en el room. Por Webex el aviso va como tarjeta.') }}
+            <div class="p-6 space-y-4 text-sm">
+                <p x-show="seguimiento && !seguimiento.evaluacion" class="text-amber-700">No hay una evaluación vigente: hace falta una para armar el aviso del evaluador.</p>
+                <label class="block font-medium text-dark-700">Evaluador
+                    <select x-model="prueba.evaluador" class="campo">
+                        <option value="">Elegí un evaluador…</option>
+                        <template x-for="e in (seguimiento?.evaluadores || [])" :key="e.evaluador.id">
+                            <option :value="e.evaluador.id" x-text="`${e.evaluador.nombre} · ${e.pendientes.length} pendiente${e.pendientes.length === 1 ? '' : 's'}`"></option>
+                        </template>
+                    </select>
+                </label>
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <p :class="canalesTildados().length ? 'text-dark-500' : 'text-amber-700'"
+                       x-text="canalesTildados().length ? 'Por: ' + canalesTildados().map(c => CANALES[c]).join(', ') : 'Tildá al menos un canal arriba'"></p>
+                    <button type="button" @click="probarCanales()" :disabled="!prueba.evaluador || !canalesTildados().length || prueba.enviando"
+                            class="flex items-center px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 text-white font-medium shadow-soft disabled:opacity-50">
+                        <i data-lucide="send" class="w-4 h-4 mr-2"></i><span x-text="prueba.enviando ? 'Enviando…' : 'Enviar prueba'"></span>
+                    </button>
+                </div>
+                <p x-show="prueba.error" x-cloak class="p-3 rounded-xl bg-red-50 border border-red-200 text-red-800" x-text="prueba.error"></p>
+                <ul x-show="prueba.resultados.length" x-cloak class="divide-y divide-dark-100 border border-dark-100 rounded-xl">
+                    <template x-for="r in prueba.resultados" :key="r.canal">
+                        <li class="px-4 py-3 flex flex-wrap items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <p class="font-medium text-dark-800" x-text="CANALES[r.canal] || r.canal"></p>
+                                <p class="text-xs text-dark-500 break-all" x-text="r.destino || 'sin destino'"></p>
+                                <p x-show="r.detalle" class="text-xs text-red-600" x-text="r.detalle"></p>
+                            </div>
+                            <span class="px-2 py-0.5 text-xs font-semibold rounded-lg"
+                                  :class="r.enviado ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'"
+                                  x-text="r.enviado ? 'Enviado' : 'No salió'"></span>
+                        </li>
+                    </template>
+                </ul>
+            </div>
+        </div>
+    </section>
+
+    <!-- Vista previa del aviso -->
+    <div x-show="vistaPrevia" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-16" @keydown.escape.window="vistaPrevia = null">
+        <div class="fixed inset-0 bg-dark-900/50 backdrop-blur-sm" @click="vistaPrevia = null"></div>
+        <div role="dialog" aria-modal="true" class="relative w-full max-w-lg bg-white rounded-2xl shadow-xl p-6 space-y-3 text-sm">
+            <p class="text-lg font-semibold text-dark-900">Vista previa del aviso</p>
+            <p><span class="font-semibold">Para:</span> <span x-text="vistaPrevia?.email || 'sin email'"></span></p>
+            <p><span class="font-semibold">Asunto:</span> <span x-text="vistaPrevia?.mensaje?.asunto"></span></p>
+            <pre class="whitespace-pre-wrap font-sans bg-dark-50 rounded-xl border border-dark-100 p-4" x-text="vistaPrevia?.mensaje?.cuerpo"></pre>
+            <div class="flex justify-end"><button type="button" @click="vistaPrevia = null" class="px-4 py-2 rounded-xl border border-dark-200">Cerrar</button></div>
+        </div>
+    </div>
+
+    <!-- Confirmar eliminación de una evaluación -->
+    <div x-show="porEliminar" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-16" @keydown.escape.window="if (!eliminando) porEliminar = null">
+        <div class="fixed inset-0 bg-dark-900/50 backdrop-blur-sm" @click="if (!eliminando) porEliminar = null"></div>
+        <div role="dialog" aria-modal="true" aria-labelledby="titulo-eliminar" class="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-3 text-sm">
+            <p id="titulo-eliminar" class="text-lg font-semibold text-dark-900">¿Eliminar la evaluación <span x-text="porEliminar?.periodo"></span>?</p>
+            <template x-for="linea in textoEliminar(porEliminar)" :key="linea">
+                <p class="text-dark-600" x-text="linea"></p>
+            </template>
+            <div class="flex justify-end gap-3 pt-2">
+                <button type="button" @click="porEliminar = null" :disabled="eliminando" class="px-4 py-2 rounded-xl border border-dark-200">Cancelar</button>
+                <button type="button" @click="eliminarEvaluacion()" :disabled="eliminando" class="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                        x-text="eliminando ? 'Eliminando…' : 'Eliminar'"></button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmar envío -->
+    <div x-show="confirmando" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-16" @keydown.escape.window="if (!enviando) confirmando = false">
+        <div class="fixed inset-0 bg-dark-900/50 backdrop-blur-sm" @click="if (!enviando) confirmando = false"></div>
+        <div role="dialog" aria-modal="true" class="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6 space-y-3 text-sm">
+            <p class="text-lg font-semibold text-dark-900">Confirmar envío</p>
+            <p>Se avisará a <span x-text="seleccion.length"></span> evaluador(es) por: <span class="font-semibold" x-text="(seguimiento?.canales || []).map(c => CANALES[c]).join(', ')"></span>.</p>
+            <div class="flex justify-end gap-3">
+                <button type="button" @click="confirmando = false" :disabled="enviando" class="px-4 py-2 rounded-xl border border-dark-200">Cancelar</button>
+                <button type="button" @click="enviarAvisos()" :disabled="enviando" class="px-4 py-2 rounded-xl bg-primary-600 text-white disabled:opacity-50"
+                        x-text="enviando ? 'Enviando…' : 'Enviar'"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .campo { margin-top: .25rem; width: 100%; padding: .625rem .75rem; background: rgb(248 250 252); border: 1px solid rgb(226 232 240); border-radius: .75rem; }
+    .campo:focus { outline: none; background: #fff; box-shadow: 0 0 0 2px rgb(99 102 241 / .35); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function configEvaluaciones(base, pestanaInicial = 'evaluaciones') {
+    const api = `${base}/api`;
+    return {
+        CANALES: {email: 'Email', webex_personal: 'Webex personal', webex_canal: 'Webex en canal'},
+        MOTIVOS: {apertura: 'Apertura', recordatorio: 'Recordatorio', previo_cierre: 'Día anterior al cierre', manual: 'Manual'},
+        pestana: pestanaInicial,
+        error: null,
+        evaluaciones: [],
+        nueva: {periodo: '', fecha_apertura: '', fecha_cierre: ''},
+        fechas: {id: null},
+        porEliminar: null,  // la evaluación del modal de confirmación
+        eliminando: false,
+        MESES: ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre',
+                'noviembre', 'diciembre'],
+        auto: null,  // la auto-generación guardada
+        formAuto: {activa: false, inicio_dia: '', inicio_mes: '', fin_dia: '', fin_mes: ''},
+        guardandoAuto: false,
+        configuracion: null,
+        formConfig: {},
+        guardandoConfig: false,
+        seguimiento: null,
+        historialAvisos: [],
+        prueba: {evaluador: '', enviando: false, error: null, resultados: []},
+        seleccion: [],
+        resultados: [],
+        vistaPrevia: null,
+        confirmando: false,
+        enviando: false,
+
+        async iniciar() {
+            await Promise.all([this.cargarEvaluaciones(), this.cargarConfiguracion()]);
+            if (['seguimiento', 'canales'].includes(this.pestana)) await this.cargarSeguimiento();
+            if (this.pestana === 'autogeneracion') await this.cargarAutogeneracion();
+        },
+        async cambiarPestana(nombre) {
+            this.pestana = nombre;
+            this.error = null;
+            // Canales también usa el seguimiento: de ahí salen los evaluadores para la prueba
+            if (['seguimiento', 'canales'].includes(nombre)) await this.cargarSeguimiento();
+            if (nombre === 'autogeneracion') await this.cargarAutogeneracion();
+        },
+        async pedir(ruta, opciones = {}) {
+            const r = await fetch(`${api}/${ruta}`, {headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, ...opciones});
+            const cuerpo = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(cuerpo.detail || 'Error en la operación');
+            return cuerpo;
+        },
+        async intentar(funcion) {
+            this.error = null;
+            try { return await funcion(); } catch (e) { this.error = e.message; }
+        },
+
+        // ─── Evaluaciones ───
+        async cargarEvaluaciones() {
+            await this.intentar(async () => { this.evaluaciones = await this.pedir('evaluaciones'); });
+        },
+        async crearEvaluacion() {
+            const vigente = this.evaluaciones.find(e => e.estado !== 'reemplazada');
+            if (vigente && !confirm(`La evaluación ${vigente.periodo} va a quedar finalizada. ¿Crear la ${this.nueva.periodo}?`)) return;
+            await this.intentar(async () => {
+                await this.pedir('evaluaciones', {method: 'POST', body: JSON.stringify(this.nueva)});
+                Alpine.store('toasts').success('Evaluación creada');
+                this.nueva = {periodo: '', fecha_apertura: '', fecha_cierre: ''};
+                await this.cargarEvaluaciones();
+            });
+        },
+        async guardarFechas() {
+            await this.intentar(async () => {
+                const {id, ...datos} = this.fechas;
+                await this.pedir(`evaluaciones/${id}`, {method: 'PUT', body: JSON.stringify(datos)});
+                Alpine.store('toasts').success('Fechas actualizadas');
+                this.fechas = {id: null};
+                await this.cargarEvaluaciones();
+            });
+        },
+
+        // Lo que se pierde, con los números, para el modal de confirmación
+        textoEliminar(e) {
+            if (!e) return [];
+            const {total, evaluados} = e.metricas;
+            const plural = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+            const lineas = [
+                `Del ${this.fecha(e.fecha_apertura)} al ${this.fecha(e.fecha_cierre)}, con ${plural(total, 'proveedor', 'proveedores')}`
+                    + (total ? ` (${plural(evaluados, 'ya evaluado', 'ya evaluados')}).` : '.'),
+                'Sus respuestas dejan de verse en el tablero y en la ficha de cada proveedor.',
+            ];
+            if (e.estado !== 'reemplazada') lineas.push('Es la evaluación vigente: no va a quedar ninguna hasta que crees otra.');
+            return lineas;
+        },
+        async eliminarEvaluacion() {
+            const e = this.porEliminar;
+            this.eliminando = true;
+            await this.intentar(async () => {
+                await this.pedir(`evaluaciones/${e.id}`, {method: 'DELETE'});
+                Alpine.store('toasts').success(`Evaluación ${e.periodo} eliminada`);
+                if (this.fechas.id === e.id) this.fechas = {id: null};
+                await this.cargarEvaluaciones();
+            });
+            this.eliminando = false;
+            this.porEliminar = null;
+        },
+
+        // ─── Auto-generación ───
+        anioActual() {
+            return new Date().getFullYear();
+        },
+        usarAutogeneracion(auto) {
+            this.auto = auto;
+            this.formAuto = {activa: auto.activa, inicio_dia: auto.inicio_dia ?? '', inicio_mes: auto.inicio_mes ?? '',
+                             fin_dia: auto.fin_dia ?? '', fin_mes: auto.fin_mes ?? ''};
+        },
+        async cargarAutogeneracion() {
+            await this.intentar(async () => { this.usarAutogeneracion(await this.pedir('autogeneracion')); });
+        },
+        cuerpoAutogeneracion() {
+            const numero = valor => (valor === '' || valor === null || valor === undefined ? null : Number(valor));
+            const f = this.formAuto;
+            return {activa: Boolean(f.activa), inicio_dia: numero(f.inicio_dia), inicio_mes: numero(f.inicio_mes),
+                    fin_dia: numero(f.fin_dia), fin_mes: numero(f.fin_mes)};
+        },
+        async guardarAutogeneracion() {
+            this.guardandoAuto = true;
+            await this.intentar(async () => {
+                this.usarAutogeneracion(await this.pedir('autogeneracion', {method: 'PUT', body: JSON.stringify(this.cuerpoAutogeneracion())}));
+                Alpine.store('toasts').success('Auto-generación guardada');
+            });
+            this.guardandoAuto = false;
+        },
+        // Qué va a hacer la tarea, según lo guardado
+        textoProxima() {
+            const p = this.auto?.proxima;
+            if (!this.auto?.activa || !p) return '';
+            if (p.ya_existe) return `La evaluación ${p.periodo} ya existe: este año no se crea otra.`;
+            return `Próxima: la evaluación ${p.periodo} se crea el ${this.fecha(p.fecha_apertura)} y cierra el ${this.fecha(p.fecha_cierre)}.`;
+        },
+
+        // ─── Configuración ───
+        async cargarConfiguracion() {
+            await this.intentar(async () => {
+                this.configuracion = await this.pedir('configuracion');
+                const c = this.configuracion;
+                this.formConfig = {
+                    sheet_url: c.sheet_url || '', sheet_hoja: c.sheet_hoja, aviso_apertura: c.aviso_apertura,
+                    aviso_previo_cierre: c.aviso_previo_cierre, recordar: c.recordar_cada_dias ? String(c.recordar_cada_dias) : '',
+                    hora_envio: (c.hora_envio || '09:00').slice(0, 5), canal_email: c.canal_email,
+                    email_cc: (c.email_cc || []).join(', '), canal_webex_personal: c.canal_webex_personal,
+                    canal_webex_canal: c.canal_webex_canal, webex_room_id: c.webex_room_id || '',
+                };
+            });
+        },
+        sinGuardar() {
+            const c = this.configuracion || {};
+            return (this.formConfig.sheet_url || '').trim() !== (c.sheet_url || '')
+                || (this.formConfig.sheet_hoja || '').trim() !== (c.sheet_hoja || '');
+        },
+        async guardarConfiguracion() {
+            this.guardandoConfig = true;
+            const {recordar, ...datos} = this.formConfig;
+            await this.intentar(async () => {
+                await this.pedir('configuracion', {method: 'PUT', body: JSON.stringify({...datos, recordar_cada_dias: recordar ? Number(recordar) : null})});
+                Alpine.store('toasts').success('Configuración guardada');
+                await this.cargarConfiguracion();
+            });
+            this.guardandoConfig = false;
+        },
+
+        async copiar(texto) {
+            try {
+                await navigator.clipboard.writeText(texto);
+                Alpine.store('toasts').success('Copiado');
+            } catch (e) {
+                this.error = 'No se pudo copiar: seleccioná el texto y copialo a mano';
+            }
+        },
+
+        // ─── Seguimiento ───
+        async cargarSeguimiento() {
+            await this.intentar(async () => {
+                this.seguimiento = await this.pedir('seguimiento');
+                this.historialAvisos = await this.pedir('avisos');
+                const validos = this.enviables().map(s => s.evaluador.id);
+                this.seleccion = this.seleccion.filter(id => validos.includes(id));
+            });
+        },
+        enviables() { return (this.seguimiento?.evaluadores || []).filter(s => s.pendientes.length); },
+
+        // ─── Prueba de canales: los de la pantalla, aunque no estén guardados ───
+        canalesTildados() {
+            const f = this.formConfig || {};
+            return [f.canal_email && 'email', f.canal_webex_personal && 'webex_personal', f.canal_webex_canal && 'webex_canal']
+                .filter(Boolean);
+        },
+        cuerpoPrueba() {
+            const f = this.formConfig;
+            return {evaluador_id: this.prueba.evaluador, canal_email: Boolean(f.canal_email), email_cc: f.email_cc || '',
+                    canal_webex_personal: Boolean(f.canal_webex_personal), canal_webex_canal: Boolean(f.canal_webex_canal),
+                    webex_room_id: f.webex_room_id || null};
+        },
+        async probarCanales() {
+            const fila = (this.seguimiento?.evaluadores || []).find(e => e.evaluador.id === this.prueba.evaluador);
+            if (!fila) return;
+            const canales = this.canalesTildados().map(c => this.CANALES[c]).join(', ');
+            if (!globalThis.confirm(`Se le va a mandar a ${fila.evaluador.nombre} un aviso de prueba por: ${canales}. ¿Enviar?`)) return;
+            this.prueba = {...this.prueba, enviando: true, error: null, resultados: []};
+            try {
+                this.prueba.resultados = await this.pedir('seguimiento/probar', {method: 'POST', body: JSON.stringify(this.cuerpoPrueba())});
+            } catch (e) {
+                this.prueba.error = e.message;
+            }
+            this.prueba.enviando = false;
+        },
+        todosMarcados() { const e = this.enviables(); return e.length > 0 && e.every(s => this.seleccion.includes(s.evaluador.id)); },
+        alternarTodos() { this.seleccion = this.todosMarcados() ? [] : this.enviables().map(s => s.evaluador.id); },
+        alternar(id) { this.seleccion = this.seleccion.includes(id) ? this.seleccion.filter(x => x !== id) : [...this.seleccion, id]; },
+        async enviarAvisos() {
+            this.enviando = true;
+            await this.intentar(async () => {
+                this.resultados = await this.pedir('seguimiento/avisar', {method: 'POST', body: JSON.stringify({evaluadores: this.seleccion})});
+                const fallidos = this.resultados.filter(r => !r.enviado && r.canal !== '-');
+                this.seleccion = [...new Set(fallidos.map(r => this.seguimiento.evaluadores.find(s => s.evaluador.nombre === r.evaluador)?.evaluador.id).filter(Boolean))];
+                await this.cargarSeguimiento();
+            });
+            this.enviando = false;
+            this.confirmando = false;
+        },
+
+        // ─── Formatos ───
+        fecha(valor) {
+            if (!valor) return '';
+            const [a, m, d] = String(valor).slice(0, 10).split('-');
+            return `${d}/${m}/${a}`;
+        },
+        fechaHora(valor) {
+            if (!valor) return '';
+            const texto = String(valor);
+            return new Date(texto.endsWith('Z') ? texto : `${texto}Z`).toLocaleString('es-AR', {dateStyle: 'short', timeStyle: 'short'});
+        },
+        textoEstado(e) { return {programada: 'Programada', abierta: 'Abierta', cerrada: 'Cerrada', reemplazada: 'Finalizada'}[e] || e; },
+        claseEstado(e) {
+            return {programada: 'bg-blue-100 text-blue-700', abierta: 'bg-emerald-100 text-emerald-700',
+                    cerrada: 'bg-amber-100 text-amber-700', reemplazada: 'bg-dark-100 text-dark-600'}[e] || '';
+        },
+    };
+}
+</script>
+{% endblock %}

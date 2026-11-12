@@ -1,0 +1,59 @@
+name: dicsys-core-tests
+
+services:
+  test-postgresql:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dicsys_core_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d dicsys_core_test"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  backend-tests:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      target: test
+    depends_on:
+      test-postgresql:
+        condition: service_healthy
+    environment:
+      APP_NAME: Dicsys Core
+      APP_VERSION: test
+      DEBUG: "false"
+      HOST: 0.0.0.0
+      PORT: 6001
+      RELOAD: "false"
+      SECRET_KEY: test-secret
+      JWT_SECRET_KEY: test-jwt-secret-de-32-bytes-o-mas-para-hs256
+      JWT_ALGORITHM: HS256
+      JWT_EXPIRE_MINUTES: 30
+      DATABASE_URL: postgresql://postgres:postgres@test-postgresql:5432/dicsys_core_test
+      CORS_ORIGINS: '["http://testserver"]'
+      ENVIRONMENT: testing
+      STORAGE_LOCAL_PATH: /tmp/dicsys-core-test/files
+      LLM_STORAGE_PATH: /tmp/dicsys-core-test/llm
+    volumes:
+      - ./backend:/app/backend:ro
+      - ./pytest.ini:/app/pytest.ini:ro
+    command: pytest backend/tests -q -o cache_dir=/tmp/pytest_cache
+
+  frontend-tests:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: test
+    environment:
+      TESTING: "true"
+      SECRET_KEY: frontend-test-secret
+      API_URL: http://backend.test
+    volumes:
+      - ./frontend:/app:ro
+      - ./pytest.ini:/tmp/pytest.ini:ro
+    command: pytest -c /tmp/pytest.ini tests -q -o cache_dir=/tmp/pytest_cache

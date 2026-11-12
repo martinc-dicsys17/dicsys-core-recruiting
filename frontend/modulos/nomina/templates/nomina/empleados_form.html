@@ -1,0 +1,823 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if item else 'Nuevo' }} Empleado - {{ config.APP_NAME }}{% endblock %}
+
+{% block head %}
+<script src="{{ url_for('static', filename='js/geo_data.js') }}"></script>
+<script src="{{ url_for('static', filename='js/form_validators.js') }}"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto animate-fade-in" x-data="{ activeTab: 'personal' }">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('nomina.empleados_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar' if item else 'Nuevo' }} Empleado</h1>
+            <p class="text-dark-500 text-sm">{{ 'Modifica la información del empleado' if item else 'Completa el formulario para crear un empleado' }}</p>
+        </div>
+    </div>
+    
+    <form hx-post="{{ url_for('nomina.empleados_edit', id=item.id) if item else url_for('nomina.empleados_create') }}" 
+          hx-target="#form-error" 
+          hx-indicator="#submit-spinner" 
+          method="POST">
+        
+        <div id="form-error"></div>
+
+        <!-- Tabs Navigation -->
+        <div class="bg-white rounded-2xl border border-dark-100 mb-6 overflow-hidden">
+            <div class="flex border-b border-dark-100 overflow-x-auto">
+                <button type="button" @click="activeTab = 'personal'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'personal' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="user" class="w-4 h-4 mr-2"></i>
+                    Datos Personales
+                    <span x-show="activeTab === 'personal'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'laboral'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'laboral' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="briefcase" class="w-4 h-4 mr-2"></i>
+                    Datos Laborales
+                    <span x-show="activeTab === 'laboral'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'direccion'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'direccion' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i>
+                    Dirección Laboral
+                    <span x-show="activeTab === 'direccion'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'emergencia'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'emergencia' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="alert-circle" class="w-4 h-4 mr-2"></i>
+                    Contacto de Emergencia
+                    <span x-show="activeTab === 'emergencia'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'ocasiones'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'ocasiones' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="gift" class="w-4 h-4 mr-2"></i>
+                    Ocasiones Especiales
+                    <span x-show="activeTab === 'ocasiones'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 1: DATOS PERSONALES ==================== -->
+        <div x-show="activeTab === 'personal'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+            <!-- Foto del Empleado -->
+            {% if item %}
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="camera" class="w-5 h-5 mr-2 text-primary-500"></i>
+                        Foto del Empleado
+                    </h2>
+                </div>
+                <div class="p-6 flex justify-center">
+                    {% if item.foto %}
+                    <div id="foto-container" class="flex flex-col items-center gap-3">
+                        <div class="w-32 h-32 rounded-2xl overflow-hidden border-2 border-dark-200 bg-dark-50">
+                            <img src="{{ item.foto|storage_url }}" alt="Foto empleado" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex gap-2">
+                            <label class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                <i data-lucide="upload" class="w-3 h-3 mr-1"></i>
+                                Cambiar foto
+                                <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp" class="hidden"
+                                       hx-post="{{ url_for('nomina.empleados_foto_upload', id=item.id) }}"
+                                       hx-target="#foto-container"
+                                       hx-swap="outerHTML"
+                                       hx-encoding="multipart/form-data">
+                            </label>
+                            <button type="button" 
+                                    hx-delete="{{ url_for('nomina.empleados_foto_delete', id=item.id) }}" 
+                                    hx-target="#foto-container" 
+                                    hx-swap="outerHTML"
+                                    hx-confirm="¿Eliminar la foto?"
+                                    class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                <i data-lucide="trash-2" class="w-3 h-3 mr-1"></i>
+                                Eliminar
+                            </button>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div id="foto-container" class="flex flex-col items-center gap-3">
+                        <div class="w-32 h-32 rounded-2xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex items-center justify-center">
+                            <i data-lucide="camera" class="w-10 h-10 text-dark-300"></i>
+                        </div>
+                        <label class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                            <i data-lucide="upload" class="w-3 h-3 mr-1"></i>
+                            Subir foto
+                            <input type="file" name="foto" accept=".jpg,.jpeg,.png,.webp" class="hidden"
+                                   hx-post="{{ url_for('nomina.empleados_foto_upload', id=item.id) }}"
+                                   hx-target="#foto-container"
+                                   hx-swap="outerHTML"
+                                   hx-encoding="multipart/form-data">
+                        </label>
+                        <p class="text-xs text-dark-400">JPG, PNG o WebP. Máx 5MB</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+                <i data-lucide="info" class="w-5 h-5 text-amber-600 flex-shrink-0"></i>
+                <p class="text-sm text-amber-800">La foto se puede agregar después de crear el empleado, desde la pantalla de edición.</p>
+            </div>
+            {% endif %}
+
+            <!-- Datos Básicos -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="user" class="w-5 h-5 mr-2 text-primary-500"></i>
+                        Datos Básicos
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Código *</label>
+                        <input type="text" name="codigo" value="{{ item.codigo if item else '' }}" required maxlength="50"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">CUIL *</label>
+                        <input type="text" name="cuil" value="{{ item.cuil if item else '' }}" required placeholder="XX-XXXXXXXX-X"
+                               inputmode="numeric" maxlength="13" pattern="\d{2}-\d{8}-\d{1}" title="Formato: XX-XXXXXXXX-X"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">DNI *</label>
+                        <input type="text" name="dni" value="{{ item.dni if item else '' }}" required
+                               inputmode="numeric" maxlength="10" minlength="9" placeholder="XX.XXX.XXX" title="DNI: entre 7 y 8 dígitos"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Apellido *</label>
+                        <input type="text" name="apellido" value="{{ item.apellido if item else '' }}" required minlength="2" maxlength="100"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                        <input type="text" name="nombre" value="{{ item.nombre if item else '' }}" required minlength="2" maxlength="100"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha Nacimiento</label>
+                        <input type="date" name="fecha_nacimiento_date" id="fecha_nacimiento_date"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <input type="hidden" name="fecha_nacimiento" id="fecha_nacimiento_hidden">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Género</label>
+                        <select name="genero" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Masculino" {{ 'selected' if item and item.genero == 'Masculino' else '' }}>Masculino</option>
+                            <option value="Femenino" {{ 'selected' if item and item.genero == 'Femenino' else '' }}>Femenino</option>
+                            <option value="Otro" {{ 'selected' if item and item.genero == 'Otro' else '' }}>Otro</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nacionalidad</label>
+                        <select name="nacionalidad" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="pais in GEO_DATA.nacionalidades" :key="pais">
+                                <option :value="pais" :selected="'{{ (item.nacionalidad or '') if item else '' }}' === pais" x-text="pais"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Estado Civil</label>
+                        <select name="estado_civil" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Soltero/a" {{ 'selected' if item and item.estado_civil == 'Soltero/a' else '' }}>Soltero/a</option>
+                            <option value="Casado/a" {{ 'selected' if item and item.estado_civil == 'Casado/a' else '' }}>Casado/a</option>
+                            <option value="Divorciado/a" {{ 'selected' if item and item.estado_civil == 'Divorciado/a' else '' }}>Divorciado/a</option>
+                            <option value="Viudo/a" {{ 'selected' if item and item.estado_civil == 'Viudo/a' else '' }}>Viudo/a</option>
+                            <option value="Unión de hecho" {{ 'selected' if item and item.estado_civil == 'Unión de hecho' else '' }}>Unión de hecho</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nivel de Estudio</label>
+                        <select name="nivel_estudio" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Primario" {{ 'selected' if item and item.nivel_estudio == 'Primario' else '' }}>Primario</option>
+                            <option value="Secundario" {{ 'selected' if item and item.nivel_estudio == 'Secundario' else '' }}>Secundario</option>
+                            <option value="Terciario" {{ 'selected' if item and item.nivel_estudio == 'Terciario' else '' }}>Terciario</option>
+                            <option value="Universitario" {{ 'selected' if item and item.nivel_estudio == 'Universitario' else '' }}>Universitario</option>
+                            <option value="Posgrado" {{ 'selected' if item and item.nivel_estudio == 'Posgrado' else '' }}>Posgrado</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Carrera</label>
+                        <div class="flex gap-2">
+                            <select name="carrera_id" class="flex-1 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                <option value="">Seleccionar...</option>
+                                {% for car in carreras %}
+                                <option value="{{ car.id }}" {{ 'selected' if item and item.carrera_id == car.id else '' }}>{{ car.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                            <a href="{{ url_for('nomina.carreras_create') }}" target="_blank" title="Registrar nueva carrera"
+                               class="flex items-center justify-center px-3 py-2.5 bg-violet-50 border border-violet-200 text-violet-600 rounded-xl hover:bg-violet-100 transition-colors">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </a>
+                        </div>
+                        <p class="text-xs text-dark-400 mt-1">¿No encontrás la carrera? <a href="{{ url_for('nomina.carreras_list') }}" target="_blank" class="text-primary-600 hover:underline">Gestionar carreras</a></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contacto Personal -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="phone" class="w-5 h-5 mr-2 text-primary-500"></i>
+                        Contacto Personal
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Teléfono Personal</label>
+                        <input type="tel" name="telefono_personal" value="{{ (item.telefono_personal or '') if item else '' }}"
+                               inputmode="tel" maxlength="20" placeholder="+54 (351) 1234-5678" title="Formato: +54 (351) 1234-5678"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Email Personal</label>
+                        <input type="email" name="email_personal" value="{{ (item.email_personal or '') if item else '' }}"
+                               inputmode="email"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navegación entre tabs -->
+            <div class="flex justify-end mb-6">
+                <button type="button" @click="activeTab = 'laboral'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    Siguiente: Laboral
+                    <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 2: DATOS LABORALES ==================== -->
+        <div x-show="activeTab === 'laboral'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="briefcase" class="w-5 h-5 mr-2 text-primary-500"></i>
+                        Datos Laborales
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha Alta</label>
+                        <input type="date" name="fecha_alta_date" id="fecha_alta_date"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <input type="hidden" name="fecha_alta" id="fecha_alta_hidden">
+                    </div>
+                    {% if item %}
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha Baja</label>
+                        <input type="date" name="fecha_baja_date" id="fecha_baja_date"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <input type="hidden" name="fecha_baja" id="fecha_baja_hidden">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Motivo Baja</label>
+                        <select name="motivo_baja" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Renuncia voluntaria" {{ 'selected' if item and item.motivo_baja == 'Renuncia voluntaria' else '' }}>Renuncia voluntaria</option>
+                            <option value="Despido con causa" {{ 'selected' if item and item.motivo_baja == 'Despido con causa' else '' }}>Despido con causa</option>
+                            <option value="Despido sin causa" {{ 'selected' if item and item.motivo_baja == 'Despido sin causa' else '' }}>Despido sin causa</option>
+                            <option value="Mutuo acuerdo" {{ 'selected' if item and item.motivo_baja == 'Mutuo acuerdo' else '' }}>Mutuo acuerdo</option>
+                            <option value="Jubilación" {{ 'selected' if item and item.motivo_baja == 'Jubilación' else '' }}>Jubilación</option>
+                            <option value="Fallecimiento" {{ 'selected' if item and item.motivo_baja == 'Fallecimiento' else '' }}>Fallecimiento</option>
+                            <option value="Fin de contrato" {{ 'selected' if item and item.motivo_baja == 'Fin de contrato' else '' }}>Fin de contrato</option>
+                            <option value="Período de prueba" {{ 'selected' if item and item.motivo_baja == 'Período de prueba' else '' }}>Período de prueba</option>
+                            <option value="Abandono de trabajo" {{ 'selected' if item and item.motivo_baja == 'Abandono de trabajo' else '' }}>Abandono de trabajo</option>
+                            <option value="Otro" {{ 'selected' if item and item.motivo_baja == 'Otro' else '' }}>Otro</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <label for="email-corporativo" class="block text-sm font-semibold text-dark-700 mb-2">Email Corporativo</label>
+                        <input id="email-corporativo" type="email" value="{{ (item.email_corporativo or '') if item else '' }}"
+                               readonly aria-readonly="true" aria-describedby="ayuda-email-corporativo" placeholder="Sin email corporativo"
+                               class="w-full px-4 py-2.5 bg-dark-100 border border-dark-200 rounded-xl text-dark-600 cursor-not-allowed">
+                        <p id="ayuda-email-corporativo" class="mt-1 text-xs text-dark-400">Es el email de la cuenta del usuario con este DNI; se cambia en Configuración › Usuarios.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Departamento</label>
+                        <select name="departamento_id" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            {% for dep in departamentos %}
+                            <option value="{{ dep.id }}" {{ 'selected' if item and item.departamento_id == dep.id else '' }}>{{ dep.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Perfil</label>
+                        <div class="flex gap-2">
+                            <select name="perfil_id" class="flex-1 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                <option value="">Seleccionar...</option>
+                                {% for perf in perfiles %}
+                                <option value="{{ perf.id }}" {{ 'selected' if item and item.perfil_id == perf.id else '' }}>{{ perf.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                            <a href="{{ url_for('nomina.perfiles_create') }}" target="_blank" title="Registrar nuevo perfil"
+                               class="flex items-center justify-center px-3 py-2.5 bg-violet-50 border border-violet-200 text-violet-600 rounded-xl hover:bg-violet-100 transition-colors">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </a>
+                        </div>
+                        <p class="text-xs text-dark-400 mt-1">¿No encontrás el perfil? <a href="{{ url_for('nomina.perfiles_list') }}" target="_blank" class="text-primary-600 hover:underline">Gestionar perfiles</a></p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Puesto</label>
+                        <input type="text" name="puesto" value="{{ (item.puesto or '') if item else '' }}" maxlength="150"
+                               placeholder="Ej: Desarrollador Frontend Sr."
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <p class="text-xs text-dark-400 mt-1">Puesto cubierto actualmente</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Seniority</label>
+                        <select name="seniority" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Trainee" {{ 'selected' if item and item.seniority == 'Trainee' else '' }}>Trainee</option>
+                            <option value="Junior" {{ 'selected' if item and item.seniority == 'Junior' else '' }}>Junior</option>
+                            <option value="Semi-Senior" {{ 'selected' if item and item.seniority == 'Semi-Senior' else '' }}>Semi-Senior</option>
+                            <option value="Senior" {{ 'selected' if item and item.seniority == 'Senior' else '' }}>Senior</option>
+                            <option value="Lead" {{ 'selected' if item and item.seniority == 'Lead' else '' }}>Lead</option>
+                            <option value="Manager" {{ 'selected' if item and item.seniority == 'Manager' else '' }}>Manager</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">HRBP</label>
+                        <select name="hrbp_id" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            {% for emp in hrbps %}
+                            <option value="{{ emp.id }}" {{ 'selected' if item and item.hrbp_id == emp.id else '' }}>{{ emp.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-dark-400 mt-1">Solo empleados con perfil tipo HRBP</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navegación entre tabs -->
+            <div class="flex justify-between mb-6">
+                <button type="button" @click="activeTab = 'personal'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+                    Anterior: Personal
+                </button>
+                <button type="button" @click="activeTab = 'direccion'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    Siguiente: Dirección
+                    <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 3: DIRECCIÓN LABORAL ==================== -->
+        <div x-show="activeTab === 'direccion'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6" x-data="direccionData('laboral')">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="map-pin" class="w-5 h-5 mr-2 text-primary-500"></i>
+                        Dirección Laboral
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">País</label>
+                        <select name="dir_laboral_pais" x-model="pais" @change="onPaisChange()" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="p in paises" :key="p">
+                                <option :value="p" x-text="p"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Provincia</label>
+                        <select name="dir_laboral_provincia" x-model="provincia" @change="onProvinciaChange()" :disabled="!pais" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all disabled:opacity-50">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="prov in provinciasActuales" :key="prov">
+                                <option :value="prov" x-text="prov"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Localidad</label>
+                        <select name="dir_laboral_localidad" x-model="localidad" :disabled="!provincia" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all disabled:opacity-50">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="loc in localidadesActuales" :key="loc">
+                                <option :value="loc" x-text="loc"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Código Postal</label>
+                        <input type="text" name="dir_laboral_codigo_postal" value="{{ (item.dir_laboral_codigo_postal or '') if item else '' }}"
+                               inputmode="numeric" maxlength="10"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Barrio</label>
+                        <input type="text" name="dir_laboral_barrio" value="{{ (item.dir_laboral_barrio or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Calle</label>
+                        <input type="text" name="dir_laboral_calle" value="{{ (item.dir_laboral_calle or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Número</label>
+                        <input type="text" name="dir_laboral_numero" value="{{ (item.dir_laboral_numero or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Piso</label>
+                        <input type="text" name="dir_laboral_piso" value="{{ (item.dir_laboral_piso or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Departamento</label>
+                        <input type="text" name="dir_laboral_departamento" value="{{ (item.dir_laboral_departamento or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navegación entre tabs -->
+            <div class="flex justify-between mb-6">
+                <button type="button" @click="activeTab = 'laboral'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+                    Anterior: Laboral
+                </button>
+                <button type="button" @click="activeTab = 'emergencia'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    Siguiente: Emergencia
+                    <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 4: CONTACTO DE EMERGENCIA ==================== -->
+        <div x-show="activeTab === 'emergencia'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="alert-circle" class="w-5 h-5 mr-2 text-red-500"></i>
+                        Contacto de Emergencia
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre Contacto</label>
+                        <input type="text" name="contacto_emergencia" value="{{ (item.contacto_emergencia or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Teléfono Emergencia</label>
+                        <input type="tel" name="numero_emergencia" value="{{ (item.numero_emergencia or '') if item else '' }}"
+                               inputmode="tel" maxlength="20" placeholder="+54 (351) 1234-5678" title="Formato: +54 (351) 1234-5678"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Parentesco</label>
+                        <input type="text" name="parentesco" value="{{ (item.parentesco or '') if item else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navegación entre tabs -->
+            <div class="flex justify-between mb-6">
+                <button type="button" @click="activeTab = 'direccion'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+                    Anterior: Dirección
+                </button>
+                <button type="button" @click="activeTab = 'ocasiones'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    Siguiente: Ocasiones
+                    <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 5: OCASIONES ESPECIALES ==================== -->
+        <div x-show="activeTab === 'ocasiones'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+            <!-- Dirección de Obsequios -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6" x-data="obsequiosData()">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="gift" class="w-5 h-5 mr-2 text-pink-500"></i>
+                        Dirección de Obsequios
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <!-- Check usar dirección laboral -->
+                    <div class="mb-4">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" name="usar_direccion_laboral" value="true" x-model="usarLaboral"
+                                   class="w-5 h-5 rounded border-dark-300 text-primary-500 focus:ring-primary-500">
+                            <span class="text-sm font-semibold text-dark-700">Usar dirección laboral para obsequios</span>
+                        </label>
+                        <p class="text-xs text-dark-400 mt-1 ml-8">Si está marcado, los obsequios se enviarán a la dirección laboral</p>
+                    </div>
+
+                    <!-- Campos dirección obsequios (ocultos si usa laboral) -->
+                    <div x-show="!usarLaboral" x-transition class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">País</label>
+                            <select name="dir_obsequios_pais" x-model="pais" @change="onPaisChange()" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                                <option value="">Seleccionar...</option>
+                                <template x-for="p in paises" :key="p">
+                                    <option :value="p" x-text="p"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Provincia</label>
+                            <select name="dir_obsequios_provincia" x-model="provincia" @change="onProvinciaChange()" :disabled="!pais" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all disabled:opacity-50">
+                                <option value="">Seleccionar...</option>
+                                <template x-for="prov in provinciasActuales" :key="prov">
+                                    <option :value="prov" x-text="prov"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Localidad</label>
+                            <select name="dir_obsequios_localidad" x-model="localidad" :disabled="!provincia" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all disabled:opacity-50">
+                                <option value="">Seleccionar...</option>
+                                <template x-for="loc in localidadesActuales" :key="loc">
+                                    <option :value="loc" x-text="loc"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Código Postal</label>
+                            <input type="text" name="dir_obsequios_codigo_postal" value="{{ (item.dir_obsequios_codigo_postal or '') if item else '' }}"
+                                   inputmode="numeric" maxlength="10"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Barrio</label>
+                            <input type="text" name="dir_obsequios_barrio" value="{{ (item.dir_obsequios_barrio or '') if item else '' }}"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Calle</label>
+                            <input type="text" name="dir_obsequios_calle" value="{{ (item.dir_obsequios_calle or '') if item else '' }}"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Número</label>
+                            <input type="text" name="dir_obsequios_numero" value="{{ (item.dir_obsequios_numero or '') if item else '' }}"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Piso</label>
+                            <input type="text" name="dir_obsequios_piso" value="{{ (item.dir_obsequios_piso or '') if item else '' }}"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-dark-700 mb-2">Departamento</label>
+                            <input type="text" name="dir_obsequios_departamento" value="{{ (item.dir_obsequios_departamento or '') if item else '' }}"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ocasiones Especiales -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="cake" class="w-5 h-5 mr-2 text-pink-500"></i>
+                        Preferencias para Ocasiones Especiales
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Preferencia Alimentaria</label>
+                        <select name="preferencia_alimentaria" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Dulce" {{ 'selected' if item and item.preferencia_alimentaria == 'Dulce' else '' }}>Dulce</option>
+                            <option value="Salado" {{ 'selected' if item and item.preferencia_alimentaria == 'Salado' else '' }}>Salado</option>
+                            <option value="Sin TACC" {{ 'selected' if item and item.preferencia_alimentaria == 'Sin TACC' else '' }}>Sin TACC</option>
+                            <option value="Vegano" {{ 'selected' if item and item.preferencia_alimentaria == 'Vegano' else '' }}>Vegano</option>
+                            <option value="Vegetariano" {{ 'selected' if item and item.preferencia_alimentaria == 'Vegetariano' else '' }}>Vegetariano</option>
+                            <option value="Sin restricciones" {{ 'selected' if item and item.preferencia_alimentaria == 'Sin restricciones' else '' }}>Sin restricciones</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Instrucciones Adicionales de Entrega</label>
+                        <textarea name="instrucciones_entrega" rows="2" maxlength="500"
+                                  placeholder="Ej: Dejar en recepción, preguntar por..."
+                                  class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">{{ (item.instrucciones_entrega or '') if item else '' }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Navegación entre tabs -->
+            <div class="flex justify-start mb-6">
+                <button type="button" @click="activeTab = 'emergencia'; window.scrollTo({top: 0, behavior: 'smooth'})"
+                        class="flex items-center px-5 py-2.5 bg-dark-50 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-100 transition-colors font-medium">
+                    <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+                    Anterior: Emergencia
+                </button>
+            </div>
+        </div>
+
+        <!-- Footer (siempre visible) -->
+        <div class="bg-white rounded-2xl border border-dark-100 px-6 py-4 flex items-center justify-between">
+            <a href="{{ url_for('nomina.empleados_list') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+            <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                {{ 'Guardar Cambios' if item else 'Crear Empleado' }}
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function empleadoSelect(campo, initialId, initialNombre) {
+    return {
+        search: initialNombre || '',
+        selectedId: initialId || '',
+        resultados: [],
+        showDropdown: false,
+        async buscar() {
+            if (this.search.length < 2) { this.resultados = []; return; }
+            try {
+                const resp = await fetch(`/api/v1/nomina/empleados/buscar-select?q=${encodeURIComponent(this.search)}`);
+                this.resultados = await resp.json();
+            } catch (e) { this.resultados = []; }
+        },
+        seleccionar(emp) {
+            this.selectedId = emp.id;
+            this.search = emp.nombre;
+            this.showDropdown = false;
+            this.resultados = [];
+        }
+    }
+}
+
+function direccionData(tipo) {
+    var prefix = 'dir_' + tipo + '_';
+    return {
+        pais: '{{ (item.dir_laboral_pais or "") if item else "" }}',
+        provincia: '{{ (item.dir_laboral_provincia or "") if item else "" }}',
+        localidad: '{{ (item.dir_laboral_localidad or "") if item else "" }}',
+        paises: GEO_DATA.paises,
+        provinciasData: GEO_DATA.provinciasData,
+        localidadesData: GEO_DATA.localidadesData,
+        provinciasActuales: [],
+        localidadesActuales: [],
+        init() {
+            if (this.pais) this.provinciasActuales = this.provinciasData[this.pais] || [];
+            if (this.provincia) this.localidadesActuales = this.localidadesData[this.provincia] || [];
+            // Forzar re-sync encadenado: pais → provincia → localidad
+            var self = this;
+            this.$nextTick(() => {
+                var p = self.pais; self.pais = '';
+                self.$nextTick(() => {
+                    self.pais = p;
+                    self.$nextTick(() => {
+                        var pr = self.provincia; self.provincia = '';
+                        self.$nextTick(() => {
+                            self.provincia = pr;
+                            self.$nextTick(() => {
+                                var l = self.localidad; self.localidad = '';
+                                self.$nextTick(() => { self.localidad = l; });
+                            });
+                        });
+                    });
+                });
+            });
+        },
+        onPaisChange() {
+            this.provinciasActuales = this.provinciasData[this.pais] || [];
+            this.provincia = ''; this.localidad = ''; this.localidadesActuales = [];
+        },
+        onProvinciaChange() {
+            this.localidadesActuales = this.localidadesData[this.provincia] || [];
+            this.localidad = '';
+        }
+    }
+}
+
+function obsequiosData() {
+    return {
+        usarLaboral: {{ 'true' if item and item.usar_direccion_laboral else 'false' }},
+        pais: '{{ (item.dir_obsequios_pais or "") if item else "" }}',
+        provincia: '{{ (item.dir_obsequios_provincia or "") if item else "" }}',
+        localidad: '{{ (item.dir_obsequios_localidad or "") if item else "" }}',
+        paises: GEO_DATA.paises,
+        provinciasData: GEO_DATA.provinciasData,
+        localidadesData: GEO_DATA.localidadesData,
+        provinciasActuales: [],
+        localidadesActuales: [],
+        init() {
+            if (this.pais) this.provinciasActuales = this.provinciasData[this.pais] || [];
+            if (this.provincia) this.localidadesActuales = this.localidadesData[this.provincia] || [];
+            // Forzar re-sync encadenado: pais → provincia → localidad
+            var self = this;
+            this.$nextTick(() => {
+                var p = self.pais; self.pais = '';
+                self.$nextTick(() => {
+                    self.pais = p;
+                    self.$nextTick(() => {
+                        var pr = self.provincia; self.provincia = '';
+                        self.$nextTick(() => {
+                            self.provincia = pr;
+                            self.$nextTick(() => {
+                                var l = self.localidad; self.localidad = '';
+                                self.$nextTick(() => { self.localidad = l; });
+                            });
+                        });
+                    });
+                });
+            });
+        },
+        onPaisChange() {
+            this.provinciasActuales = this.provinciasData[this.pais] || [];
+            this.provincia = ''; this.localidad = ''; this.localidadesActuales = [];
+        },
+        onProvinciaChange() {
+            this.localidadesActuales = this.localidadesData[this.provincia] || [];
+            this.localidad = '';
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    function ddmmyyyyToDate(str) {
+        if (!str) return '';
+        const parts = str.split('/');
+        if (parts.length === 3) return parts[2] + '-' + parts[1] + '-' + parts[0];
+        return str;
+    }
+    
+    function dateToddmmyyyy(dateStr) {
+        if (!dateStr) return '';
+        const parts = dateStr.split('-');
+        if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+        return dateStr;
+    }
+    
+    {% if item %}
+        {% if item.fecha_nacimiento %}
+        var fechaNacInput = document.getElementById('fecha_nacimiento_date');
+        if (fechaNacInput) fechaNacInput.value = ddmmyyyyToDate('{{ item.fecha_nacimiento }}');
+        {% endif %}
+        {% if item.fecha_alta %}
+        var fechaAltaInput = document.getElementById('fecha_alta_date');
+        if (fechaAltaInput) fechaAltaInput.value = ddmmyyyyToDate('{{ item.fecha_alta }}');
+        {% endif %}
+        {% if item.fecha_baja %}
+        var fechaBajaInput = document.getElementById('fecha_baja_date');
+        if (fechaBajaInput) fechaBajaInput.value = ddmmyyyyToDate('{{ item.fecha_baja }}');
+        {% endif %}
+    {% endif %}
+    
+    var formEl = document.querySelector('form');
+    if (formEl) {
+        formEl.addEventListener('htmx:configRequest', function(evt) {
+            var fechaNacDate = document.getElementById('fecha_nacimiento_date');
+            var fechaAltaDate = document.getElementById('fecha_alta_date');
+            
+            if (fechaNacDate && fechaNacDate.value) {
+                evt.detail.parameters['fecha_nacimiento'] = dateToddmmyyyy(fechaNacDate.value);
+            }
+            if (fechaAltaDate && fechaAltaDate.value) {
+                evt.detail.parameters['fecha_alta'] = dateToddmmyyyy(fechaAltaDate.value);
+            }
+            
+            var fechaBajaDate = document.getElementById('fecha_baja_date');
+            if (fechaBajaDate && fechaBajaDate.value) {
+                evt.detail.parameters['fecha_baja'] = dateToddmmyyyy(fechaBajaDate.value);
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

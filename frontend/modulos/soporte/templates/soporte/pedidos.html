@@ -1,0 +1,83 @@
+{% extends "core/base.html" %}
+
+{% block title %}Pedidos de Compra - Soporte IT{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Pedidos de Compra</h1>
+            <p class="text-dark-500">Seguimiento de pedidos generados desde tickets de soporte</p>
+        </div>
+    </div>
+
+    <!-- Filtros por estado -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ url_for('soporte.pedidos_list') }}"
+               class="px-4 py-2 rounded-xl text-sm font-medium transition-all
+                      {% if not filtro_estado %}bg-dark-900 text-white{% else %}bg-dark-100 text-dark-600 hover:bg-dark-200{% endif %}">
+                Todos
+            </a>
+            {% for estado, label, color in [
+                ('borrador', 'Borrador', 'bg-gray-100 text-gray-700'),
+                ('pendiente_aprobacion', 'Pendiente Aprobación', 'bg-amber-100 text-amber-700'),
+                ('aprobado', 'Aprobado', 'bg-emerald-100 text-emerald-700'),
+                ('rechazado', 'Rechazado', 'bg-red-100 text-red-700'),
+                ('en_compra', 'En Compra', 'bg-blue-100 text-blue-700'),
+                ('recibido', 'Recibido', 'bg-teal-100 text-teal-700'),
+                ('cancelado', 'Cancelado', 'bg-dark-100 text-dark-500')
+            ] %}
+            <a href="{{ url_for('soporte.pedidos_list', estado=estado) }}"
+               class="px-4 py-2 rounded-xl text-sm font-medium transition-all
+                      {% if filtro_estado == estado %}bg-dark-900 text-white{% else %}{{ color }} hover:opacity-80{% endif %}">
+                {{ label }}
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="pedidos-table">
+            {% include "soporte/partials/pedidos_table.html" %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal detalle pedido -->
+<div id="pedido-modal-overlay"
+     class="fixed inset-0 z-50 hidden items-center justify-center p-4"
+     onclick="if(event.target===this){closePedidoModal()}">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm"></div>
+    <div id="pedido-modal-content"
+         class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10">
+        <div class="p-8 text-center text-dark-400">
+            <i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto"></i>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openPedidoModal(pedidoId) {
+    const overlay = document.getElementById('pedido-modal-overlay');
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    htmx.ajax('GET', '/soporte/pedidos/' + pedidoId, {target: '#pedido-modal-content'});
+}
+
+function closePedidoModal() {
+    const overlay = document.getElementById('pedido-modal-overlay');
+    overlay.classList.add('hidden');
+    overlay.classList.remove('flex');
+}
+
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closePedidoModal();
+});
+</script>
+{% endblock %}

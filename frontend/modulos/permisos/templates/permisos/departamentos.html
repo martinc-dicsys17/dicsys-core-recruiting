@@ -1,0 +1,75 @@
+{% extends "core/base.html" %}
+
+{% block title %}Permisos por Departamento - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('permisos.grupos_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500 transition-colors">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">Permisos por Departamento</h1>
+            <p class="text-dark-500 text-sm">Visualizá qué grupos de permisos tiene cada departamento</p>
+        </div>
+    </div>
+
+    {% if departamentos %}
+    <div class="space-y-4">
+        {% for dep in departamentos %}
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <!-- Header del departamento -->
+            <div class="flex items-center justify-between p-5 border-b border-dark-100 bg-dark-50/50">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center mr-3">
+                        <i data-lucide="building-2" class="w-5 h-5 text-primary-600"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-dark-900">{{ dep.departamento_nombre }}</h3>
+                        <p class="text-xs text-dark-400">{{ dep.total_empleados }} empleado{{ 's' if dep.total_empleados != 1 else '' }}</p>
+                    </div>
+                </div>
+                {% if dep.grupos %}
+                <span class="px-2.5 py-1 text-xs font-medium bg-primary-100 text-primary-700 rounded-lg">
+                    {{ dep.grupos|length }} grupo{{ 's' if dep.grupos|length != 1 else '' }}
+                </span>
+                {% else %}
+                <span class="px-2.5 py-1 text-xs font-medium bg-dark-100 text-dark-500 rounded-lg">Sin grupos</span>
+                {% endif %}
+            </div>
+
+            <!-- Grupos del departamento -->
+            {% if dep.grupos %}
+            <div class="p-4">
+                <div class="flex flex-wrap gap-2">
+                    {% for grupo in dep.grupos %}
+                    <a href="{{ url_for('permisos.edit_grupo', id=grupo.grupo_id) }}"
+                       class="flex items-center px-3 py-1.5 rounded-lg border transition-colors
+                              {% if grupo.grupo_activo %}bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100{% else %}bg-dark-50 border-dark-200 text-dark-500 hover:bg-dark-100{% endif %}">
+                        <i data-lucide="shield" class="w-3.5 h-3.5 mr-1.5"></i>
+                        <span class="text-sm font-medium">{{ grupo.grupo_nombre }}</span>
+                        <span class="ml-2 text-xs opacity-70">{{ grupo.cantidad_usuarios }} usuario{{ 's' if grupo.cantidad_usuarios != 1 else '' }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="p-4 text-center text-dark-400 text-sm">
+                Ningún usuario de este departamento tiene grupos asignados
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-2xl border border-dark-100 p-16 text-center">
+        <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="building-2" class="w-10 h-10 text-dark-300"></i>
+        </div>
+        <p class="text-dark-900 font-semibold mb-1">No hay departamentos</p>
+        <p class="text-dark-500 text-sm">Creá departamentos en el módulo de Nómina para ver el resumen aquí</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

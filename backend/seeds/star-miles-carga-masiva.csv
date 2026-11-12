@@ -1,0 +1,58 @@
+--- CATEGORIAS ---
+nombre,descripcion,color,icono
+Cultura,"Desafíos relacionados con valores, clima laboral y trabajo en equipo",#8B5CF6,users
+Formación,"Desafíos de aprendizaje, capacitación y desarrollo profesional",#3B82F6,graduation-cap
+Innovación,"Desafíos orientados a nuevas ideas, tecnología y mejora continua",#10B981,lightbulb
+Marketing,Acciones relacionadas con generación de contenido para comunicaciones externas.,#f73b3b,star
+Negocio,"Desafíos enfocados en crecimiento, ventas y eficiencia operativa",#F59E0B,briefcase
+
+--- DESAFIOS ---
+nombre,descripcion,categoria_nombre,star_miles,alcance,fecha_inicio,fecha_vencimiento,activo
+Colaboración técnica Inter-Equipo,Reconocimiento por hora por colaboración de Dicsyanos en otros equipos de la operación o entrevistas técnicas.,Cultura,50,Área Operaciones,2026-03-30,2026-06-30,SI
+Colaboración técnica con Área Preventa,Reconocimiento por hora por colaboración de técnica en el area de Preventa.,Cultura,100,Área Operaciones,2026-03-30,2026-06-30,SI
+Dicsys School - Organización y Planificación,"Planificación y coordinación de charlas y actividades con escuelas técnicas y ProA (Programa Avanzado de Educación Secundaria).",Cultura,250,Empresa,2026-03-30,2026-06-30,SI
+Eventos Publicos representando a Dicsys | Participación,Asistencia a eventos externos en representación de Dicsys.,Cultura,100,Empresa,2026-03-30,2026-06-30,SI
+Eventos Publicos representando a Dicsys | Stand,"Participación en stand en eventos externos, representando a Dicsys.",Cultura,300,Empresa,2026-03-30,2026-06-30,SI
+Presencialidad Diaria,Presencialidad diaria en oficinas de Dicsys.,Cultura,50,Área Operaciones,2026-03-30,2026-06-30,SI
+Referido con contratación Junior,Referir un candidato Junior que sea contratado y supere el período de prueba.,Cultura,1500,Área Operaciones,2026-03-30,2026-06-30,SI
+Referido con contratación Semi Sr.,Referir un candidato Semi Senior que sea contratado y supere el período de prueba.,Cultura,2000,Área Operaciones,2026-03-30,2026-06-30,SI
+Referido con contratación Senior,Referir un candidato Senior que sea contratado y supere el período de prueba.,Cultura,2500,Área Operaciones,2026-03-30,2026-06-30,SI
+Reuniones presenciales de equipos  | Organización y planificacion (interno),"Organización de reuniones presenciales de equipo, con temática definida, en oficinas de Dicsys.",Cultura,300,Área Operaciones,2026-03-30,2026-06-30,SI
+Reuniones presenciales de equipos  | Organización y planificación (con cliente),"Coordinación de reuniones presenciales de equipo con el cliente, en oficinas de Dicsys o del cliente.",Cultura,500,Área Operaciones,2026-03-30,2026-06-30,SI
+Reuniones presenciales de equipos | Participación,"Participación en reuniones presenciales de equipo, con temática definida, en oficinas de Dicsys o del cliente.",Cultura,100,Área Operaciones,2026-03-30,2026-06-30,SI
+Speaker,Participación como speaker en un evento externo en representación de Dicsys.,Cultura,3500,Empresa,2026-03-30,2026-06-30,SI
+Speaker | Charlas temáticas para clientes,"Speaker en charlas a clientes, con temática definida.",Cultura,500,Área Operaciones,2026-03-30,2026-06-30,SI
+Speaker | Profesor,"Reconocimiento por hora como profesor o speaker en iniciativas internas (Dicsys Academy, Dicsys School, cursos internos o charlas internas).",Cultura,100,Empresa,2026-03-30,2026-06-30,SI
+Asistencia Perfecta Inglés,Asistencia perfecta del 100% a las clases de Inglés,Formación,500,Área Operaciones,2026-03-30,2026-06-30,SI
+Certificaciones aprobadas,"Certificación Tecnologías / Herramientas, definidas y planificadas con su líder",Formación,1500,Área Operaciones,2026-03-30,2026-06-30,SI
+AI Certified Developer - FULL TEAM | Nivel 1,Completar el Nivel 1 de la certificación AI Developer por todo el equipo completo. Puntaje asignado por colaborador.,Innovación,50,Área Operaciones,2026-03-30,2026-06-30,SI
+AI Certified Developer | Nivel 1,Completar el Nivel 1 de la Certificación de AI Developer,Innovación,100,Empresa,2026-03-30,2026-06-30,SI
+AI Certified Staff | Nivel 1,Completar el Nivel 1 de la Certificación de AI Staff,Innovación,100,Empresa,2026-03-30,2026-06-30,SI
+Track #1 | Participación en charlas onboarding,Participación en las charlas de onboarding definidas.,Innovación,10,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #2 | Curso AI No Code - UTN,Completar y aprobar el curso AI No Code de UTN.,Innovación,100,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #2 | Curso Docker interno,Completar y aprobar el Curso Docker interno.,Innovación,10,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #2 | Curso Github interno,Completar y aprobar el Curso Github interno,Innovación,10,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #2 | Curso N8n Automatizaciones,Completar y aprobar el curso N8n Automatizaciones,Innovación,50,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #2 | Curso Python interno,Completar y aprobar el Curso de Python interno,Innovación,30,Área Operaciones,2026-03-01,2026-06-30,SI
+Track #2 | Rutas GCP Dev con AI / APIs,Completar y aprobar rutas GCP APIs Developer,Innovación,200,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #4 | AI Challenge - Innovación - Presentacion y participacion,"Participación y presentación en un AI Challenge, cumpliendo los requisitos establecidos.",Innovación,200,Empresa,2026-03-30,2026-06-30,SI
+Track #4 | AI Challenge - Puesto 1,Primer puesto del Challenge de IA,Innovación,7000,Empresa,2026-03-01,2026-06-30,SI
+Track #4 | AI Challenge - Puesto 2,Segundo puesto del Challenge de IA,Innovación,3500,Empresa,2026-03-30,2026-06-30,SI
+Track #4 | AI Challenge - Puesto 3,Tercer puesto del Challenge de IA.,Innovación,2000,Empresa,2026-03-30,2026-06-30,SI
+Track #4 | Propuesta de mejora de procesos internos,"Propuesta, desarrollo e implementación de mejoras en procesos internos, validadas por el área responsable.",Innovación,1000,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #4 | Propuesta de mejora diaria en cliente,"Propuesta de mejora en cliente (idea, desarrollo e implementación) validada por el cliente.",Innovación,1300,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #5 | Idea - Construcción - Implementación de MVP en cliente,"Diseño, construcción e implementación de un MVP en cliente.",Innovación,3500,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #6 | Participar de Tech Talks,Participación como oyente en Tech Talks.,Innovación,10,Área Operaciones,2026-03-30,2026-06-30,SI
+Track #6 | Speaker Tech Talks,"Participar como speaker en Tech Talks, con planificación previa y aprobación del área de Innovación.",Innovación,50,Área Operaciones,2026-03-30,2026-06-30,SI
+Casos de éxito en clientes para redes sociales / web / blog,"Creación de casos de éxito de clientes para redes sociales, web o blog de Dicsys, con coordinación previa con el área de Marketing y Operaciones.",Marketing,500,Área Operaciones,2026-03-30,2026-06-30,SI
+Generacion Contenido para redes sociales / web / blog,"Generación de contenido para redes sociales, web o blog de Dicsys, con coordinación previa con el área de Marketing y Operaciones.",Marketing,250,Área Operaciones - Innovación - Preventa,2026-03-30,2026-06-30,SI
+Nueva oportunidad | Cross selling,Proponer una oportunidad de cross selling que se concrete y genere facturación.,Negocio,7000,Empresa,2026-03-30,2026-06-30,SI
+Nueva oportunidad | Nuevo cliente,Proponer una nueva oportunidad de cliente que se concrete y genere facturación.,Negocio,13000,Empresa,2026-03-30,2026-06-30,SI
+Nueva oportunidad | Up selling,Proponer una oportunidad de up selling que se concrete y genere facturación.,Negocio,2000,Empresa,2026-03-30,2026-06-30,SI
+
+--- ITEMS CANJE ---
+tipo,nombre,descripcion,star_miles_costo,stock,imagen_url,activo
+Producto,Dia Dicsyano,"Día Dicsyano: día disponible para utilizar en una fecha a elección, previa coordinación con el líder de equipo / servicio.",2000,,,SI
+Producto,Gift Card,Gift Card de $50.000 para utilizar en comercios adheridos.,340,,,SI
+Producto,Kit Dicsys,Seleccioná el o los productos que quieras canjear de nuestro Kit Dicsyano.,500,,,SI
+Mercado Libre,"Producto de Mercado Libre","Producto de Mercado Libre con un valor superior a $50.000 y envío gratuito. El costo en Star Miles se calcula en función del precio real del producto y su equivalencia en Star Miles.",,,,SI

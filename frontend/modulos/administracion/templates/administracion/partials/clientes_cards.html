@@ -1,0 +1,115 @@
+{% if items %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+    {% for item in items %}
+    <div class="bg-white rounded-2xl border border-dark-100 hover:shadow-soft hover:border-primary-200 transition-all overflow-hidden">
+        <!-- Barra de estado -->
+        {% if item.activo %}
+        <div class="h-1 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
+        {% else %}
+        <div class="h-1 bg-gradient-to-r from-red-400 to-red-500"></div>
+        {% endif %}
+
+        <div class="p-4">
+            <!-- Header: logo + nombre + estado -->
+            <div class="flex items-start gap-3 mb-3">
+                <a href="{{ url_for('administracion.clientes_view', id=item.id) }}" class="flex-shrink-0">
+                    <div class="w-12 h-12 rounded-xl border border-dark-200 bg-dark-50 flex items-center justify-center overflow-hidden hover:border-primary-300 transition-colors">
+                        {% if item.logo %}
+                        <img src="{{ item.logo }}" alt="Logo de {{ item.razon_social }}" class="max-w-full max-h-full object-contain p-1">
+                        {% else %}
+                        <i data-lucide="{% if item.tipo == 'Empresa' %}building-2{% else %}user{% endif %}" class="w-6 h-6 text-dark-400"></i>
+                        {% endif %}
+                    </div>
+                </a>
+                <div class="min-w-0 flex-1">
+                    <a href="{{ url_for('administracion.clientes_view', id=item.id) }}"
+                       class="font-bold text-dark-900 hover:text-primary-600 transition-colors truncate block">
+                        {{ item.razon_social }}
+                    </a>
+                    {% if item.nombre_fantasia %}
+                    <p class="text-xs text-dark-400 truncate">{{ item.nombre_fantasia }}</p>
+                    {% endif %}
+                </div>
+                {% if item.activo %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded-md flex-shrink-0">Activo</span>
+                {% else %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 rounded-md flex-shrink-0">Inactivo</span>
+                {% endif %}
+            </div>
+
+            <!-- Info -->
+            <div class="space-y-1.5 mb-3">
+                <div class="flex items-center text-xs text-dark-500">
+                    <i data-lucide="hash" class="w-3.5 h-3.5 mr-2 text-dark-400 flex-shrink-0"></i>
+                    <span class="font-mono">{{ item.cuit }}</span>
+                </div>
+                <div class="flex items-center text-xs text-dark-500">
+                    <i data-lucide="file-text" class="w-3.5 h-3.5 mr-2 text-dark-400 flex-shrink-0"></i>
+                    <span>{{ item.responsabilidad_afip }}</span>
+                </div>
+            </div>
+
+            <!-- Badges tipo + categorías -->
+            <div class="flex flex-wrap gap-1.5 mb-3">
+                <span class="px-2 py-0.5 text-[10px] font-medium rounded-md
+                    {% if item.tipo == 'Empresa' %}bg-blue-50 text-blue-700{% else %}bg-purple-50 text-purple-700{% endif %}">
+                    {{ item.tipo }}
+                </span>
+                {% for cat in item.categorias %}
+                <span class="px-2 py-0.5 text-[10px] font-medium bg-dark-100 text-dark-600 rounded-md">{{ cat.nombre }}</span>
+                {% endfor %}
+            </div>
+
+            <!-- Footer: ver detalle + acciones -->
+            <div class="pt-3 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('administracion.clientes_view', id=item.id) }}"
+                   class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center">
+                    Ver detalle
+                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 ml-1"></i>
+                </a>
+                <div class="flex items-center space-x-1">
+                    <a href="{{ url_for('administracion.clientes_edit', id=item.id) }}"
+                       class="p-1.5 text-dark-300 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                       aria-label="Editar cliente">
+                        <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                    </a>
+                    <button @click="deleteId = '{{ item.id }}'; showDeleteModal = true"
+                            class="p-1.5 text-dark-300 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            aria-label="Eliminar cliente">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="px-6 py-16 text-center">
+    <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="building-2" class="w-10 h-10 text-dark-300"></i>
+    </div>
+    <p class="text-dark-900 font-semibold mb-1">No hay clientes</p>
+    <a href="{{ url_for('administracion.clientes_create') }}"
+       class="text-primary-600 hover:text-primary-700 font-medium">
+        Crear el primero →
+    </a>
+</div>
+{% endif %}
+
+{% if total_paginas is defined and total_paginas > 1 %}
+<div class="px-4 py-4 flex items-center justify-between">
+    <p class="text-sm text-dark-500">{{ total }} clientes en total</p>
+    <div class="flex gap-2">
+        {% if pagina > 1 %}
+        <a href="{{ url_for('administracion.clientes_list', pagina=pagina-1) }}"
+           class="px-3 py-1.5 border border-dark-200 rounded-lg text-sm hover:bg-dark-50">Anterior</a>
+        {% endif %}
+        <span class="px-3 py-1.5 text-sm text-dark-500">{{ pagina }} / {{ total_paginas }}</span>
+        {% if pagina < total_paginas %}
+        <a href="{{ url_for('administracion.clientes_list', pagina=pagina+1) }}"
+           class="px-3 py-1.5 border border-dark-200 rounded-lg text-sm hover:bg-dark-50">Siguiente</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

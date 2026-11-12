@@ -1,0 +1,132 @@
+{% if items %}
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+    {% for item in items %}
+    <div class="bg-white rounded-2xl border border-dark-100 hover:shadow-soft hover:border-primary-200 transition-all overflow-hidden">
+        <!-- Status bar -->
+        {% if item.activo %}
+        <div class="h-1 bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
+        {% else %}
+        <div class="h-1 bg-gradient-to-r from-red-400 to-red-500"></div>
+        {% endif %}
+
+        <div class="p-4">
+            <!-- Header: foto + nombre + estado -->
+            <div class="flex items-start gap-3 mb-3">
+                <a href="{{ url_for('nomina.empleados_view', id=item.id) }}" class="flex-shrink-0">
+                    <img src="{{ (item.foto_thumbnail or item.foto)|storage_url or '/static/profesional.svg' }}" alt=""
+                         class="w-12 h-12 rounded-xl object-cover border border-dark-200 hover:border-primary-300 transition-colors">
+                </a>
+                <div class="min-w-0 flex-1">
+                    <a href="{{ url_for('nomina.empleados_view', id=item.id) }}" 
+                       class="font-bold text-dark-900 hover:text-primary-600 transition-colors truncate block">
+                        {{ item.empleado }}
+                    </a>
+                    <p class="text-xs text-dark-400 font-mono">{{ item.cuil }}</p>
+                </div>
+                {% if item.activo %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold bg-emerald-100 text-emerald-700 rounded-md flex-shrink-0">Activo</span>
+                {% else %}
+                <span class="px-2 py-0.5 text-[10px] font-semibold bg-red-100 text-red-700 rounded-md flex-shrink-0">Inactivo</span>
+                {% endif %}
+            </div>
+
+            <!-- Info -->
+            <div class="space-y-2 mb-3">
+                {% if item.email_corporativo %}
+                <div class="flex items-center text-xs text-dark-500">
+                    <i data-lucide="mail" class="w-3.5 h-3.5 mr-2 text-dark-400 flex-shrink-0"></i>
+                    <span class="truncate">{{ item.email_corporativo }}</span>
+                </div>
+                {% endif %}
+                {% if item.departamento_nombre %}
+                <div class="flex items-center text-xs text-dark-500">
+                    <i data-lucide="building-2" class="w-3.5 h-3.5 mr-2 text-dark-400 flex-shrink-0"></i>
+                    <span>{{ item.departamento_nombre }}</span>
+                </div>
+                {% endif %}
+                {% if item.perfil_nombre %}
+                <div class="flex items-center text-xs text-dark-500">
+                    <i data-lucide="briefcase" class="w-3.5 h-3.5 mr-2 text-dark-400 flex-shrink-0"></i>
+                    <span>{{ item.perfil_nombre }}</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Badges -->
+            <div class="flex flex-wrap gap-1.5 mb-3">
+                {% if item.seniority %}
+                <span class="px-2 py-0.5 text-[10px] font-medium bg-primary-50 text-primary-700 rounded-md">{{ item.seniority }}</span>
+                {% endif %}
+                {% if item.antiguedad is defined %}
+                <span class="px-2 py-0.5 text-[10px] font-medium bg-amber-50 text-amber-700 rounded-md">{{ item.antiguedad }} años</span>
+                {% endif %}
+            </div>
+
+            <!-- Footer: acciones -->
+            <div class="pt-3 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('nomina.empleados_view', id=item.id) }}" 
+                   class="text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center">
+                    Ver detalle
+                    <i data-lucide="arrow-right" class="w-3.5 h-3.5 ml-1"></i>
+                </a>
+                <div class="flex items-center space-x-1">
+                    <a href="{{ url_for('nomina.empleados_edit', id=item.id) }}" 
+                       class="p-1.5 text-dark-300 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Editar">
+                        <i data-lucide="edit-2" class="w-3.5 h-3.5"></i>
+                    </a>
+                    {% if item.activo %}
+                    <button onclick="document.body.dispatchEvent(new CustomEvent('abrirBaja', {detail: {id: '{{ item.id }}', nombre: '{{ item.empleado }}'}}))" 
+                            class="p-1.5 text-dark-300 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors" title="Dar de Baja">
+                        <i data-lucide="user-minus" class="w-3.5 h-3.5"></i>
+                    </button>
+                    {% else %}
+                    <button onclick="document.body.dispatchEvent(new CustomEvent('abrirReactivar', {detail: {id: '{{ item.id }}', nombre: '{{ item.empleado }}'}}))" 
+                            class="p-1.5 text-dark-300 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors" title="Reactivar">
+                        <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% else %}
+<div class="px-6 py-16 text-center">
+    <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="users" class="w-10 h-10 text-dark-300"></i>
+    </div>
+    <p class="text-dark-900 font-semibold mb-1">No hay empleados</p>
+    <p class="text-dark-400 mb-4">Comenzá agregando el primer empleado</p>
+    <a href="{{ url_for('nomina.empleados_create') }}" class="text-primary-600 hover:text-primary-700 font-medium">
+        Crear empleado →
+    </a>
+</div>
+{% endif %}
+
+{% if total_paginas is defined and total_paginas > 1 %}
+<div class="px-4 py-4 flex items-center justify-between">
+    <p class="text-sm text-dark-500">
+        Página {{ pagina }} de {{ total_paginas }}
+    </p>
+    <div class="flex space-x-2">
+        {% if pagina > 1 %}
+        <a href="{{ url_for('nomina.empleados_list', pagina=pagina-1, buscar=buscar) }}" 
+           hx-get="{{ url_for('nomina.empleados_list', pagina=pagina-1, buscar=buscar) }}&view=cards"
+           hx-target="#empleados-cards"
+           class="px-4 py-2 text-sm border border-dark-200 rounded-lg hover:bg-dark-50 transition-colors">
+            Anterior
+        </a>
+        {% endif %}
+        {% if pagina < total_paginas %}
+        <a href="{{ url_for('nomina.empleados_list', pagina=pagina+1, buscar=buscar) }}"
+           hx-get="{{ url_for('nomina.empleados_list', pagina=pagina+1, buscar=buscar) }}&view=cards"
+           hx-target="#empleados-cards"
+           class="px-4 py-2 text-sm border border-dark-200 rounded-lg hover:bg-dark-50 transition-colors">
+            Siguiente
+        </a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

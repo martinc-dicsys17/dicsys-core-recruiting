@@ -1,0 +1,16 @@
+{% if categorias %}
+<div class="flex flex-wrap gap-3">
+    {% for cat in categorias %}
+    <label class="flex items-center gap-2 cursor-pointer px-4 py-2 rounded-xl border border-dark-200 hover:border-primary-400 hover:bg-primary-50 transition-all has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50">
+        <input type="checkbox" name="categoria_ids" value="{{ cat.id }}"
+               {% if selected_ids and cat.id in selected_ids %}checked{% endif %}
+               class="w-4 h-4 text-primary-600 rounded">
+        <span class="text-sm font-medium text-dark-700">{{ cat.nombre }}</span>
+    </label>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-dark-400 text-sm">No hay categorías creadas.
+    <a href="{{ url_for('administracion.categorias_list') }}" target="_blank" class="text-primary-600 hover:underline">Crear categorías →</a>
+</p>
+{% endif %}

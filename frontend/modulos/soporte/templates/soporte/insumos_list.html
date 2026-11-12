@@ -1,0 +1,130 @@
+{% extends "core/base.html" %}
+
+{% block title %}Insumos - Soporte - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ showDeleteModal: false, deleteId: null, showStockModal: false, stockId: null, stockNombre: '' }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <div class="flex items-center space-x-2 mb-1">
+                <a href="{{ url_for('soporte.dashboard') }}" class="text-dark-400 hover:text-primary-500 transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                </a>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-dark-300"></i>
+                <a href="{{ url_for('soporte.stock_list') }}" class="text-dark-400 hover:text-primary-500 transition-colors">
+                    <span class="text-sm font-medium">Stock</span>
+                </a>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-dark-300"></i>
+                <span class="text-sm font-medium text-dark-500">Insumos</span>
+            </div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Insumos 🔧</h1>
+            <p class="text-dark-500">Gestiona el stock de insumos y repuestos para soporte IT</p>
+        </div>
+        <div class="flex items-center space-x-3 mt-4 md:mt-0">
+            <div class="flex bg-white p-1 rounded-xl border border-dark-100 items-center">
+                <a href="{{ url_for('soporte.stock_list') }}"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all text-dark-400 hover:text-dark-700">Activos</a>
+                <a href="{{ url_for('soporte.insumos_list') }}"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-primary-50 text-primary-600 shadow-sm">Insumos</a>
+            </div>
+            <a href="{{ url_for('soporte.insumos_consumos_list') }}" class="flex items-center px-4 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 font-medium">
+                <i data-lucide="clipboard-list" class="w-4 h-4 mr-2"></i>Consumos
+            </a>
+            <a href="{{ url_for('soporte.insumos_create') }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Insumo
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar insumos..." name="buscar" value="{{ buscar or '' }}"
+                       hx-get="{{ url_for('soporte.insumos_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#insumos-table"
+                       hx-include="[name='categoria'], [name='stock_bajo']"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            <select name="categoria"
+                    hx-get="{{ url_for('soporte.insumos_list') }}"
+                    hx-trigger="change"
+                    hx-target="#insumos-table"
+                    hx-include="[name='buscar'], [name='stock_bajo']"
+                    class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                <option value="">Todas las categorías</option>
+                <option value="insumo" {{ 'selected' if categoria == 'insumo' else '' }}>🖱️ Insumos</option>
+            </select>
+            <label class="flex items-center space-x-2 cursor-pointer">
+                <input type="checkbox" name="stock_bajo" value="true" {{ 'checked' if stock_bajo else '' }}
+                       hx-get="{{ url_for('soporte.insumos_list') }}"
+                       hx-trigger="change"
+                       hx-target="#insumos-table"
+                       hx-include="[name='buscar'], [name='categoria']"
+                       class="w-4 h-4 text-primary-600 border-dark-300 rounded focus:ring-primary-500">
+                <span class="text-dark-700">Solo stock bajo</span>
+            </label>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="insumos-table" hx-get="{{ url_for('soporte.insumos_list') }}" hx-trigger="insumoDeleted from:body, stockInsumoAjustado from:body">
+            {% include "soporte/partials/insumos_table.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar insumo?</h3>
+                <p class="text-dark-500 mb-6">Esta acción marcará el insumo como eliminado.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button @click="htmx.ajax('DELETE', '/soporte/insumos/' + deleteId + '/eliminar', {target: '#insumos-table'}); showDeleteModal = false" class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600">Eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Ajustar Stock -->
+    <div x-show="showStockModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showStockModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="mb-6">
+                <h3 class="text-xl font-bold text-dark-900 mb-1">Ajustar Stock</h3>
+                <p class="text-dark-500" x-text="stockNombre"></p>
+            </div>
+            <form id="ajustar-stock-form" @submit.prevent="
+                const formData = new FormData($el);
+                htmx.ajax('POST', '/soporte/insumos/' + stockId + '/ajustar-stock', {target: '#insumos-table', values: Object.fromEntries(formData)});
+                showStockModal = false;
+                $el.reset();
+            ">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Cantidad (+ agregar, - quitar)</label>
+                        <input type="number" name="cantidad" required class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Motivo (opcional)</label>
+                        <input type="text" name="motivo" class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                </div>
+                <div class="flex space-x-3 mt-6">
+                    <button type="button" @click="showStockModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                    <button type="submit" class="flex-1 px-5 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600">Ajustar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

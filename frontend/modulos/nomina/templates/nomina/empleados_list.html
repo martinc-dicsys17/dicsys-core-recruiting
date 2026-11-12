@@ -1,0 +1,554 @@
+{% extends "core/base.html" %}
+
+{% block title %}Empleados - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="empleadosFiltros()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Empleados</h1>
+            <p class="text-dark-500">Gestión de empleados de la empresa</p>
+        </div>
+        <a href="{{ url_for('nomina.empleados_create') }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Empleado
+        </a>
+    </div>
+    
+    <!-- Barra de Filtros Principal -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-4">
+        <!-- Fila 1: Búsqueda + Agrupar + Filtros -->
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <!-- Búsqueda -->
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar por código, CUIL, nombre, DNI..." 
+                       x-model="buscar"
+                       @input.debounce.300ms="aplicarFiltros()"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            
+            <!-- Agrupar por -->
+            <div class="relative" x-data="{ openAgrupar: false }">
+                <button @click="openAgrupar = !openAgrupar" class="flex items-center px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl hover:bg-dark-100 transition-colors">
+                    <i data-lucide="layers" class="w-4 h-4 mr-2 text-dark-500"></i>
+                    <span class="text-dark-700" x-text="agruparPor ? 'Agrupado: ' + agruparLabels[agruparPor] : 'Agrupar por'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="openAgrupar" @click.away="openAgrupar = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl border border-dark-100 shadow-lg z-20">
+                    <div class="p-2">
+                        <button @click="setAgrupar(null); openAgrupar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': !agruparPor }">
+                            Sin agrupar
+                        </button>
+                        <button @click="setAgrupar('departamento'); openAgrupar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': agruparPor === 'departamento' }">
+                            Departamento
+                        </button>
+                        <button @click="setAgrupar('perfil'); openAgrupar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': agruparPor === 'perfil' }">
+                            Perfil
+                        </button>
+                        <button @click="setAgrupar('estado'); openAgrupar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': agruparPor === 'estado' }">
+                            Estado
+                        </button>
+                        <button @click="setAgrupar('seniority'); openAgrupar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': agruparPor === 'seniority' }">
+                            Seniority
+                        </button>
+                        <button @click="setAgrupar('antiguedad'); openAgrupar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': agruparPor === 'antiguedad' }">
+                            Antigüedad
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Botón Filtros -->
+            <button @click="showFiltros = !showFiltros" 
+                    class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                    :class="tieneFilrosActivos() ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                <i data-lucide="filter" class="w-4 h-4 mr-2"></i>
+                <span>Filtros</span>
+                <span x-show="tieneFilrosActivos()" class="ml-2 px-2 py-0.5 text-xs bg-primary-500 text-white rounded-full" x-text="contarFiltros()"></span>
+            </button>
+            
+            <!-- Ordenar por -->
+            <div class="relative" x-data="{ openOrdenar: false }">
+                <button @click="openOrdenar = !openOrdenar" 
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="ordenarPor ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="arrow-up-down" class="w-4 h-4 mr-2"></i>
+                    <span x-text="ordenarPor ? 'Orden: ' + ordenarLabels[ordenarPor] : 'Ordenar'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="openOrdenar" @click.away="openOrdenar = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-dark-100 shadow-lg z-20">
+                    <div class="p-2">
+                        <button @click="setOrdenar(null); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': !ordenarPor }">
+                            Por defecto (Apellido)
+                        </button>
+                        <button @click="setOrdenar('apellido', 'asc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'apellido' && ordenarDir === 'asc' }">
+                            <span>Empleado A-Z</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('apellido', 'desc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'apellido' && ordenarDir === 'desc' }">
+                            <span>Empleado Z-A</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                        <div class="border-t border-dark-100 my-1"></div>
+                        <button @click="setOrdenar('antiguedad', 'asc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'antiguedad' && ordenarDir === 'asc' }">
+                            <span>Más nuevos primero</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('antiguedad', 'desc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'antiguedad' && ordenarDir === 'desc' }">
+                            <span>Más antiguos primero</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                        <div class="border-t border-dark-100 my-1"></div>
+                        <button @click="setOrdenar('activo', 'desc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'activo' && ordenarDir === 'desc' }">
+                            <span>Activos primero</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('activo', 'asc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'activo' && ordenarDir === 'asc' }">
+                            <span>Inactivos primero</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Toggle Vista -->
+            <div class="flex items-center bg-dark-100 rounded-xl p-1 ml-auto mr-3">
+                <button @click="viewMode = 'table'" 
+                        class="flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                        :class="viewMode === 'table' ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'">
+                    <i data-lucide="list" class="w-4 h-4 mr-1.5"></i>Lista
+                </button>
+                <button @click="viewMode = 'cards'" 
+                        class="flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                        :class="viewMode === 'cards' ? 'bg-white text-dark-900 shadow-sm' : 'text-dark-500 hover:text-dark-700'">
+                    <i data-lucide="layout-grid" class="w-4 h-4 mr-1.5"></i>Cards
+                </button>
+            </div>
+
+            <!-- Total -->
+            <div class="flex items-center text-sm text-dark-500">
+                <i data-lucide="users" class="w-4 h-4 mr-2"></i>
+                <span id="total-empleados">{{ total }} empleados</span>
+            </div>
+        </div>
+        
+        <!-- Fila 2: Panel de Filtros (desplegable) -->
+        <div x-show="showFiltros" x-collapse x-cloak class="mt-4 pt-4 border-t border-dark-100">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Filtro Departamento -->
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 uppercase mb-2">Departamento</label>
+                    <select x-model="filtros.departamento_id" @change="aplicarFiltros()"
+                            class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-sm">
+                        <option value="">Todos</option>
+                        {% for dep in departamentos %}
+                        <option value="{{ dep.id }}">{{ dep.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Filtro Perfil -->
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 uppercase mb-2">Perfil</label>
+                    <select x-model="filtros.perfil_id" @change="aplicarFiltros()"
+                            class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-sm">
+                        <option value="">Todos</option>
+                        {% for perfil in perfiles %}
+                        <option value="{{ perfil.id }}">{{ perfil.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <!-- Filtro Estado -->
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 uppercase mb-2">Estado</label>
+                    <select x-model="filtros.activo" @change="aplicarFiltros()"
+                            class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-sm">
+                        <option value="">Todos</option>
+                        <option value="true">Activos</option>
+                        <option value="false">Inactivos</option>
+                    </select>
+                </div>
+                
+                <!-- Filtro Seniority -->
+                <div>
+                    <label class="block text-xs font-semibold text-dark-500 uppercase mb-2">Seniority</label>
+                    <select x-model="filtros.seniority" @change="aplicarFiltros()"
+                            class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-sm">
+                        <option value="">Todos</option>
+                        <option value="Trainee">Trainee</option>
+                        <option value="Junior">Junior</option>
+                        <option value="Semi-Senior">Semi-Senior</option>
+                        <option value="Senior">Senior</option>
+                        <option value="Lead">Lead</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Botón limpiar filtros -->
+            <div class="mt-4 flex justify-end">
+                <button @click="limpiarFiltros()" x-show="tieneFilrosActivos()"
+                        class="text-sm text-dark-500 hover:text-dark-700 flex items-center">
+                    <i data-lucide="x" class="w-4 h-4 mr-1"></i>
+                    Limpiar filtros
+                </button>
+            </div>
+        </div>
+        
+        <!-- Fila 3: Chips de filtros activos -->
+        <div x-show="tieneFilrosActivos()" class="mt-4 flex flex-wrap gap-2">
+            <!-- Chip Departamento -->
+            <template x-if="filtros.departamento_id">
+                <span class="inline-flex items-center px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm">
+                    <span x-text="'Depto: ' + getNombreDepartamento(filtros.departamento_id)"></span>
+                    <button @click="filtros.departamento_id = ''; aplicarFiltros()" class="ml-2 hover:text-primary-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            
+            <!-- Chip Perfil -->
+            <template x-if="filtros.perfil_id">
+                <span class="inline-flex items-center px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm">
+                    <span x-text="'Perfil: ' + getNombrePerfil(filtros.perfil_id)"></span>
+                    <button @click="filtros.perfil_id = ''; aplicarFiltros()" class="ml-2 hover:text-primary-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            
+            <!-- Chip Estado -->
+            <template x-if="filtros.activo !== ''">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm"
+                      :class="filtros.activo === 'true' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'">
+                    <span x-text="filtros.activo === 'true' ? 'Activos' : 'Inactivos'"></span>
+                    <button @click="filtros.activo = ''; aplicarFiltros()" class="ml-2 hover:opacity-70">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            
+            <!-- Chip Seniority -->
+            <template x-if="filtros.seniority">
+                <span class="inline-flex items-center px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-sm">
+                    <span x-text="'Seniority: ' + filtros.seniority"></span>
+                    <button @click="filtros.seniority = ''; aplicarFiltros()" class="ml-2 hover:text-violet-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            
+            <!-- Chip Antigüedad -->
+            <template x-if="filtros.antiguedad_rango">
+                <span class="inline-flex items-center px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-sm">
+                    <span x-text="'Antigüedad: ' + getAntiguedadLabel(filtros.antiguedad_rango)"></span>
+                    <button @click="filtros.antiguedad_rango = ''; aplicarFiltros()" class="ml-2 hover:text-amber-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+        </div>
+    </div>
+
+    <!-- Vista Tabla -->
+    <div x-show="viewMode === 'table'" class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="empleados-table">
+            {% include "nomina/partials/empleados_table.html" %}
+        </div>
+    </div>
+
+    <!-- Vista Cards -->
+    <div x-show="viewMode === 'cards'" x-cloak>
+        <div id="empleados-cards">
+            {% include "nomina/partials/empleados_cards.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Dar de Baja -->
+    <div x-show="showBajaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showBajaModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="user-minus" class="w-8 h-8 text-amber-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">Dar de Baja</h3>
+                <p class="text-dark-500">Estás por dar de baja a:</p>
+                <p class="text-dark-800 font-semibold" x-text="bajaNombre"></p>
+            </div>
+            
+            <div id="baja-form-container">
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha de Baja *</label>
+                        <input type="date" id="baja_fecha" required
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Motivo de Baja *</label>
+                        <textarea id="baja_motivo" required rows="3" placeholder="Ingrese el motivo de la baja..."
+                                  class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500"></textarea>
+                    </div>
+                </div>
+                <div id="baja-error"></div>
+                <div class="flex space-x-3">
+                    <button type="button" @click="showBajaModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors">Cancelar</button>
+                    <button type="button" @click="
+                        const fechaInput = document.getElementById('baja_fecha').value;
+                        const motivo = document.getElementById('baja_motivo').value;
+                        if (!fechaInput || !motivo) {
+                            document.getElementById('baja-error').innerHTML = '<div class=\'p-3 mb-4 rounded-xl bg-red-50 text-red-800 text-sm\'>Complete todos los campos</div>';
+                            return;
+                        }
+                        // Convertir yyyy-mm-dd a dd/mm/yyyy
+                        const parts = fechaInput.split('-');
+                        const fecha = parts[2] + '/' + parts[1] + '/' + parts[0];
+                        const formData = new FormData();
+                        formData.append('fecha_baja', fecha);
+                        formData.append('motivo_baja', motivo);
+                        fetch('/nomina/empleados/' + bajaId + '/baja', {
+                            method: 'POST',
+                            body: formData
+                        }).then(r => {
+                            if (r.ok) {
+                                showBajaModal = false;
+                                document.getElementById('baja_fecha').value = '';
+                                document.getElementById('baja_motivo').value = '';
+                                document.getElementById('baja-error').innerHTML = '';
+                                htmx.trigger('#empleados-table', 'empleadoBaja');
+                            } else {
+                                r.text().then(t => document.getElementById('baja-error').innerHTML = t);
+                            }
+                        });
+                    " class="flex-1 px-5 py-2.5 bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors">Confirmar Baja</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Reactivar -->
+    <div x-show="showReactivarModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showReactivarModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="user-plus" class="w-8 h-8 text-emerald-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Reactivar empleado?</h3>
+                <p class="text-dark-500 mb-2">Estás por reactivar a:</p>
+                <p class="text-dark-800 font-semibold mb-6" x-text="reactivarNombre"></p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showReactivarModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors">Cancelar</button>
+                <button @click="htmx.ajax('PUT', '/nomina/empleados/' + reactivarId + '/reactivar', {target: '#empleados-table'}); showReactivarModal = false" class="flex-1 px-5 py-2.5 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-colors">Reactivar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function empleadosFiltros() {
+    return {
+        viewMode: 'table',
+        buscar: '{{ buscar }}',
+        showFiltros: false,
+        agruparPor: '{{ agrupar_por or "" }}',
+        ordenarPor: '{{ ordenar_por or "" }}',
+        ordenarDir: '{{ ordenar_dir or "asc" }}',
+        filtros: {
+            departamento_id: '{{ filtro_departamento or "" }}',
+            perfil_id: '{{ filtro_perfil or "" }}',
+            activo: '{{ filtro_activo if filtro_activo is defined else "true" }}',
+            seniority: '{{ filtro_seniority or "" }}',
+            antiguedad_rango: '{{ filtro_antiguedad or "" }}'
+        },
+        agruparLabels: {
+            'departamento': 'Departamento',
+            'perfil': 'Perfil',
+            'estado': 'Estado',
+            'seniority': 'Seniority',
+            'antiguedad': 'Antigüedad'
+        },
+        ordenarLabels: {
+            'apellido': 'Empleado',
+            'antiguedad': 'Antigüedad',
+            'activo': 'Estado'
+        },
+        departamentos: {{ departamentos | tojson | safe }},
+        perfiles: {{ perfiles | tojson | safe }},
+        
+        // Modales
+        showBajaModal: false,
+        bajaId: null,
+        bajaNombre: '',
+        showReactivarModal: false,
+        reactivarId: null,
+        reactivarNombre: '',
+        
+        init() {
+            document.body.addEventListener('empleadoBaja', () => this.aplicarFiltros());
+            document.body.addEventListener('empleadoReactivado', () => this.aplicarFiltros());
+            document.body.addEventListener('filtrarGrupo', (e) => this.filtrarPorGrupo(e.detail));
+            document.body.addEventListener('abrirBaja', (e) => {
+                this.bajaId = e.detail.id;
+                this.bajaNombre = e.detail.nombre;
+                this.showBajaModal = true;
+            });
+            document.body.addEventListener('abrirReactivar', (e) => {
+                this.reactivarId = e.detail.id;
+                this.reactivarNombre = e.detail.nombre;
+                this.showReactivarModal = true;
+            });
+        },
+        
+        tieneFilrosActivos() {
+            return this.filtros.departamento_id || this.filtros.perfil_id || 
+                   this.filtros.activo !== '' || this.filtros.seniority || this.filtros.antiguedad_rango;
+        },
+        
+        contarFiltros() {
+            let count = 0;
+            if (this.filtros.departamento_id) count++;
+            if (this.filtros.perfil_id) count++;
+            if (this.filtros.activo !== '') count++;
+            if (this.filtros.seniority) count++;
+            if (this.filtros.antiguedad_rango) count++;
+            return count;
+        },
+        
+        setAgrupar(valor) {
+            this.agruparPor = valor;
+            this.aplicarFiltros();
+        },
+        
+        setOrdenar(campo, dir) {
+            if (campo === null) {
+                this.ordenarPor = '';
+                this.ordenarDir = 'asc';
+            } else {
+                this.ordenarPor = campo;
+                this.ordenarDir = dir || 'asc';
+            }
+            this.aplicarFiltros();
+        },
+        
+        filtrarPorGrupo(nombreGrupo) {
+            if (this.agruparPor === 'departamento') {
+                const dep = this.departamentos.find(d => d.nombre === nombreGrupo);
+                if (dep) this.filtros.departamento_id = dep.id;
+                else if (nombreGrupo === 'Sin Departamento') this.filtros.departamento_id = 'null';
+            } else if (this.agruparPor === 'perfil') {
+                const perfil = this.perfiles.find(p => p.nombre === nombreGrupo);
+                if (perfil) this.filtros.perfil_id = perfil.id;
+                else if (nombreGrupo === 'Sin Perfil') this.filtros.perfil_id = 'null';
+            } else if (this.agruparPor === 'estado') {
+                this.filtros.activo = nombreGrupo === 'Activos' ? 'true' : 'false';
+            } else if (this.agruparPor === 'seniority') {
+                if (nombreGrupo === 'Sin Seniority') this.filtros.seniority = 'null';
+                else this.filtros.seniority = nombreGrupo;
+            } else if (this.agruparPor === 'antiguedad') {
+                const rangoMap = {
+                    '0-1 años': '0-1',
+                    '1-3 años': '1-3',
+                    '3-5 años': '3-5',
+                    '5-10 años': '5-10',
+                    '10+ años': '10+',
+                    'Sin fecha': 'sin'
+                };
+                this.filtros.antiguedad_rango = rangoMap[nombreGrupo] || '';
+            }
+            this.agruparPor = '';
+            this.aplicarFiltros();
+        },
+        
+        limpiarFiltros() {
+            this.filtros = {
+                departamento_id: '',
+                perfil_id: '',
+                activo: '',
+                seniority: '',
+                antiguedad_rango: ''
+            };
+            this.aplicarFiltros();
+        },
+        
+        getNombreDepartamento(id) {
+            const dep = this.departamentos.find(d => d.id === id);
+            return dep ? dep.nombre : id;
+        },
+        
+        getNombrePerfil(id) {
+            const perfil = this.perfiles.find(p => p.id === id);
+            return perfil ? perfil.nombre : id;
+        },
+        
+        getAntiguedadLabel(rango) {
+            const labels = {
+                '0-1': '0-1 años',
+                '1-3': '1-3 años',
+                '3-5': '3-5 años',
+                '5-10': '5-10 años',
+                '10+': '10+ años',
+                'sin': 'Sin fecha'
+            };
+            return labels[rango] || rango;
+        },
+        
+        aplicarFiltros() {
+            let params = new URLSearchParams();
+            if (this.buscar) params.append('buscar', this.buscar);
+            if (this.agruparPor) params.append('agrupar_por', this.agruparPor);
+            if (this.ordenarPor) params.append('ordenar_por', this.ordenarPor);
+            if (this.ordenarDir) params.append('ordenar_dir', this.ordenarDir);
+            if (this.filtros.departamento_id) params.append('departamento_id', this.filtros.departamento_id);
+            if (this.filtros.perfil_id) params.append('perfil_id', this.filtros.perfil_id);
+            if (this.filtros.activo !== '') params.append('activo', this.filtros.activo);
+            if (this.filtros.seniority) params.append('seniority', this.filtros.seniority);
+            if (this.filtros.antiguedad_rango) params.append('antiguedad_rango', this.filtros.antiguedad_rango);
+            
+            htmx.ajax('GET', '{{ url_for("nomina.empleados_list") }}?' + params.toString(), {
+                target: '#empleados-table',
+                swap: 'innerHTML'
+            }).then(() => {
+                // También actualizar cards
+                htmx.ajax('GET', '{{ url_for("nomina.empleados_list") }}?' + params.toString() + '&view=cards', {
+                    target: '#empleados-cards',
+                    swap: 'innerHTML'
+                }).then(() => {
+                    if (typeof lucide !== 'undefined') lucide.createIcons();
+                });
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

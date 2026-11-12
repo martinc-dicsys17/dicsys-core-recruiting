@@ -1,0 +1,67 @@
+<!-- Stats de tickets para el dashboard (HTMX partial) -->
+<!-- Tickets Abiertos -->
+<div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+    <div class="flex items-center justify-between mb-4">
+        <div
+            class="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+            <i data-lucide="ticket" class="w-6 h-6 text-white"></i>
+        </div>
+        {% if stats.abiertos > 0 %}
+        <span class="flex items-center text-blue-600 text-sm font-semibold bg-blue-50 px-2.5 py-1 rounded-lg">
+            <i data-lucide="alert-circle" class="w-4 h-4 mr-1"></i>Abiertos
+        </span>
+        {% endif %}
+    </div>
+    <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.abiertos|default(0) }}</p>
+    <p class="text-dark-500 text-sm">Tickets Abiertos</p>
+</div>
+
+<!-- En Progreso -->
+<div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+    <div class="flex items-center justify-between mb-4">
+        <div
+            class="w-12 h-12 bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+            <i data-lucide="loader" class="w-6 h-6 text-white"></i>
+        </div>
+        {% if stats.en_progreso > 0 %}
+        <span class="flex items-center text-amber-600 text-sm font-semibold bg-amber-50 px-2.5 py-1 rounded-lg">
+            <i data-lucide="clock" class="w-4 h-4 mr-1"></i>Activos
+        </span>
+        {% endif %}
+    </div>
+    <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.en_progreso|default(0) }}</p>
+    <p class="text-dark-500 text-sm">En Progreso</p>
+</div>
+
+<!-- Resueltos -->
+<div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+    <div class="flex items-center justify-between mb-4">
+        <div
+            class="w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+            <i data-lucide="check-circle" class="w-6 h-6 text-white"></i>
+        </div>
+        <span class="flex items-center text-emerald-600 text-sm font-semibold bg-emerald-50 px-2.5 py-1 rounded-lg">
+            <i data-lucide="check" class="w-4 h-4 mr-1"></i>OK
+        </span>
+    </div>
+    <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.resueltos|default(0) }}</p>
+    <p class="text-dark-500 text-sm">Resueltos</p>
+</div>
+
+<!-- Total -->
+<div class="bg-white rounded-2xl p-6 border border-dark-100 hover:shadow-soft transition-all group">
+    <div class="flex items-center justify-between mb-4">
+        <div
+            class="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-soft group-hover:scale-110 transition-transform">
+            <i data-lucide="clipboard-list" class="w-6 h-6 text-white"></i>
+        </div>
+        {% if stats.criticos > 0 %}
+        <span class="flex items-center text-red-600 text-sm font-semibold bg-red-50 px-2.5 py-1 rounded-lg">
+            <i data-lucide="alert-triangle" class="w-4 h-4 mr-1"></i>{{ stats.criticos }} Crítico{{ 's' if
+            stats.criticos > 1 else '' }}
+        </span>
+        {% endif %}
+    </div>
+    <p class="text-3xl font-bold text-dark-900 mb-1">{{ stats.total|default(0) }}</p>
+    <p class="text-dark-500 text-sm">Total Tickets</p>
+</div>

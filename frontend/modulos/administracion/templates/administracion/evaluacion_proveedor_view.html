@@ -1,0 +1,144 @@
+{% extends "core/base.html" %}
+{% from 'administracion/partials/proveedores_macros.html' import respuesta %}
+
+{% set TIPOS = {'proveedor': 'Proveedor', 'herramienta': 'Herramienta', 'sin_clasificar': 'Sin clasificar'} %}
+{% set PREGUNTAS = {'incidentes': 'Herramientas: ¿hubo incidentes?',
+                    'mal_manejo': 'Proveedores: ¿hubo mal manejo de información compartida?'} %}
+{% set ESTADOS = {'programada': 'Programada', 'abierta': 'Abierta', 'cerrada': 'Cerrada', 'reemplazada': 'Finalizada'} %}
+{% set ACCIONES = {'crear': 'Agregado a la evaluación', 'evaluar': 'Evaluación guardada',
+                   'cambiar_evaluador': 'Cambio de evaluador', 'quitar': 'Quitado de la evaluación'} %}
+{% set CAMPOS = {'incidentes': 'Incidentes', 'mal_manejo': 'Mal manejo',
+                 'evidencia_incidentes': 'Evidencia de incidentes', 'evidencia_mal_manejo': 'Evidencia de mal manejo',
+                 'evaluador_empleado_id': 'Evaluador'} %}
+
+{% block title %}Evaluación de {{ item.proveedor.nombre }} - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+{# Evaluación completa de un proveedor en una campaña. Editan el referente y el admin (D-87). #}
+<div class="max-w-5xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div class="flex items-center">
+            <a href="{{ url_for('administracion.evaluaciones_proveedores') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver a Evaluación de Proveedores">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div class="w-16 h-16 rounded-2xl bg-primary-50 border border-primary-100 flex items-center justify-center mr-4 flex-shrink-0">
+                <i data-lucide="clipboard-check" class="w-8 h-8 text-primary-500"></i>
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-dark-900">{{ item.proveedor.nombre }}</h1>
+                <div class="flex flex-wrap items-center gap-3 mt-1">
+                    <span class="text-dark-500 text-sm">Evaluación {{ item.evaluacion.periodo }}</span>
+                    <span class="text-dark-300">·</span>
+                    <span class="text-dark-500 text-sm">{{ TIPOS.get(item.tipo, item.tipo) }}</span>
+                    <span class="text-dark-300">·</span>
+                    {% if item.evaluado %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg">Evaluado</span>
+                    {% else %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg">Pendiente</span>
+                    {% endif %}
+                    {% if item.con_hallazgo %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 rounded-lg">Con hallazgo</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% if item.puede_editar %}
+        <a href="{{ url_for('administracion.evaluaciones_proveedores_item_edit', item_id=item.id) }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="edit-2" class="w-4 h-4 mr-2"></i>{{ 'Editar' if item.evaluado else 'Evaluar' }}
+        </a>
+        {% endif %}
+    </div>
+
+    <!-- Respuestas -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+            <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="list-checks" class="w-5 h-5 mr-2 text-primary-500"></i>Respuestas</h2>
+        </div>
+        <div class="px-6 divide-y divide-dark-100" x-data="{ abiertas: {} }">
+            {% for pregunta in item.preguntas %}
+            {% set evidencia = item['evidencia_' ~ pregunta] %}
+            <div class="py-4">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <p class="text-dark-700">{{ PREGUNTAS[pregunta] }}</p>
+                    {{ respuesta(item[pregunta]) }}
+                </div>
+                {% if evidencia %}
+                <!-- Evidencia de la respuesta: oculta hasta que se pide (D-90) -->
+                <button type="button" @click="abiertas['{{ pregunta }}'] = !abiertas['{{ pregunta }}']"
+                        :aria-expanded="!!abiertas['{{ pregunta }}']" aria-controls="evidencia-{{ pregunta }}"
+                        class="mt-2 inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-700">
+                    <span class="inline-flex mr-1 transition-transform" :class="abiertas['{{ pregunta }}'] ? 'rotate-90' : ''"><i data-lucide="chevron-right" class="w-4 h-4"></i></span>
+                    <span x-text="abiertas['{{ pregunta }}'] ? 'Ocultar evidencia' : 'Mostrar evidencia'">Mostrar evidencia</span>
+                </button>
+                <div id="evidencia-{{ pregunta }}" x-show="abiertas['{{ pregunta }}']" x-cloak
+                     class="mt-2 p-3 rounded-xl bg-dark-50 text-sm text-dark-800 whitespace-pre-line break-words">
+                    {{- evidencia|urlize(target='_blank', rel='noopener noreferrer') -}}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Datos -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+        <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+            <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2 text-primary-500"></i>Datos</h2>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+            <div>
+                <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Usuario referente</p>
+                {% if item.evaluador %}<p class="text-dark-900 font-medium">{{ item.evaluador.nombre }}</p>
+                {% else %}<span class="px-2 py-1 text-xs font-semibold rounded-lg bg-amber-100 text-amber-700">Sin definir</span>{% endif %}
+            </div>
+            <div>
+                <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Fecha de evaluación</p>
+                <p class="text-dark-900 font-medium">{{ item.evaluado_at|datetime_gmt3_ampm if item.evaluado_at else '-' }}</p>
+                {% if item.evaluado_por %}<p class="text-sm text-dark-400">por {{ item.evaluado_por }}</p>{% endif %}
+            </div>
+            <div>
+                <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Evaluación {{ item.evaluacion.periodo }}</p>
+                <p class="text-dark-900 font-medium">{{ item.evaluacion.fecha_apertura|fecha_es }} al {{ item.evaluacion.fecha_cierre|fecha_es }}</p>
+                <p class="text-sm text-dark-400">{{ ESTADOS.get(item.evaluacion.estado, item.evaluacion.estado) }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historial -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+            <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="history" class="w-5 h-5 mr-2 text-primary-500"></i>Historial de cambios</h2>
+        </div>
+        {% if item.historial %}
+        <table class="w-full">
+            <thead>
+                <tr class="border-b border-dark-100">
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Fecha</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Usuario</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Acción</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Cambios</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-dark-100 text-sm">
+                {% for h in item.historial %}
+                <tr>
+                    <td class="px-6 py-3 text-dark-600 whitespace-nowrap">{{ h.fecha_hora|datetime_gmt3_ampm }}</td>
+                    <td class="px-6 py-3 text-dark-600">{{ h.usuario or 'Sistema' }}</td>
+                    <td class="px-6 py-3 text-dark-800">{{ ACCIONES.get(h.accion, h.accion) }}</td>
+                    <td class="px-6 py-3 text-dark-600">
+                        {% for campo, nuevo in (h.despues or {}).items() if campo in CAMPOS and campo != 'evaluador_empleado_id' %}
+                        <p><span class="font-medium">{{ CAMPOS[campo] }}:</span>
+                            {% if h.antes and h.antes.get(campo) %}<span class="line-through text-dark-400">{{ h.antes.get(campo)|truncate(60) }}</span> → {% endif %}{{ (nuevo or '—')|truncate(60) }}</p>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="px-6 py-8 text-center text-dark-500">Sin cambios registrados.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

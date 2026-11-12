@@ -1,0 +1,169 @@
+# Compose base, apto para producción: imágenes con el código adentro, sin mounts de código y sin publicar
+# Postgres. En local, docker-compose.override.yml (que Compose carga solo cuando no se pasa -f) suma los mounts
+# de código, el reload y el puerto de Postgres. El deploy usa docker compose -f docker-compose.yml.
+services:
+  # Base de datos PostgreSQL
+  postgresql:
+    image: postgres:16.15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ops_network
+
+  # Migraciones del esquema (F04): `alembic upgrade head` con la imagen del backend, una vez por `up` y antes de que
+  # arranque el backend, que no toca el esquema. Si falla, el backend no arranca. Ojo: `up` recrea el backend antes de
+  # migrar, así que en un release se corre primero `docker compose run --rm migraciones` (si falla, el backend que está
+  # corriendo sigue). Una base de antes de Alembic se adopta una sola vez. Todo en docs/Migraciones.md.
+  migraciones:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      target: runtime
+    restart: "no"
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:${POSTGRES_PORT}/${POSTGRES_DB}
+      ENVIRONMENT: ${ENVIRONMENT}
+      PORT: ${BACKEND_PORT}
+    command: ["alembic", "upgrade", "head"]
+    healthcheck:
+      disable: true
+    networks:
+      - ops_network
+
+  # Aplicación FastAPI
+  backend:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      migraciones:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      # Sobreescribir DATABASE_URL para usar el hostname del contenedor
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:${POSTGRES_PORT}/${POSTGRES_DB}
+      ENVIRONMENT: ${ENVIRONMENT}
+      PORT: ${BACKEND_PORT}
+      OG_CACHE_DIR: /data/innovacion/certificados
+      # el programador corre en el servicio scheduler: reiniciar o escalar el backend no arranca tareas (F06-P01)
+      CRON_ENABLED: "false"
+    ports:
+      - "${BACKEND_EXTERNAL_PORT}:${BACKEND_PORT}"
+    volumes:
+      # Volumen para archivos subidos (carpeta local)
+      - ./data/files:/data/files
+      # Volumen para fotos de empleados
+      - ./data/nomina/fotos:/data/nomina/fotos
+      # Volumen para logs raw de LLM (requests/responses)
+      - ./data/llm:/data/llm
+      # Volumen para banners og:image de certificados (generados por el backend)
+      - ./data/innovacion/certificados:/data/innovacion/certificados
+      # Google Cloud Storage va con la identidad de la VM (ADC, F06-P04): sin la clave JSON montada
+      # Service account de solo lectura de Google Sheets (sheets-lectura@)
+      - ./secrets/sheets-lectura.json:/app/secrets/sheets-service-account.json:ro
+      # Claves de firma del proveedor OpenID Connect (F21): un <kid>.pem por clave (docs/OIDC.md)
+      - ./secrets/oidc:/app/secrets/oidc:ro
+    networks:
+      - ops_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Tareas programadas (F06-P01, D-10): la imagen del backend con CRON_ENABLED=true y un solo worker, sin puerto
+  # publicado. Corre el programador de F19 (cumpleaños, Actualización de Datos, avisos de proveedores y la cola de
+  # envíos); la API la atiende el servicio backend, que lo tiene apagado.
+  scheduler:
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      migraciones:
+        condition: service_completed_successfully
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgresql:${POSTGRES_PORT}/${POSTGRES_DB}
+      ENVIRONMENT: ${ENVIRONMENT}
+      PORT: ${BACKEND_PORT}
+      OG_CACHE_DIR: /data/innovacion/certificados
+      CRON_ENABLED: "true"
+    command: ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port $${PORT} --workers 1"]
+    volumes:
+      - ./data/files:/data/files
+      - ./data/nomina/fotos:/data/nomina/fotos
+      - ./data/llm:/data/llm
+      - ./data/innovacion/certificados:/data/innovacion/certificados
+      - ./secrets/sheets-lectura.json:/app/secrets/sheets-service-account.json:ro
+    networks:
+      - ops_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${BACKEND_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Flask + HTMX + Alpine.js + Tailwind
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_EXTERNAL_PORT}:${FRONTEND_PORT}"
+    environment:
+      # development => dev server de Flask con reload; cualquier otro valor => gunicorn
+      - ENVIRONMENT=${ENVIRONMENT}
+      - DEBUG=${DEBUG}
+      - SECRET_KEY=${SECRET_KEY}
+      - API_URL=http://backend:${BACKEND_PORT}
+      - FLASK_PORT=${FRONTEND_PORT}
+      - RECIBOS_ADMIN_ALLOWED_EMAILS=${RECIBOS_ADMIN_ALLOWED_EMAILS}
+      # Cookie de sesión Secure: por defecto sí, salvo ENVIRONMENT=development
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-}
+    networks:
+      - ops_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${FRONTEND_PORT}/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# Volúmenes persistentes
+volumes:
+  postgres_data:
+    driver: local
+
+# Red interna
+networks:
+  ops_network:
+    driver: bridge

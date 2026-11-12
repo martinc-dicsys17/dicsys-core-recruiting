@@ -1,0 +1,4 @@
+# Las fotos del esquema se cargan con psql: COPY no acepta el retorno de carro del CRLF al final de cada fila
+backend/migraciones/snapshots/** text eol=lf
+# Los scripts de despliegue y lo que llevan a las VMs: en CRLF, bash falla en Git Bash y el .env de test sale con \r
+despliegue/** text eol=lf

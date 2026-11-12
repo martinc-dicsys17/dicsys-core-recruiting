@@ -1,0 +1,194 @@
+{% extends "core/base.html" %}
+
+{% block title %}{% if oidc_pendiente %}Entrar a {{ oidc_pendiente.nombre }}{% else %}Login{% endif %} - {{ config.APP_NAME }}{% endblock %}
+
+{# La marca de la app que entra con Core (F21): su logo cuadrado o, si no tiene, la inicial del nombre #}
+{% macro marca_app(app, clase_inicial) %}
+{% if app.logos.marca %}<img src="{{ url_for('static', filename=app.logos.marca) }}" alt="" class="w-full h-full object-contain">{% else %}<span class="{{ clase_inicial }}">{{ app.inicial }}</span>{% endif %}
+{% endmacro %}
+
+{% block public_content %}
+<script>console.log('[LOGIN] public_content block rendering');</script>
+<div class="min-h-screen flex" x-data="{ showPassword: false, loading: false }" x-init="console.log('[LOGIN] Alpine x-data initialized')">
+    <div class="hidden lg:flex lg:w-1/2 relative overflow-hidden">
+        <div class="absolute inset-0 bg-gradient-to-br from-accent-green via-accent-orange to-primary-600"></div>
+        <div class="absolute inset-0 bg-gradient-to-t from-accent-purple/50 to-transparent"></div>
+        <div class="absolute inset-0 opacity-10">
+            <svg class="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" stroke-width="0.5"/></pattern></defs>
+                <rect width="100" height="100" fill="url(#grid)"/>
+            </svg>
+        </div>
+        <div class="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse-slow"></div>
+        <div class="absolute bottom-20 right-20 w-96 h-96 bg-accent-purple/20 rounded-full blur-3xl animate-pulse-slow" style="animation-delay: 1s;"></div>
+
+        {% if oidc_pendiente %}
+        {# Ingreso desde otra app (F21): a qué app se entra y qué recibe #}
+        <div class="relative z-10 flex flex-col justify-center px-16 text-white max-w-2xl">
+            <img src="{{ url_for('static', filename='logo-dicsys-ai-blanco.svg') }}" alt="Dicsys" class="h-10 self-start mb-14">
+            <div class="flex items-center gap-3 mb-8" aria-hidden="true">
+                <div class="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center">
+                    <img src="{{ url_for('static', filename='favicon/android-chrome-192x192.png') }}" alt="" class="w-11 h-11">
+                </div>
+                <div class="flex items-center gap-1.5 text-white/80">
+                    <span class="w-1.5 h-1.5 rounded-full bg-white/40"></span><span class="w-1.5 h-1.5 rounded-full bg-white/60"></span>
+                    <span class="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center"><i data-lucide="arrow-right" class="w-4 h-4"></i></span>
+                    <span class="w-1.5 h-1.5 rounded-full bg-white/60"></span><span class="w-1.5 h-1.5 rounded-full bg-white/40"></span>
+                </div>
+                <div class="w-16 h-16 bg-white rounded-2xl shadow-lg flex items-center justify-center p-2.5 overflow-hidden">
+                    {{ marca_app(oidc_pendiente, 'text-3xl font-extrabold text-primary-700') }}
+                </div>
+            </div>
+            <p class="text-sm font-semibold uppercase tracking-widest text-white/70 mb-4">Ingreso con Dicsys Core{% if oidc_pendiente.detalle and not oidc_pendiente.logos.horizontal %} · {{ oidc_pendiente.detalle }}{% endif %}</p>
+            {% if oidc_pendiente.logos.horizontal %}
+            {# La horizontal de la app, en línea: su tinta es currentColor y acá es la oscura de razorback (#0B0D14) #}
+            <div class="text-[#0B0D14] mb-5">{{ oidc_pendiente.logos.horizontal }}</div>
+            <h1 class="text-3xl font-extrabold leading-tight mb-4">Entrá con tu cuenta de Dicsys Core</h1>
+            {% else %}
+            <h1 class="text-4xl font-extrabold leading-tight mb-4">Entrá a {{ oidc_pendiente.nombre }} con tu cuenta de Dicsys Core</h1>
+            {% endif %}
+            <p class="text-lg text-white/80 leading-relaxed mb-10">Es la misma cuenta con la que entrás a Core: no hace falta crear otra.</p>
+            {% if oidc_pendiente.recibe %}
+            <div class="max-w-md bg-white/10 border border-white/20 rounded-2xl p-6 backdrop-blur-sm">
+                <p class="font-semibold mb-4">{{ oidc_pendiente.nombre }} va a recibir</p>
+                <ul class="space-y-3">
+                    {% for icono, texto in oidc_pendiente.recibe %}
+                    <li class="flex items-center gap-3">
+                        <span class="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0"><i data-lucide="{{ icono }}" class="w-4 h-4"></i></span>
+                        <span class="text-white/90">{{ texto }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+                <p class="mt-5 pt-4 border-t border-white/15 flex items-center gap-3 text-sm text-white/75">
+                    <i data-lucide="lock" class="w-4 h-4 flex-shrink-0"></i>Tu contraseña no sale de Dicsys Core.
+                </p>
+            </div>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="relative z-10 flex flex-col justify-center px-16 text-white">
+            <div class="mb-8">
+                <img src="{{ url_for('static', filename='logo-dicsys-ai-blanco.svg') }}" alt="Dicsys" class="h-16 mb-6">
+                <p class="text-xl text-white/80 leading-relaxed">Gestiona tu equipo de manera eficiente con nuestra plataforma moderna y segura.</p>
+            </div>
+            <div class="space-y-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-4"><i data-lucide="shield-check" class="w-5 h-5"></i></div>
+                    <div><p class="font-semibold">Seguridad Avanzada</p><p class="text-sm text-white/70">Protección de datos de nivel empresarial</p></div>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-4"><i data-lucide="zap" class="w-5 h-5"></i></div>
+                    <div><p class="font-semibold">Rendimiento Óptimo</p><p class="text-sm text-white/70">Respuestas instantáneas y fluidas</p></div>
+                </div>
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mr-4"><i data-lucide="users" class="w-5 h-5"></i></div>
+                    <div><p class="font-semibold">Colaboración en Equipo</p><p class="text-sm text-white/70">Trabaja junto a tu equipo en tiempo real</p></div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="w-full lg:w-1/2 flex items-center justify-center p-8 bg-dark-50">
+        <div class="w-full max-w-md animate-fade-in">
+            <div class="lg:hidden text-center mb-8">
+                <div class="dicsys-gradient h-1 w-32 mx-auto rounded-full mb-4"></div>
+                <img src="{{ url_for('static', filename='logo-dicsys-ai-blanco.svg') }}" alt="Dicsys Logo" class="h-14 mx-auto mb-4">
+            </div>
+
+            <div class="bg-white rounded-3xl shadow-soft p-8 border border-dark-100">
+                {% if oidc_pendiente %}
+                {# Con un ingreso OpenID Connect pendiente: la app y lo que recibe (F21) #}
+                <div class="mb-6 flex items-center gap-3 p-3 pr-4 rounded-2xl bg-primary-50 border border-primary-100" role="status">
+                    <div class="w-12 h-12 flex-shrink-0 bg-white rounded-xl border border-primary-100 flex items-center justify-center p-1.5 overflow-hidden">
+                        {{ marca_app(oidc_pendiente, 'text-xl font-bold text-primary-700') }}
+                    </div>
+                    <p class="text-xs text-dark-500 leading-snug">Estás entrando a <strong class="block text-sm font-semibold text-dark-900">{{ oidc_pendiente.cliente }}</strong></p>
+                </div>
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-dark-900 mb-2">Entrar a {{ oidc_pendiente.nombre }}</h2>
+                    <p class="text-dark-500">Con tu email y tu contraseña de Dicsys Core{% if google is not none %}, o con Google{% endif %}</p>
+                    {% if oidc_pendiente.resumen %}<p class="lg:hidden mt-3 text-xs text-dark-400">{{ oidc_pendiente.nombre }} va a recibir: {{ oidc_pendiente.resumen }}.</p>{% endif %}
+                </div>
+                {% else %}
+                <div class="text-center mb-8">
+                    <h2 class="text-2xl font-bold text-dark-900 mb-2">¡Bienvenido de nuevo!</h2>
+                    <p class="text-dark-500">Ingresa tus credenciales para continuar</p>
+                </div>
+                {% endif %}
+
+                <form hx-post="{{ url_for('core.login') }}" hx-target="#login-error" hx-indicator="#login-spinner"
+                      @htmx:before-request="loading = true" @htmx:after-request="loading = false" class="space-y-5">
+                    <div id="login-error">
+                        {# Lo que dejaron los pasos que vuelven al login: link vencido, contraseña configurada, sesión
+                           expirada (F02-P03) o la vuelta de Google (F22). Los toasts del layout solo existen con sesión #}
+                        {% for categoria, mensaje in get_flashed_messages(with_categories=true) %}
+                        <div class="flex items-center gap-3 p-4 rounded-xl text-sm font-medium {{ 'bg-red-50 border border-red-300 text-red-700' if categoria == 'error' else 'bg-emerald-50 border border-emerald-300 text-emerald-700' }}" role="{{ 'alert' if categoria == 'error' else 'status' }}" data-flash="{{ categoria }}">
+                            <span>{{ mensaje }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div>
+                        <label for="email" class="block text-sm font-semibold text-dark-700 mb-2">Correo electrónico</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i data-lucide="mail" class="w-5 h-5 text-dark-400"></i></div>
+                            <input id="email" name="email" type="email" required autocomplete="email" class="w-full pl-12 pr-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-dark-800 placeholder-dark-400" placeholder="tu@email.com" />
+                        </div>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <label for="password" class="block text-sm font-semibold text-dark-700">Contraseña</label>
+                            <a href="{{ url_for('core.forgot_password') }}" class="text-sm text-primary-600 hover:text-primary-700 font-medium">¿Olvidaste tu contraseña?</a>
+                        </div>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none"><i data-lucide="lock" class="w-5 h-5 text-dark-400"></i></div>
+                            <input id="password" name="password" :type="showPassword ? 'text' : 'password'" required autocomplete="current-password" class="w-full pl-12 pr-12 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-dark-800 placeholder-dark-400" placeholder="••••••••" />
+                            <button type="button" @click="showPassword = !showPassword" class="absolute inset-y-0 right-0 pr-4 flex items-center text-dark-400 hover:text-dark-600 transition-colors">
+                                <i x-show="!showPassword" data-lucide="eye" class="w-5 h-5"></i>
+                                <i x-show="showPassword" x-cloak data-lucide="eye-off" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center">
+                        <input type="checkbox" id="remember" name="remember" class="w-4 h-4 text-primary-600 border-dark-300 rounded focus:ring-primary-500">
+                        <label for="remember" class="ml-2 text-sm text-dark-600">Mantener sesión iniciada</label>
+                    </div>
+                    <button type="submit" :disabled="loading" class="w-full flex justify-center items-center py-3.5 px-4 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-primary-300 disabled:to-primary-400 text-white font-semibold rounded-xl transition-all shadow-soft hover:shadow-glow">
+                        <svg id="login-spinner" class="htmx-indicator animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        {% if oidc_pendiente %}
+                        <span x-text="loading ? 'Iniciando sesión...' : 'Iniciar sesión y continuar'">Iniciar sesión y continuar</span>
+                        {% else %}
+                        <span x-text="loading ? 'Iniciando sesión...' : 'Iniciar Sesión'">Iniciar Sesión</span>
+                        {% endif %}
+                    </button>
+                </form>
+
+                {% if google is not none %}
+                {# Ingreso con Google (F22): solo cuentas del dominio configurado #}
+                <div class="flex items-center gap-3 my-6" aria-hidden="true">
+                    <div class="flex-1 h-px bg-dark-100"></div><span class="text-xs text-dark-400">o</span><div class="flex-1 h-px bg-dark-100"></div>
+                </div>
+                <a href="{{ url_for('core.login_google') }}" class="w-full flex justify-center items-center gap-3 py-3 px-4 bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 font-semibold rounded-xl transition-all">
+                    <svg class="w-5 h-5" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+                    <span>Entrar con Google</span>
+                </a>
+                {% if google %}<p class="mt-2 text-xs text-center text-dark-400">Con tu cuenta @{{ google }}</p>{% endif %}
+                {% endif %}
+
+                {% if oidc_pendiente %}
+                <div class="mt-6 text-center">
+                    <a href="{{ url_for('oidc.cancelar') }}" class="inline-flex items-center gap-2 text-sm font-medium text-dark-500 hover:text-dark-800 transition-colors"><i data-lucide="arrow-left" class="w-4 h-4"></i>Cancelar y volver a {{ oidc_pendiente.nombre }}</a>
+                </div>
+                {% endif %}
+
+                <div class="mt-6 pt-4 border-t border-dark-100 text-center">
+                    <p class="text-xs text-dark-400">Creado con tecnología <span class="font-semibold text-primary-600">Dicsys</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

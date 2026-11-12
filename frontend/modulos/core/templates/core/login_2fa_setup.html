@@ -1,0 +1,172 @@
+{% extends "core/base.html" %}
+
+{% block title %}Configurar 2FA - {{ config.APP_NAME }}{% endblock %}
+
+{% block public_content %}
+<div class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div class="w-full max-w-lg" x-data="setupWizard()">
+        <div class="text-center mb-6">
+            <img src="/static/logo-dicsys-ai-azul.svg" alt="Dicsys" class="h-10 mx-auto mb-4">
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-xl border border-dark-100 overflow-hidden">
+            <div class="p-8">
+                <div class="flex justify-center mb-4">
+                    <div class="w-16 h-16 bg-amber-100 rounded-2xl flex items-center justify-center">
+                        <i data-lucide="shield-alert" class="w-8 h-8 text-amber-600"></i>
+                    </div>
+                </div>
+                <h2 class="text-xl font-bold text-center text-dark-900 mb-1">Configuración obligatoria de 2FA</h2>
+                <p class="text-center text-dark-500 text-sm mb-6">
+                    Hola {{ user_2fa.nombre or '' }}, tu cuenta requiere autenticación de dos factores.
+                </p>
+
+                <!-- Paso 1: Apps -->
+                <template x-if="step === 1">
+                    <div>
+                        <details class="mb-4 bg-blue-50 border border-blue-200 rounded-xl">
+                            <summary class="px-4 py-2.5 text-sm font-medium text-blue-700 cursor-pointer hover:text-blue-900 select-none">¿Qué es una app authenticator?</summary>
+                            <div class="px-4 pb-3 text-xs text-blue-800 leading-relaxed">
+                                Es una aplicación gratuita para tu celular que genera códigos numéricos de 6 dígitos que cambian cada 30 segundos. Funciona como una "llave extra" para proteger tu cuenta: además de tu contraseña, necesitás el código del momento para entrar. No requiere internet ni señal de celular para funcionar.
+                            </div>
+                        </details>
+                        <p class="text-dark-600 text-sm mb-4">Si no tenés una app authenticator en tu celular, instalá alguna de las siguientes:</p>
+                        <div class="grid grid-cols-2 gap-3 mb-6">
+                            <a href="https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2" target="_blank" class="flex flex-col items-center p-3 bg-dark-50 rounded-xl border border-dark-200 hover:border-primary-300 hover:bg-primary-50/30 transition-all">
+                                <span class="text-2xl mb-1">🔐</span><span class="text-xs font-medium text-dark-700">Google Auth</span>
+                            </a>
+                            <a href="https://play.google.com/store/apps/details?id=com.azure.authenticator" target="_blank" class="flex flex-col items-center p-3 bg-dark-50 rounded-xl border border-dark-200 hover:border-primary-300 hover:bg-primary-50/30 transition-all">
+                                <span class="text-2xl mb-1">🛡️</span><span class="text-xs font-medium text-dark-700">Microsoft Auth</span>
+                            </a>
+                            <a href="https://play.google.com/store/apps/details?id=com.authy.authy" target="_blank" class="flex flex-col items-center p-3 bg-dark-50 rounded-xl border border-dark-200 hover:border-primary-300 hover:bg-primary-50/30 transition-all">
+                                <span class="text-2xl mb-1">🔑</span><span class="text-xs font-medium text-dark-700">Authy</span>
+                            </a>
+                            <a href="https://play.google.com/store/apps/details?id=com.duosecurity.duomobile" target="_blank" class="flex flex-col items-center p-3 bg-dark-50 rounded-xl border border-dark-200 hover:border-primary-300 hover:bg-primary-50/30 transition-all">
+                                <span class="text-2xl mb-1">📱</span><span class="text-xs font-medium text-dark-700">Duo Mobile</span>
+                            </a>
+                        </div>
+                        <button @click="generateQR()" type="button" class="w-full py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 font-semibold transition-all shadow-soft">
+                            Ya tengo una app → Siguiente
+                        </button>
+                    </div>
+                </template>
+
+                <!-- Paso 2: QR -->
+                <template x-if="step === 2">
+                    <div>
+                        <p class="text-dark-600 text-sm mb-4">Escaneá este código QR con tu app:</p>
+                        <div class="flex justify-center mb-4">
+                            <img :src="qrBase64" alt="QR" class="w-48 h-48 rounded-xl border-2 border-dark-200">
+                        </div>
+                        <details class="mb-4 bg-blue-50 border border-blue-200 rounded-xl">
+                            <summary class="px-4 py-2.5 text-sm font-medium text-blue-700 cursor-pointer hover:text-blue-900 select-none">¿Cómo escaneo el QR?</summary>
+                            <div class="px-4 pb-3 text-xs text-blue-800 leading-relaxed space-y-1.5">
+                                <p><strong>1.</strong> Abrí la app authenticator en tu celular</p>
+                                <p><strong>2.</strong> Tocá el botón <strong>+</strong> (o "Agregar cuenta")</p>
+                                <p><strong>3.</strong> Elegí la opción <strong>"Escanear código QR"</strong></p>
+                                <p><strong>4.</strong> Apuntá la cámara al código QR de esta pantalla</p>
+                                <p class="pt-1 text-blue-600">✓ Deberías ver una nueva entrada "Dicsys Core" con un código de 6 dígitos que cambia cada 30 segundos.</p>
+                            </div>
+                        </details>
+                        <div class="bg-dark-50 rounded-xl p-3 mb-4">
+                            <p class="text-xs text-dark-500 mb-1">¿No podés escanear? Ingresá este código manualmente en tu app:</p>
+                            <code class="text-sm font-mono font-bold text-dark-900 tracking-widest" x-text="secret"></code>
+                        </div>
+                        <button @click="step = 3" type="button" class="w-full py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 font-semibold transition-all shadow-soft">
+                            Ya escaneé → Siguiente
+                        </button>
+                    </div>
+                </template>
+
+                <!-- Paso 3: Confirmar -->
+                <template x-if="step === 3">
+                    <div>
+                        <p class="text-dark-600 text-sm mb-4">Ingresá el código de 6 dígitos de tu app:</p>
+                        <div id="setup-error" class="mb-3"></div>
+                        <input type="text" x-model="code" maxlength="6" pattern="[0-9]*" inputmode="numeric" placeholder="000000"
+                               class="w-full px-4 py-4 bg-dark-50 border border-dark-200 rounded-xl text-center text-3xl font-mono tracking-[0.5em] mb-4 focus:ring-2 focus:ring-primary-500">
+                        <button @click="activate()" type="button" :disabled="code.length !== 6 || loading"
+                                class="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 font-semibold transition-all shadow-soft disabled:opacity-50">
+                            <span x-show="!loading">Activar 2FA</span>
+                            <span x-show="loading">Verificando...</span>
+                        </button>
+                        <button @click="step = 2" type="button" class="w-full mt-2 text-sm text-dark-500 hover:text-dark-700">← Volver al QR</button>
+                    </div>
+                </template>
+
+                <!-- Paso 4: Backup codes -->
+                <template x-if="step === 4">
+                    <div>
+                        <div class="flex items-center gap-3 mb-4">
+                            <div class="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                                <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600"></i>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold text-dark-900">2FA activado</h3>
+                                <p class="text-dark-500 text-xs">Guardá estos códigos de recuperación</p>
+                            </div>
+                        </div>
+                        <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4">
+                            <p class="text-amber-800 text-xs font-medium mb-2">⚠️ Si perdés acceso a tu app, usá estos códigos. Cada uno se usa una sola vez.</p>
+                            <p class="text-red-700 text-xs font-bold mb-3">🚨 No vas a poder ver estos códigos de nuevo. Guardalos ahora en un lugar seguro (anotados, en un archivo, captura de pantalla, etc.)</p>
+                            <div class="grid grid-cols-2 gap-2">
+                                <template x-for="c in backupCodes" :key="c">
+                                    <code class="bg-white px-3 py-1.5 rounded-lg text-sm font-mono text-center border border-amber-200" x-text="c"></code>
+                                </template>
+                            </div>
+                        </div>
+                        <button @click="navigator.clipboard.writeText(backupCodes.join('\n'))" type="button" class="w-full py-2 border border-dark-200 text-dark-600 rounded-xl hover:bg-dark-50 font-medium text-sm mb-2">
+                            Copiar códigos
+                        </button>
+                        <a @click="completeSetup()" class="block w-full py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 font-semibold transition-all shadow-soft text-center cursor-pointer">
+                            Listo, los guardé → Entrar
+                        </a>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setupWizard() {
+    return {
+        step: 1, qrBase64: '', secret: '', code: '', backupCodes: [], loading: false,
+        async generateQR() {
+            const form = new FormData();
+            form.append('action', 'setup');
+            const r = await fetch('{{ url_for("core.login_2fa_setup") }}', { method: 'POST', body: form });
+            if (r.ok) { const d = await r.json(); this.qrBase64 = d.qr_base64; this.secret = d.secret_manual; this.step = 2; }
+        },
+        async activate() {
+            this.loading = true;
+            document.getElementById('setup-error').innerHTML = '';
+            const form = new FormData();
+            form.append('action', 'enable');
+            form.append('code', this.code);
+            const r = await fetch('{{ url_for("core.login_2fa_setup") }}', { method: 'POST', body: form });
+            if (r.ok) {
+                const d = await r.json();
+                if (d.backup_codes) { this.backupCodes = d.backup_codes; this.step = 4; }
+                else { window.location.href = '{{ url_for("core.login") }}'; }
+            } else {
+                const d = await r.json();
+                document.getElementById('setup-error').innerHTML = '<div class="p-3 rounded-xl bg-red-50 text-red-800 border border-red-200 text-sm">' + (d.error || 'Código incorrecto') + '</div>';
+            }
+            this.loading = false;
+        },
+        async completeSetup() {
+            const form = new FormData();
+            form.append('action', 'complete');
+            const r = await fetch('{{ url_for("core.login_2fa_setup") }}', { method: 'POST', body: form });
+            if (r.ok) {
+                const d = await r.json();
+                window.location.href = d.redirect || '{{ url_for("core.login") }}';
+            } else {
+                window.location.href = '{{ url_for("core.login") }}';
+            }
+        }
+    };
+}
+</script>
+{% endblock %}

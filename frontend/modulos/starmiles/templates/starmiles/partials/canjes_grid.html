@@ -1,0 +1,102 @@
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+    {% for item in items %}
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden hover:shadow-soft transition-all group">
+        {% if item.imagen_url %}
+        <div class="h-48 bg-dark-100 relative">
+            <img src="{{ item.imagen_url }}" alt="{{ item.nombre }}" class="w-full h-full object-cover">
+            {% if item.tipo == 'mercadolibre' %}
+            <span class="absolute top-2 right-2 px-2 py-1 bg-yellow-400 text-yellow-900 text-xs font-bold rounded-lg">
+                MercadoLibre
+            </span>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="h-48 bg-gradient-to-br {% if item.tipo == 'mercadolibre' %}from-yellow-400 to-yellow-500{% else %}from-emerald-400 to-teal-500{% endif %} flex items-center justify-center relative">
+            <i data-lucide="{% if item.tipo == 'mercadolibre' %}shopping-cart{% else %}gift{% endif %}" class="w-16 h-16 text-white/50"></i>
+            {% if item.tipo == 'mercadolibre' %}
+            <span class="absolute top-2 right-2 px-2 py-1 bg-white/90 text-yellow-700 text-xs font-bold rounded-lg">
+                MercadoLibre
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+        
+        <div class="p-5">
+            <h3 class="font-bold text-dark-900 mb-2 group-hover:text-primary-600 transition-colors">
+                {{ item.nombre }}
+            </h3>
+            
+            {% if item.descripcion %}
+            <div x-data="{ expanded: false }" class="mb-3">
+                <p :class="expanded ? '' : 'line-clamp-2'" 
+                   class="text-dark-500 text-sm cursor-pointer hover:text-dark-700 transition-colors"
+                   @click="expanded = !expanded"
+                   title="Click para expandir/colapsar">
+                    {{ item.descripcion }}
+                </p>
+                {% if item.descripcion|length > 60 %}
+                <button type="button" @click="expanded = !expanded" 
+                        class="text-xs text-primary-600 hover:text-primary-700 font-semibold focus:outline-none mt-1">
+                    <span x-text="expanded ? 'Ver menos' : 'Ver más'"></span>
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if item.stock is not none %}
+            <p class="text-dark-400 text-xs mb-3">
+                <i data-lucide="package" class="w-3 h-3 inline mr-1"></i>
+                Stock: {{ item.stock }} disponibles
+            </p>
+            {% endif %}
+            
+            <div class="flex items-center justify-between pt-3 border-t border-dark-100">
+                {% if item.tipo == 'mercadolibre' %}
+                <div class="flex items-center text-yellow-600">
+                    <i data-lucide="calculator" class="w-5 h-5 mr-1"></i>
+                    <span class="text-sm font-medium">Según precio ML</span>
+                </div>
+                {% if mis_millas %}
+                <button onclick="abrirModalCanjearML('{{ item.id }}', '{{ item.nombre }}')"
+                        class="px-4 py-2 text-sm font-semibold bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 transition-colors">
+                    Canjear
+                </button>
+                {% else %}
+                <span class="px-3 py-1.5 text-xs font-semibold bg-yellow-100 text-yellow-700 rounded-lg">
+                    Requiere millas
+                </span>
+                {% endif %}
+                {% else %}
+                <div class="flex items-center text-amber-500">
+                    <i data-lucide="star" class="w-5 h-5 mr-1 fill-current"></i>
+                    <span class="font-bold text-lg">{{ item.star_miles_costo or 0 }}</span>
+                </div>
+                
+                {% if mis_millas and item.star_miles_costo and mis_millas.millas_disponibles >= item.star_miles_costo %}
+                <button onclick="abrirModalCanjear('{{ item.id }}', '{{ item.nombre }}', {{ item.star_miles_costo }})"
+                        class="px-4 py-2 text-sm font-semibold bg-primary-600 hover:bg-primary-700 transition-colors">
+                    Canjear
+                </button>
+                {% elif mis_millas %}
+                <span class="px-3 py-1.5 text-xs font-semibold bg-dark-100 text-dark-500 rounded-lg">
+                    Millas insuficientes
+                </span>
+                {% else %}
+                <span class="px-3 py-1.5 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg">
+                    {{ item.star_miles_costo or 0 }} millas
+                </span>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="col-span-full py-16 text-center">
+        <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="gift" class="w-10 h-10 text-dark-300"></i>
+        </div>
+        <p class="text-dark-900 font-semibold mb-1">No hay items disponibles</p>
+        <p class="text-dark-500 text-sm">Pronto habrá nuevos premios</p>
+    </div>
+    {% endfor %}
+</div>

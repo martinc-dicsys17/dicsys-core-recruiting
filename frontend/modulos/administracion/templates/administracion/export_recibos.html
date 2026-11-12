@@ -1,0 +1,181 @@
+{% extends "core/base.html" %}
+{% block title %}Exportar Recibos por Cliente - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ openCliente: null, openPeriodo: {} }">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Exportar Recibos por Cliente</h1>
+            <p class="text-dark-500">Recibos agrupados por cliente, período y tipo de liquidación. Descarga ZIP por liquidación o PDF individual.</p>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-center gap-4">
+            <div class="w-11 h-11 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                <i data-lucide="building-2" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <p class="text-sm text-dark-500">Clientes</p>
+                <p class="text-2xl font-bold text-dark-900">{{ data.total_clientes or 0 }}</p>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-center gap-4">
+            <div class="w-11 h-11 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <i data-lucide="users" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <p class="text-sm text-dark-500">Empleados</p>
+                <p class="text-2xl font-bold text-dark-900">{{ data.total_empleados or 0 }}</p>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-center gap-4">
+            <div class="w-11 h-11 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <i data-lucide="file-text" class="w-5 h-5"></i>
+            </div>
+            <div>
+                <p class="text-sm text-dark-500">Recibos disponibles</p>
+                <p class="text-2xl font-bold text-dark-900">{{ data.total_recibos or 0 }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% if not data.clientes %}
+    <div class="bg-white rounded-2xl border border-dark-100 p-10 text-center">
+        <i data-lucide="package-x" class="w-12 h-12 text-dark-300 mx-auto mb-3"></i>
+        <p class="text-dark-600 font-medium mb-1">No hay datos para exportar</p>
+        <p class="text-dark-400 text-sm">Ejecutá la sincronización <em>Carga Administración Recibos</em> para cargar los DNIs desde el CSV.</p>
+    </div>
+    {% endif %}
+
+    <div class="space-y-4">
+        {% for cliente in data.clientes %}
+        {% set ci = loop.index %}
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <button type="button"
+                    @click="openCliente = (openCliente === '{{ ci }}' ? null : '{{ ci }}')"
+                    class="w-full flex items-center justify-between px-5 py-4 hover:bg-dark-50 transition-all">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-primary-50 text-primary-600 flex items-center justify-center">
+                        <i data-lucide="building-2" class="w-5 h-5"></i>
+                    </div>
+                    <div class="text-left">
+                        <p class="font-semibold text-dark-900">{{ cliente.cliente or 'Sin cliente' }}</p>
+                        <p class="text-xs text-dark-500">
+                            {{ cliente.total_empleados }} empleado{{ '' if cliente.total_empleados == 1 else 's' }}
+                            · {{ cliente.total_recibos }} recibo{{ '' if cliente.total_recibos == 1 else 's' }}
+                            · {{ cliente.total_periodos }} período{{ '' if cliente.total_periodos == 1 else 's' }}
+                            · {{ cliente.total_liquidaciones }} liquidación{{ '' if cliente.total_liquidaciones == 1 else 'es' }}
+                        </p>
+                    </div>
+                </div>
+                <i data-lucide="chevron-down" class="w-5 h-5 text-dark-400 transition-transform"
+                   :class="openCliente === '{{ ci }}' ? 'rotate-180' : ''"></i>
+            </button>
+
+            <div x-show="openCliente === '{{ ci }}'" x-cloak class="border-t border-dark-100">
+                {% for periodo in cliente.periodos %}
+                {% set pi = loop.index %}
+                {% set key = ci ~ '-' ~ pi %}
+                <div class="border-b border-dark-50 last:border-b-0">
+                    <div class="flex items-center justify-between gap-6 px-5 py-3 bg-dark-50/50">
+                        <button type="button"
+                                @click="openPeriodo['{{ key }}'] = !openPeriodo['{{ key }}']"
+                                class="flex items-center gap-3 flex-1 text-left min-w-0">
+                            <i data-lucide="chevron-right" class="w-4 h-4 text-dark-400 transition-transform shrink-0"
+                               :class="openPeriodo['{{ key }}'] ? 'rotate-90' : ''"></i>
+                            <p class="font-medium text-dark-900 text-sm flex items-center gap-2 min-w-0">
+                                {% if periodo.periodo %}
+                                    <span>Período {{ periodo.periodo }}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-50 text-primary-700 truncate">
+                                        {{ periodo.tipo_liquidacion or 'Sin tipo' }}
+                                    </span>
+                                {% else %}
+                                    Sin recibos disponibles
+                                {% endif %}
+                            </p>
+                        </button>
+
+                        <div class="flex items-center gap-6 text-sm shrink-0">
+                            <span class="inline-flex items-center gap-1.5 text-dark-700">
+                                <i data-lucide="users" class="w-4 h-4 text-dark-500"></i>
+                                <span class="font-semibold">{{ periodo.total_empleados }}</span>
+                                <span class="text-dark-500">empleado{{ '' if periodo.total_empleados == 1 else 's' }}</span>
+                            </span>
+                            {% if periodo.periodo %}
+                            <span class="inline-flex items-center gap-1.5 text-emerald-700">
+                                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                                <span class="font-semibold">{{ periodo.firmados }}</span>
+                                <span>Firmado{{ '' if periodo.firmados == 1 else 's' }}</span>
+                            </span>
+                            <span class="inline-flex items-center gap-1.5 text-amber-700">
+                                <i data-lucide="clock" class="w-4 h-4"></i>
+                                <span class="font-semibold">{{ periodo.pendientes }}</span>
+                                <span>Pendiente{{ '' if periodo.pendientes == 1 else 's' }}</span>
+                            </span>
+                            {% endif %}
+                            {% if periodo.periodo and periodo.total_recibos > 0 %}
+                            <a href="{{ url_for('administracion.export_recibos_descargar', cliente=cliente.cliente, periodo=periodo.periodo, tipo_liquidacion=periodo.tipo_liquidacion) }}"
+                               class="flex items-center px-3 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all text-sm font-medium">
+                                <i data-lucide="download" class="w-4 h-4 mr-1.5"></i>Bajar ZIP
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div x-show="openPeriodo['{{ key }}']" x-cloak class="px-5 py-3">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-dark-500 border-b border-dark-100">
+                                    <th class="text-left py-2 font-medium w-44">CUIL</th>
+                                    <th class="text-left py-2 font-medium">Nombre completo</th>
+                                    <th class="text-left py-2 font-medium w-32">Estado</th>
+                                    <th class="text-right py-2 font-medium w-40">Recibo</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for emp in periodo.empleados %}
+                                <tr class="border-b border-dark-50 last:border-b-0">
+                                    <td class="py-2 font-mono text-xs">{{ emp.cuil or emp.dni or '-' }}</td>
+                                    <td class="py-2">{{ emp.nombre_completo or '-' }}</td>
+                                    <td class="py-2">
+                                        {% if emp.sin_empleado %}
+                                            <span class="px-2 py-0.5 rounded-full text-xs bg-red-50 text-red-700">DNI no encontrado</span>
+                                        {% elif emp.recibos|length == 0 %}
+                                            <span class="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700">Sin recibos</span>
+                                        {% elif emp.estado == 'Firmado' %}
+                                            <span class="px-2 py-0.5 rounded-full text-xs bg-emerald-50 text-emerald-700">Firmado</span>
+                                        {% else %}
+                                            <span class="px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700">Pendiente</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="py-2 text-right">
+                                        {% if emp.recibos %}
+                                        <div class="inline-flex items-center justify-end gap-1.5 flex-wrap">
+                                            {% for recibo in emp.recibos %}
+                                            <a href="{{ url_for('administracion.export_recibos_descargar_individual', recibo_id=recibo.id) }}"
+                                               class="inline-flex items-center px-2.5 py-1.5 bg-dark-100 text-dark-700 rounded-lg hover:bg-dark-200 transition-all text-xs font-medium">
+                                                <i data-lucide="download" class="w-3.5 h-3.5 mr-1"></i>Bajar
+                                            </a>
+                                            {% endfor %}
+                                        </div>
+                                        {% else %}
+                                        <span class="text-dark-300 text-xs">—</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

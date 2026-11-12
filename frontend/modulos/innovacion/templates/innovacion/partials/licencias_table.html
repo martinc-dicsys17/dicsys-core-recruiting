@@ -1,0 +1,167 @@
+{# Una tarjeta por empleado. Las licencias van dentro, cada una con su
+   checkbox de estado y el detalle en el tooltip. #}
+{% macro paginacion_url(nro) -%}
+{{ url_for('innovacion.licencias_list', pagina=nro, buscar=buscar,
+           equipo_id=filtro_equipos, proveedor_id=filtro_proveedor,
+           empleado_id=filtro_empleados, vista=vista) }}
+{%- endmacro %}
+
+{% macro fila_empleado(fila) -%}
+<div class="flex items-start gap-4" data-empleado-id="{{ fila.empleado_id }}">
+    <div class="w-64 shrink-0">
+        <p class="text-sm font-medium text-dark-800">{{ fila.empleado_nombre|title if fila.empleado_nombre.isupper() else fila.empleado_nombre }}</p>
+        <span class="mt-1.5 inline-flex rounded-full px-2 py-0.5 text-xs {% if fila.cantidad_activas %}bg-emerald-50 text-emerald-700{% else %}bg-dark-50 text-dark-500{% endif %}"
+              aria-label="Licencias activas: {{ fila.cantidad_activas }} de {{ fila.cantidad }}">{{ fila.cantidad_activas }} de {{ fila.cantidad }} activa{{ '' if fila.cantidad == 1 else 's' }}</span>
+    </div>
+    <div class="min-w-0 flex-1">{% include "innovacion/partials/licencias_empleado.html" %}</div>
+    <div class="shrink-0 text-sm font-medium tabular-nums text-dark-700">
+        {% for t in fila.totales %}<p class="whitespace-nowrap">{{ importe(t.moneda, t.total) }}</p>{% else %}<span class="font-normal text-dark-500">Sin gasto activo</span>{% endfor %}
+    </div>
+</div>
+{%- endmacro %}
+<style>
+    .licencia-grupo > summary { list-style: none; }
+    .licencia-grupo > summary::-webkit-details-marker { display: none; }
+    .licencia-grupo[open] > summary .licencia-chevron { transform: rotate(90deg); }
+</style>
+
+{# El signo va aparte del valor absoluto: negar el total daba "-0.00" cuando
+   la variacion era cero. #}
+{% macro importe(moneda, total, signo=false) -%}
+{%- if signo and total > 0 %}+{% elif signo and total < 0 %}−{% endif -%}
+{{ 'U$D' if moneda == 'USD' else '$' }} {{ "%.2f"|format(total|abs if signo else total) }}
+{%- endmacro %}
+
+{# Gasto de este mes y del anterior: la diferencia es lo que se vence o arranca.
+   Activar o suspender una licencia mueve los dos numeros. #}
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+    <div class="bg-white rounded-2xl border border-dark-100 p-4">
+        <p class="text-sm font-medium text-dark-500 mb-2">Mes anterior</p>
+        {% if metricas.mes_anterior %}
+            {% for t in metricas.mes_anterior %}
+            <p class="text-xl font-medium tabular-nums text-dark-800">{{ importe(t.moneda, t.total) }}</p>
+            {% endfor %}
+        {% else %}
+            <p class="text-xl font-medium text-dark-400">Sin gasto</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-2xl border border-dark-100 p-4">
+        <p class="text-sm font-medium text-dark-500 mb-2">Mes actual</p>
+        {% if metricas.mes_actual %}
+            {% for t in metricas.mes_actual %}
+            <p class="text-xl font-medium tabular-nums text-dark-800">{{ importe(t.moneda, t.total) }}</p>
+            {% endfor %}
+        {% else %}
+            <p class="text-xl font-medium text-dark-400">Sin gasto</p>
+        {% endif %}
+    </div>
+
+    <div class="bg-white rounded-2xl border p-4
+                {% if metricas.tendencia == 'sube' %}border-red-200 bg-red-50/40
+                {% elif metricas.tendencia == 'baja' %}border-emerald-200 bg-emerald-50/40
+                {% else %}border-dark-100{% endif %}">
+        <p class="text-sm font-medium text-dark-500 mb-2">Variación</p>
+        {% if metricas.delta %}
+            {# Una linea por moneda, igual que las otras dos tarjetas: si una
+               moneda no varia se muestra en cero, no se omite. #}
+            {% for t in metricas.delta %}
+            <p class="text-xl font-medium tabular-nums flex items-center gap-1.5
+                      {% if t.total > 0 %}text-red-600
+                      {% elif t.total < 0 %}text-emerald-600
+                      {% else %}text-dark-500{% endif %}">
+                {% if t.total %}
+                <i data-lucide="{{ 'trending-up' if t.total > 0 else 'trending-down' }}" class="w-5 h-5"></i>
+                {% else %}
+                <i data-lucide="minus" class="w-5 h-5"></i>
+                {% endif %}
+                {{ importe(t.moneda, t.total, signo=true) }}
+            </p>
+            {% endfor %}
+        {% else %}
+            <p class="text-xl font-medium text-dark-400">Sin cambios</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="mb-3 text-sm text-dark-500" data-pagina="{{ pagina }}">
+    {{ total_empleados }} empleado{{ '' if total_empleados == 1 else 's' }}
+    {% if vista == 'equipos' %}
+    · {{ total }} grupo{{ '' if total == 1 else 's' }}
+    {% endif %}
+</div>
+
+{% if vista == 'equipos' %}
+<div class="space-y-3">
+    {% for equipo in items %}
+    <details class="licencia-grupo bg-white rounded-2xl border border-dark-100 overflow-hidden" data-equipo-id="{{ equipo.equipo_id or '' }}" data-grupo="equipo-{{ equipo.equipo_id or 'sin-equipo' }}">
+        <summary class="cursor-pointer px-4 py-4 text-dark-800 hover:bg-dark-50/60 transition-colors focus-visible:outline-primary-500">
+            <span class="flex items-center gap-3">
+                <i data-lucide="chevron-right" class="licencia-chevron w-4 h-4 shrink-0 text-dark-400"></i>
+                <span class="flex flex-1 flex-wrap items-center justify-between gap-3 min-w-0">
+                <span><span class="font-medium">{{ equipo.equipo_nombre }}</span>
+                    <span class="ml-2 text-xs text-dark-500">{{ equipo.total_empleados }} empleado{{ '' if equipo.total_empleados == 1 else 's' }}</span>
+                </span>
+                <span class="text-sm font-medium tabular-nums text-dark-700">
+                    {% for t in equipo.totales %}<span class="ml-3 whitespace-nowrap">{{ importe(t.moneda, t.total) }}</span>{% endfor %}
+                </span>
+                </span>
+            </span>
+        </summary>
+        <div class="px-4 pb-4 space-y-2 border-t border-dark-100">
+            {% for fila in equipo.empleados %}
+            <div class="py-3 border-b border-dark-100 last:border-0">{{ fila_empleado(fila) }}</div>
+            {% endfor %}
+        </div>
+    </details>
+    {% else %}
+    <p class="rounded-2xl bg-white border border-dark-100 px-4 py-12 text-center text-dark-500">No hay licencias asignadas que coincidan con los filtros.</p>
+    {% endfor %}
+</div>
+{% else %}
+<div class="space-y-2">
+    {% for fila in items %}
+    <div class="bg-white rounded-2xl border border-dark-100 px-4 py-4">{{ fila_empleado(fila) }}</div>
+    {% else %}
+    <div class="bg-white rounded-2xl border border-dark-100 px-4 py-16 text-center">
+        <div class="inline-flex items-center justify-center w-16 h-16 bg-dark-50 rounded-2xl mb-4">
+            <i data-lucide="key" class="w-7 h-7 text-dark-300"></i>
+        </div>
+        <p class="text-dark-500 font-medium">No hay licencias asignadas</p>
+        <p class="text-sm text-dark-400 mt-1">
+            {% if buscar or filtro_equipos or filtro_proveedor or filtro_empleados %}
+            Ningún empleado coincide con los filtros aplicados
+            {% else %}
+            Comenzá asignando la primera licencia
+            {% endif %}
+        </p>
+        <button type="button" @click="abrirNueva()"
+                class="inline-block mt-3 text-primary-600 hover:text-primary-700 font-medium">
+            Crear licencia →
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if total_paginas > 1 %}
+<div class="px-4 py-4 border-t border-dark-100 flex items-center justify-between">
+    <p class="text-sm text-dark-500">
+        Página {{ pagina }} de {{ total_paginas }} · {{ total }} {{ 'grupo' if vista == 'equipos' else 'empleado' }}{{ '' if total == 1 else 's' }}
+    </p>
+    <div class="flex items-center space-x-2">
+        {% if pagina > 1 %}
+        <a href="{{ paginacion_url(pagina - 1) }}"
+           hx-get="{{ paginacion_url(pagina - 1) }}"
+           hx-target="#licencias-table"
+           class="px-3 py-1.5 text-sm border border-dark-200 rounded-lg hover:bg-dark-50 text-dark-600">Anterior</a>
+        {% endif %}
+        {% if pagina < total_paginas %}
+        <a href="{{ paginacion_url(pagina + 1) }}"
+           hx-get="{{ paginacion_url(pagina + 1) }}"
+           hx-target="#licencias-table"
+           class="px-3 py-1.5 text-sm border border-dark-200 rounded-lg hover:bg-dark-50 text-dark-600">Siguiente</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

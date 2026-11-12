@@ -1,0 +1,240 @@
+{% extends "core/base.html" %}
+
+{% block title %}Perfiles - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="perfilesFiltros()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Perfiles</h1>
+            <p class="text-dark-500">Gestión de perfiles laborales</p>
+        </div>
+        <a href="{{ url_for('nomina.perfiles_create') }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Perfil
+        </a>
+    </div>
+    
+    <!-- Barra de Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <!-- Búsqueda -->
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar por nombre..." 
+                       x-model="buscar"
+                       @input.debounce.300ms="aplicarFiltros()"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            
+            <!-- Filtro Departamento -->
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" 
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="filtros.departamento_id ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="building-2" class="w-4 h-4 mr-2"></i>
+                    <span x-text="filtros.departamento_id ? 'Depto: ' + getNombreDepto(filtros.departamento_id) : 'Departamento'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="open" @click.away="open = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-dark-100 shadow-lg z-20 max-h-64 overflow-y-auto">
+                    <div class="p-2">
+                        <button @click="filtros.departamento_id = ''; aplicarFiltros(); open = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': !filtros.departamento_id }">
+                            Todos
+                        </button>
+                        {% for dep in departamentos %}
+                        <button @click="filtros.departamento_id = '{{ dep.id }}'; aplicarFiltros(); open = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': filtros.departamento_id === '{{ dep.id }}' }">
+                            {{ dep.nombre }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtro Categoría -->
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" 
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="filtros.categoria_id ? 'bg-violet-50 border-violet-200 text-violet-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="folder" class="w-4 h-4 mr-2"></i>
+                    <span x-text="filtros.categoria_id ? 'Cat: ' + getNombreCat(filtros.categoria_id) : 'Categoría'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="open" @click.away="open = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-dark-100 shadow-lg z-20 max-h-64 overflow-y-auto">
+                    <div class="p-2">
+                        <button @click="filtros.categoria_id = ''; aplicarFiltros(); open = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-violet-50 text-violet-700': !filtros.categoria_id }">
+                            Todas
+                        </button>
+                        {% for cat in categorias %}
+                        <button @click="filtros.categoria_id = '{{ cat.id }}'; aplicarFiltros(); open = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-violet-50 text-violet-700': filtros.categoria_id === '{{ cat.id }}' }">
+                            {{ cat.nombre }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filtro Tipo -->
+            <div class="relative" x-data="{ open: false }">
+                <button @click="open = !open" 
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="filtros.tipo ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="tag" class="w-4 h-4 mr-2"></i>
+                    <span x-text="filtros.tipo ? 'Tipo: ' + filtros.tipo : 'Tipo'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="open" @click.away="open = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-48 bg-white rounded-xl border border-dark-100 shadow-lg z-20">
+                    <div class="p-2">
+                        <button @click="filtros.tipo = ''; aplicarFiltros(); open = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-blue-50 text-blue-700': !filtros.tipo }">
+                            Todos
+                        </button>
+                        {% for t in ['DEVELOPER', 'MANAGER', 'LIDER', 'HRBP', 'DIRECTOR'] %}
+                        <button @click="filtros.tipo = '{{ t }}'; aplicarFiltros(); open = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-blue-50 text-blue-700': filtros.tipo === '{{ t }}' }">
+                            {{ t }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Limpiar filtros -->
+            <button x-show="tieneFilrosActivos()" @click="limpiarFiltros()"
+                    class="flex items-center px-3 py-2.5 text-sm text-dark-500 hover:text-dark-700 transition-colors">
+                <i data-lucide="x" class="w-4 h-4 mr-1"></i>
+                Limpiar
+            </button>
+            
+            <!-- Total -->
+            <div class="flex items-center text-sm text-dark-500 ml-auto">
+                <i data-lucide="briefcase" class="w-4 h-4 mr-2"></i>
+                <span>{{ total }} perfiles</span>
+            </div>
+        </div>
+        
+        <!-- Chips de filtros activos -->
+        <div x-show="tieneFilrosActivos()" class="mt-4 pt-4 border-t border-dark-100 flex flex-wrap gap-2">
+            <template x-if="filtros.departamento_id">
+                <span class="inline-flex items-center px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm">
+                    <span x-text="'Depto: ' + getNombreDepto(filtros.departamento_id)"></span>
+                    <button @click="filtros.departamento_id = ''; aplicarFiltros()" class="ml-2 hover:text-primary-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            <template x-if="filtros.categoria_id">
+                <span class="inline-flex items-center px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-sm">
+                    <span x-text="'Cat: ' + getNombreCat(filtros.categoria_id)"></span>
+                    <button @click="filtros.categoria_id = ''; aplicarFiltros()" class="ml-2 hover:text-violet-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            <template x-if="filtros.tipo">
+                <span class="inline-flex items-center px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-sm">
+                    <span x-text="'Tipo: ' + filtros.tipo"></span>
+                    <button @click="filtros.tipo = ''; aplicarFiltros()" class="ml-2 hover:text-blue-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+        </div>
+    </div>
+
+    <!-- Cards Grid -->
+    <div class="rounded-2xl">
+        <div id="perfiles-table" hx-get="{{ url_for('nomina.perfiles_list') }}" hx-trigger="perfilDeleted from:body">
+            {% include "nomina/partials/perfiles_table.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar perfil?</h3>
+                <p class="text-dark-500 mb-2">Estás por eliminar:</p>
+                <p class="text-dark-800 font-semibold mb-6" x-text="deleteNombre"></p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors">Cancelar</button>
+                <button @click="htmx.ajax('DELETE', '/nomina/perfiles/' + deleteId + '/eliminar', {target: '#perfiles-table'}); showDeleteModal = false" class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function perfilesFiltros() {
+    return {
+        buscar: '{{ buscar }}',
+        filtros: {
+            departamento_id: '{{ filtro_departamento or "" }}',
+            categoria_id: '{{ filtro_categoria or "" }}',
+            tipo: '{{ filtro_tipo or "" }}'
+        },
+        departamentos: {{ departamentos | tojson | safe }},
+        categorias: {{ categorias | tojson | safe }},
+        showDeleteModal: false,
+        deleteId: null,
+        deleteNombre: '',
+        
+        init() {
+            document.body.addEventListener('perfilDeleted', () => this.aplicarFiltros());
+        },
+        
+        tieneFilrosActivos() {
+            return this.filtros.departamento_id || this.filtros.categoria_id || this.filtros.tipo;
+        },
+        
+        limpiarFiltros() {
+            this.filtros.departamento_id = '';
+            this.filtros.categoria_id = '';
+            this.filtros.tipo = '';
+            this.buscar = '';
+            this.aplicarFiltros();
+        },
+        
+        getNombreDepto(id) {
+            const dep = this.departamentos.find(d => d.id === id);
+            return dep ? dep.nombre : id;
+        },
+        
+        getNombreCat(id) {
+            const cat = this.categorias.find(c => c.id === id);
+            return cat ? cat.nombre : id;
+        },
+        
+        aplicarFiltros() {
+            let params = new URLSearchParams();
+            if (this.buscar) params.append('buscar', this.buscar);
+            if (this.filtros.departamento_id) params.append('departamento_id', this.filtros.departamento_id);
+            if (this.filtros.categoria_id) params.append('categoria_id', this.filtros.categoria_id);
+            if (this.filtros.tipo) params.append('tipo', this.filtros.tipo);
+            
+            htmx.ajax('GET', '{{ url_for("nomina.perfiles_list") }}?' + params.toString(), {
+                target: '#perfiles-table',
+                swap: 'innerHTML'
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

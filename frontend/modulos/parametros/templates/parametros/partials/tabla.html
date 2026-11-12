@@ -1,0 +1,120 @@
+{% if grupos %}
+<table class="w-full text-sm">
+    <thead class="bg-dark-50 border-b border-dark-100">
+        <tr class="text-left text-xs font-semibold text-dark-500 uppercase tracking-wide">
+            <th class="px-6 py-3">Parámetro</th>
+            <th class="px-4 py-3">Key</th>
+            <th class="px-4 py-3 w-96">Valor</th>
+            <th class="px-6 py-3 text-right">Acciones</th>
+        </tr>
+    </thead>
+    {% for categoria, subgrupos in grupos.items() %}
+    <tbody>
+        <tr class="bg-dark-50/70 border-b border-dark-100">
+            <td colspan="4" class="px-6 py-2.5">
+                <div class="flex items-center gap-2 text-dark-700 font-semibold">
+                    <i data-lucide="folder" class="w-4 h-4 text-primary-500"></i>{{ categoria }}
+                </div>
+            </td>
+        </tr>
+        {% for sub, items in subgrupos.items() %}
+        {% if sub %}
+        <tr class="bg-dark-50/30 border-b border-dark-50">
+            <td colspan="4" class="px-6 py-2">
+                <div class="flex items-center gap-2 pl-6 text-dark-500 text-xs font-semibold uppercase tracking-wide">
+                    <i data-lucide="corner-down-right" class="w-3.5 h-3.5 text-dark-300"></i>{{ sub }}
+                </div>
+            </td>
+        </tr>
+        {% endif %}
+        {% for p in items %}
+        <tr class="border-b border-dark-50 hover:bg-dark-50/40 transition-colors">
+            <td class="px-6 py-3 align-top">
+                <div class="{{ 'pl-12' if sub else 'pl-6' }}">
+                    <span class="font-medium text-dark-900">{{ p.nombre }}</span>
+                    {% if p.descripcion %}
+                    <p class="text-xs text-dark-400 mt-1">{{ p.descripcion }}</p>
+                    {% endif %}
+                </div>
+            </td>
+            <td class="px-4 py-3 align-top">
+                <code class="px-2 py-1 bg-dark-50 border border-dark-100 rounded-lg text-xs text-dark-600">{{ p.key }}</code>
+            </td>
+            <td class="px-4 py-3 align-top">
+                {% if p.key == 'webex_sync_espacios' %}
+                {% set seleccion = p.valor|from_json %}
+                <div class="flex flex-wrap items-center gap-1.5">
+                    {% for e in seleccion %}
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-primary-50 text-primary-700 border border-primary-100">
+                        {{ e.nombre or e.id }}
+                    </span>
+                    {% else %}
+                    <span class="text-xs text-dark-400 italic">Sin espacios seleccionados</span>
+                    {% endfor %}
+                    <button type="button"
+                            hx-get="{{ url_for('parametros.webex_espacios', id=p.id) }}"
+                            hx-target="#modal-editar" hx-swap="innerHTML"
+                            title="Elegir espacios desde Webex"
+                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 border border-primary-200 rounded-full hover:bg-primary-50 transition-colors">
+                        <i data-lucide="list-checks" class="w-3.5 h-3.5"></i>Editar
+                    </button>
+                </div>
+                <p class="text-xs text-dark-400 mt-1.5 pl-1">{{ seleccion|length }} espacio(s) · se guarda el ID, se muestra el nombre</p>
+                {% else %}
+                <form hx-post="{{ url_for('parametros.editar_valor', id=p.id) }}"
+                      hx-target="#parametros-table" hx-swap="innerHTML"
+                      hx-include="#parametros-filtros"
+                      class="flex items-center gap-1.5">
+                    <input type="text" name="valor" value="{{ p.valor or '' }}"
+                           placeholder="{{ p.valor_default or 'Sin valor' }}"
+                           class="flex-1 px-3 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-sm font-mono focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                    <button type="submit" title="Guardar valor"
+                            class="p-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                    </button>
+                    {% if p.valor %}
+                    <button type="submit" name="restaurar" value="1" title="Restaurar al valor por defecto"
+                            class="p-2 text-dark-400 hover:text-dark-600 hover:bg-dark-100 rounded-lg transition-colors">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                    </button>
+                    {% endif %}
+                </form>
+                <p class="text-xs text-dark-400 mt-1.5 pl-1">
+                    Por defecto: <span class="font-mono">{{ p.valor_default or '—' }}</span>
+                </p>
+                {% endif %}
+            </td>
+            <td class="px-6 py-3 align-top text-right whitespace-nowrap">
+                <button hx-get="{{ url_for('parametros.editar', id=p.id) }}"
+                        hx-target="#modal-editar" hx-swap="innerHTML"
+                        title="Editar definición"
+                        class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors">
+                    <i data-lucide="pencil" class="w-4 h-4"></i>
+                </button>
+                <button @click="showDeleteModal = true; deleteId = '{{ p.id }}'; deleteName = '{{ p.nombre|e }}'"
+                        title="Eliminar"
+                        class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+    </tbody>
+    {% endfor %}
+</table>
+{% else %}
+<div class="p-12 text-center">
+    <div class="w-16 h-16 bg-dark-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+        <i data-lucide="sliders-horizontal" class="w-8 h-8 text-dark-300"></i>
+    </div>
+    <h3 class="text-lg font-semibold text-dark-700 mb-1">Sin parámetros</h3>
+    <p class="text-dark-400 text-sm">
+        {% if filtros.buscar or filtros.categoria %}
+        No se encontraron parámetros con los filtros aplicados.
+        {% else %}
+        Creá el primer parámetro con el botón "Nuevo Parámetro".
+        {% endif %}
+    </p>
+</div>
+{% endif %}

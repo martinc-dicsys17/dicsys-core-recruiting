@@ -1,0 +1,345 @@
+{% extends "core/base.html" %}
+
+{% block title %}Detalle de Activo - {{ item.nombre }} | Centro IT{% endblock %}
+
+{% block content %}
+<div class="space-y-6" x-data="stockDetailManager()">
+
+    {% macro render_estado(nombre, valor) %}
+    <div class="flex items-center justify-between p-2 rounded-lg bg-white border border-dark-100 text-sm">
+        <span class="text-dark-600 font-medium capitalize text-xs">{{ nombre|replace('_', ' ') }}</span>
+        {% if valor %}
+        <span class="px-2.5 py-1 rounded-lg font-semibold text-xs whitespace-nowrap
+                {% if valor == 'Excelente' %}bg-emerald-500 text-white
+                {% elif valor == 'Bueno' %}bg-blue-500 text-white
+                {% elif valor == 'Regular' %}bg-amber-500 text-white
+                {% elif valor == 'Malo' %}bg-red-500 text-white
+                {% elif valor == 'No aplica' %}bg-gray-400 text-white
+                {% else %}bg-dark-200 text-dark-700{% endif %}">
+            {{ valor }}
+        </span>
+        {% else %}
+        <span class="px-2.5 py-1 rounded-lg font-semibold text-xs bg-dark-100 text-dark-500">N/A</span>
+        {% endif %}
+    </div>
+    {% endmacro %}
+
+    {% macro render_photo(titulo, url) %}
+    {% if url and url != '/files/default.png' %}
+    <div class="group relative aspect-video rounded-xl overflow-hidden border border-dark-200 bg-dark-50 cursor-zoom-in shadow-sm"
+        @click="window.open('{{ url }}', '_blank')">
+        <img src="{{ url }}" alt="{{ titulo }}"
+            class="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-500">
+        <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+            <p class="text-white text-[10px] font-bold truncate">{{ titulo }}</p>
+        </div>
+    </div>
+    {% endif %}
+    {% endmacro %}
+
+    <!-- Header & Breadcrumbs -->
+    <div
+        class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 rounded-2xl shadow-sm border border-dark-100 gap-4">
+        <div>
+            <div class="flex items-center space-x-2 text-sm text-dark-500 mb-2">
+                <a href="{{ url_for('soporte.stock_list') }}"
+                    class="hover:text-primary-600 transition-colors">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i> Volver al Stock
+                </a>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-dark-900 tracking-tight flex items-center">
+                <div
+                    class="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center text-white mr-3 shadow-soft">
+                    {% if item.tipo == 'notebook' %}💻{% elif item.tipo == 'monitor' %}🖥️{% elif item.tipo ==
+                    'periferico' %}🖱️{% elif item.tipo == 'impresora' %}🖨️{% elif item.tipo == 'servidor' %}🖧{% else
+                    %}📦{% endif %}
+                </div>
+                {{ item.nombre }}
+            </h1>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="inline-flex items-center px-3 py-1.5 rounded-xl text-sm font-semibold shadow-sm border
+            {% if item.estado == 'disponible' %}bg-emerald-50 text-emerald-700 border-emerald-100
+            {% elif item.estado == 'asignado' %}bg-blue-50 text-blue-700 border-blue-100
+            {% elif item.estado == 'en_reparacion' %}bg-amber-50 text-amber-700 border-amber-100
+            {% else %}bg-dark-100 text-dark-500 border-dark-200{% endif %}">
+                {% if item.estado == 'disponible' %}🟢 Disponible
+                {% elif item.estado == 'asignado' %}🔵 Asignado a {{ item.asignado_a }}
+                {% elif item.estado == 'en_reparacion' %}🟠 En reparación
+                {% else %}⚫ Dado de baja{% endif %}
+            </span>
+            <button @click="tipoEvento = 'Actualizacion Estado'; showHistorialModal = true"
+                class="inline-flex items-center px-3 py-1.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold shadow-soft hover:bg-indigo-700 transition-all">
+                <i data-lucide="activity" class="w-4 h-4 mr-1.5"></i> ACTUALIZAR ESTADO
+            </button>
+            <button @click="tipoEvento = 'Reparacion'; showHistorialModal = true"
+                class="inline-flex items-center px-3 py-1.5 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-semibold shadow-sm hover:bg-red-50 transition-all">
+                <i data-lucide="wrench" class="w-4 h-4 mr-1.5"></i> REPARAR
+            </button>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Tarjeta Lateral Izquierda: Especificaciones Técnicas -->
+        <div class="lg:col-span-1 space-y-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-dark-100 overflow-hidden">
+                <div class="bg-dark-50/50 px-6 py-4 border-b border-dark-100">
+                    <h3 class="font-bold text-dark-900 flex items-center">
+                        <i data-lucide="cpu" class="w-5 h-5 text-indigo-500 mr-2"></i>
+                        Especificaciones
+                    </h3>
+                </div>
+                <div class="p-6 divide-y divide-dark-50">
+                    <div class="py-3 items-center grid grid-cols-3 gap-2">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Marca/Modelo</span>
+                        <span class="text-sm font-semibold text-dark-900 col-span-2 text-right">{{ item.marca or 'N/A'
+                            }} {{ item.modelo or '' }}</span>
+                    </div>
+                    <div class="py-3 items-center grid grid-cols-3 gap-2 border-b border-dark-100">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Nro Inventario</span>
+                        <span class="text-sm font-mono font-bold text-primary-600 col-span-2 text-right">{{
+                            item.numero_inventario or 'N/A' }}</span>
+                    </div>
+                    <div class="py-3 items-center grid grid-cols-3 gap-2">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Número de Serie</span>
+                        <span class="text-sm font-mono text-dark-800 col-span-2 text-right">{{ item.numero_serie or
+                            'N/A' }}</span>
+                    </div>
+                    <div class="py-3 items-center grid grid-cols-3 gap-2">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Procesador</span>
+                        <span class="text-sm font-semibold text-dark-900 col-span-2 text-right">{{ item.procesador or
+                            'N/A' }}</span>
+                    </div>
+                    <div class="py-3 items-center grid grid-cols-3 gap-2">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Memoria</span>
+                        <span class="text-sm font-semibold text-dark-900 col-span-2 text-right">{% if item.memoria %}{{
+                            item.memoria }}{% else %}N/A{% endif %}</span>
+                    </div>
+                    <div class="py-3 items-center grid grid-cols-3 gap-2">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Disco Principal</span>
+                        <span class="text-sm font-semibold text-dark-900 col-span-2 text-right">{{ item.disco_principal
+                            or 'N/A' }}</span>
+                    </div>
+                    <div class="py-3 items-center grid grid-cols-3 gap-2">
+                        <span class="text-sm font-medium text-dark-500 col-span-1">Disco Secundario</span>
+                        <span class="text-sm font-semibold text-dark-900 col-span-2 text-right">{{ item.disco_secundario
+                            or 'No aplica' }}</span>
+                    </div>
+                    {% if item.notas %}
+                    <div class="py-3">
+                        <span class="text-sm font-medium text-dark-500 block mb-1">Notas Permanentes</span>
+                        <p class="text-sm text-dark-700 bg-amber-50 p-2 rounded-lg border border-amber-100">{{
+                            item.notas }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Columna Central/Derecha: Historial y Auditorías -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-2xl shadow-sm border border-dark-100 overflow-hidden">
+                <div class="bg-dark-50/50 px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+                    <h3 class="font-bold text-dark-900 flex items-center">
+                        <i data-lucide="history" class="w-5 h-5 text-indigo-500 mr-2"></i>
+                        Ciclo de Vida y Historial de Activo
+                    </h3>
+                    <span class="text-xs font-semibold px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg">{{
+                        historial|length }} registros</span>
+                </div>
+
+                <div class="p-6">
+                    {% if historial %}
+                    <div class="relative border-l-2 border-indigo-100 ml-3 space-y-10">
+                        {% for aud in historial %}
+                        <div class="relative pl-6">
+                            <!-- Indicador de línea de tiempo -->
+                            <div class="absolute -left-[9px] top-1.5 w-4 h-4 rounded-full border-4 border-white
+                                {% if aud.tipo_evento == 'Alta' %}bg-emerald-500
+                                {% elif aud.tipo_evento == 'Baja' %}bg-rose-500
+                                {% elif aud.tipo_evento == 'Reparacion' %}bg-amber-500
+                                {% elif aud.tipo_evento == 'Actualizacion Estado' %}bg-purple-500
+                                {% else %}bg-indigo-500{% endif %}">
+                            </div>
+
+                            <!-- Tarjeta del Historial -->
+                            <div class="bg-white border {% if loop.first %}border-indigo-200 shadow-md ring-1 ring-indigo-50{% else %}border-dark-100 shadow-sm{% endif %} rounded-2xl p-5"
+                                x-data="{ expanded: false }">
+                                <div class="flex justify-between items-start mb-3 cursor-pointer"
+                                    @click="expanded = !expanded">
+                                    <div>
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <h4 class="font-bold text-dark-900 flex items-center gap-2">
+                                                <span class="px-2 py-0.5 text-xs rounded-md 
+                                                    {% if aud.tipo_evento == 'Alta' %}bg-emerald-100 text-emerald-800
+                                                    {% elif aud.tipo_evento == 'Baja' %}bg-rose-100 text-rose-800
+                                                    {% elif aud.tipo_evento == 'Reparacion' %}bg-amber-100 text-amber-800
+                                                    {% elif aud.tipo_evento == 'Actualizacion Estado' %}bg-purple-100 text-purple-800
+                                                    {% else %}bg-indigo-100 text-indigo-800{% endif %}">
+                                                    {{ aud.tipo_evento|capitalize }}
+                                                </span>
+                                                {% if aud.colaborador_nombre %}
+                                                <span class="text-sm text-dark-600">por <strong>{{
+                                                        aud.colaborador_nombre }}</strong></span>
+                                                {% endif %}
+                                            </h4>
+                                        </div>
+                                        <p class="text-xs text-dark-400 mt-1">Registrado el: <span class="font-mono">{{
+                                                aud.fecha_hora }}</span> por Téc. {{
+                                            aud.responsable_nombre or 'Sistema' }}</p>
+                                    </div>
+                                    <button class="p-1 text-dark-400 hover:bg-dark-50 rounded-lg transition-colors">
+                                        <i data-lucide="chevron-down" class="w-5 h-5 transition-transform duration-300"
+                                            :class="expanded ? 'rotate-180' : ''"></i>
+                                    </button>
+                                </div>
+
+                                {% if aud.notas_adicionales %}
+                                <p class="text-sm text-dark-600 mt-2 bg-dark-50 p-3 rounded-xl border border-dark-100">
+                                    {{ aud.notas_adicionales }}</p>
+                                {% endif %}
+
+                                <!-- Acordeón Desplegable -->
+                                <div x-show="expanded" x-transition x-cloak
+                                    class="mt-5 space-y-6 border-t border-dark-100 pt-5">
+
+                                    <!-- Detalle Especial para Reparacion -->
+                                    {% if aud.tipo_evento == 'Reparacion' %}
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div class="bg-red-50/50 p-4 rounded-xl border border-red-100">
+                                            <p class="text-[10px] font-bold text-red-700 uppercase tracking-widest mb-2">
+                                                Costo de Reparación</p>
+                                            <div class="space-y-2">
+                                                <div class="flex justify-between text-sm">
+                                                    <span class="text-dark-500">Costo Total:</span>
+                                                    <span class="font-bold text-red-700 text-lg">${{ aud.costo_reparacion or '0.00' }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- Fotos Factura -->
+                                        {% if aud.get('evidencia_fotografica', {}).get('fotos_factura') %}
+                                        <div class="bg-dark-50 p-4 rounded-xl border border-dark-100">
+                                            <p class="text-[10px] font-bold text-dark-500 uppercase tracking-widest mb-2">
+                                                Facturas / Comprobantes</p>
+                                            <div class="flex flex-wrap gap-2">
+                                                {% for url in aud.get('evidencia_fotografica', {}).get('fotos_factura', []) %}
+                                                <div class="w-16 h-16 rounded-lg border border-dark-200 overflow-hidden cursor-zoom-in group relative"
+                                                    @click="window.open('{{ url }}', '_blank')">
+                                                    <img src="{{ url }}"
+                                                        class="w-full h-full object-cover group-hover:scale-110 transition-transform">
+                                                    <i data-lucide="eye"
+                                                        class="absolute inset-0 m-auto w-4 h-4 text-white opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+
+                                    <!-- Matriz Desgaste - SIEMPRE mostrar para trazabilidad completa -->
+                                    <div>
+                                        <h5 class="text-xs font-bold text-dark-500 uppercase tracking-wider mb-3">
+                                            <i data-lucide="activity" class="w-4 h-4 inline mr-1"></i>
+                                            Estado Físico en el Momento (1: Excelente → 4: Malo)
+                                        </h5>
+                                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                            {{ render_estado('pantalla', aud.estado_pantalla) }}
+                                            {{ render_estado('carcasa', aud.estado_carcasa) }}
+                                            {{ render_estado('batería', aud.estado_bateria) }}
+                                            {{ render_estado('puertos', aud.estado_puertos) }}
+                                            {{ render_estado('teclado/pad', aud.estado_teclado_trackpad) }}
+                                            {{ render_estado('audio/cam', aud.estado_audio_camara) }}
+                                            {% if aud.estado_general %}
+                                            {{ render_estado('estado general', aud.estado_general) }}
+                                            {% endif %}
+                                        </div>
+                                        <p class="text-[10px] text-dark-400 mt-2 italic">
+                                            Snapshot del estado físico registrado durante este evento de {{ aud.tipo_evento|lower }}
+                                        </p>
+                                    </div>
+
+                                    <!-- Evidencia Fotográfica -->
+                                    <div>
+                                        <h5
+                                            class="text-xs font-bold text-dark-500 uppercase tracking-wider mb-3 flex items-center">
+                                            <i data-lucide="image" class="w-4 h-4 mr-1"></i> Evidencia Fotográfica
+                                        </h5>
+                                        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+                                            <!-- Fotos Base (si existen) -->
+                                            {{ render_photo('Superior', aud.get('evidencia_fotografica', {}).get('foto_superior')) }}
+                                            {{ render_photo('Inferior', aud.get('evidencia_fotografica', {}).get('foto_inferior')) }}
+                                            {{ render_photo('Trasera (S/N)', aud.get('evidencia_fotografica', {}).get('foto_trasero')) }}
+                                            {{ render_photo('Adicional 1', aud.get('evidencia_fotografica', {}).get('foto_adicional_1')) }}
+                                            {{ render_photo('Adicional 2', aud.get('evidencia_fotografica', {}).get('foto_adicional_2')) }}
+
+                                            <!-- Acuerdo (Alta/Baja) -->
+                                            {{ render_photo('Acuerdo Firmado', aud.get('evidencia_fotografica', {}).get('foto_acuerdo')) }}
+
+                                            <!-- Galería de Evidencias (del nuevo sistema de reparaciones) -->
+                                            {% if aud.get('evidencia_fotografica', {}).get('fotos_evidencias') %}
+                                            {% for url in aud.get('evidencia_fotografica', {}).get('fotos_evidencias', []) %}
+                                            {{ render_photo('Evidencia ' ~ loop.index, url) }}
+                                            {% endfor %}
+                                            {% endif %}
+
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="py-16 flex flex-col items-center justify-center text-center">
+                        <div class="w-20 h-20 bg-dark-50 rounded-full flex items-center justify-center mb-4">
+                            <i data-lucide="ghost" class="w-10 h-10 text-dark-300"></i>
+                        </div>
+                        <h4 class="text-lg font-bold text-dark-900 mb-1">Sin historial</h4>
+                        <p class="text-dark-500 text-sm max-w-sm">No existen registros históricos para este
+                            activo todavía.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal Historial (Wrapper) -->
+    <div x-show="showHistorialModal" x-cloak class="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showHistorialModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+
+        <div class="bg-white rounded-2xl shadow-soft z-10 w-full max-w-4xl max-h-[95vh] flex flex-col overflow-hidden"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100"
+            x-init="$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); })">
+            {% include 'soporte/partials/modal_historial_simple.html' %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    function stockDetailManager() {
+        return {
+            showHistorialModal: false,
+            tipoEvento: 'Actualizacion Estado'
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+    });
+</script>
+{% endblock %}

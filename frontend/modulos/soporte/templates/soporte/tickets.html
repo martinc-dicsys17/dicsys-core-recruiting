@@ -1,0 +1,1243 @@
+{% extends "core/base.html" %}
+
+{% block title %}Tickets - Soporte Técnico - {{ config.APP_NAME }}{% endblock %}
+
+{% block head %}
+<style>
+    .kanban-col {
+        min-height: 500px;
+    }
+
+    .ticket-card {
+        cursor: pointer;
+    }
+
+    .ticket-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .priority-bar {
+        width: 4px;
+        border-radius: 4px 0 0 4px;
+    }
+
+    .priority-critica {
+        background: linear-gradient(180deg, #EF4444, #DC2626);
+    }
+
+    .priority-alta {
+        background: linear-gradient(180deg, #F97316, #EA580C);
+    }
+
+    .priority-media {
+        background: linear-gradient(180deg, #EAB308, #CA8A04);
+    }
+
+    .priority-baja {
+        background: linear-gradient(180deg, #22C55E, #16A34A);
+    }
+
+    .modal-backdrop {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+    }
+    
+    /* Ocultar scrollbar nativa del navegador */
+    .kanban-scroll {
+        overflow-x: auto;
+        overflow-y: visible;
+        scrollbar-width: none; /* Firefox */
+        -ms-overflow-style: none; /* IE/Edge */
+    }
+    
+    .kanban-scroll::-webkit-scrollbar {
+        display: none; /* Chrome/Safari/Opera */
+    }
+    
+    /* Barra indicadora personalizada */
+    .scroll-indicator-bar {
+        height: 8px;
+        background: #e2e8f0;
+        border-radius: 4px;
+        position: relative;
+        cursor: pointer;
+        transition: height 0.2s ease;
+    }
+    
+    .scroll-indicator-bar:hover {
+        height: 10px;
+    }
+    
+    .scroll-indicator-thumb {
+        height: 100%;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+        border-radius: 4px;
+        position: absolute;
+        will-change: left, width;
+        cursor: grab;
+        transition: background 0.2s ease;
+    }
+    
+    .scroll-indicator-thumb:hover {
+        background: linear-gradient(90deg, #2563eb, #7c3aed);
+    }
+    
+    .scroll-indicator-thumb:active {
+        cursor: grabbing;
+        background: linear-gradient(90deg, #1d4ed8, #6d28d9);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="ticketsData()" class="animate-fade-in bg-[#f8f9fa] min-h-screen rounded-2xl border border-dark-100">
+    
+    <!-- Header con padding normal y ancho adaptable al sidebar -->
+    <div class="p-6 pb-0" :style="'max-width: calc(100vw - ' + ($store.sidebar.collapsed ? '72px' : '288px') + ' - 48px);'">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+            <div>
+                <div class="flex items-center space-x-2 mb-1">
+                    <a href="{{ url_for('soporte.dashboard') }}"
+                        class="text-dark-400 hover:text-primary-500 transition-colors">
+                        <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                    </a>
+                    <i data-lucide="chevron-right" class="w-4 h-4 text-dark-300"></i>
+                    <span class="text-sm font-medium text-dark-500">Tickets</span>
+                </div>
+                <h1 class="text-3xl font-bold text-dark-900 tracking-tight">Panel Kanban 🎫</h1>
+            </div>
+            <div class="flex items-center space-x-3 mt-4 md:mt-0">
+                <!-- Toggle Vista -->
+                <div class="flex bg-white p-1 rounded-xl border border-dark-100 items-center">
+                    <a href="{{ url_for('soporte.tickets_kanban') }}"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-primary-50 text-primary-600 shadow-sm whitespace-nowrap">
+                        <i data-lucide="columns" class="w-4 h-4 inline-block mr-1"></i>Kanban
+                    </a>
+                    <a href="{{ url_for('soporte.tickets_table') }}"
+                        class="px-4 py-2 rounded-lg text-sm font-semibold transition-all text-dark-400 hover:text-dark-700 whitespace-nowrap">
+                        <i data-lucide="list" class="w-4 h-4 inline-block mr-1"></i>Tabla
+                    </a>
+                </div>
+                
+                {% if session.get('user', {}).get('rol') == 'admin' %}
+                <button @click="showManageCategoriesModal = true"
+                    class="p-2.5 bg-white border border-dark-200 text-dark-600 rounded-xl hover:bg-dark-50 transition-all shadow-sm active:scale-95"
+                    title="Gestionar Categorías">
+                    <i data-lucide="tag" class="w-5 h-5"></i>
+                </button>
+                {% else %}
+                {% endif %}
+                
+                <button @click="showCreateModal = true"
+                    class="flex items-center px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-all shadow-md active:scale-95 whitespace-nowrap">
+                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                    <span>Nuevo Ticket</span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Contenido con padding separado y ancho adaptable al sidebar -->
+    <div class="px-6 pb-6" :style="'max-width: calc(100vw - ' + ($store.sidebar.collapsed ? '72px' : '288px') + ' - 48px);'">
+
+    <!-- Buscador y Filtros -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <!-- Buscador -->
+        <form action="{{ url_for('soporte.tickets_kanban') }}" method="GET" class="relative group w-full md:max-w-md">
+            {% if filtro_categoria %}<input type="hidden" name="categoria_id" value="{{ filtro_categoria }}">{% endif %}
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i data-lucide="search"
+                    class="w-4 h-4 text-dark-400 group-focus-within:text-primary-500 transition-colors"></i>
+            </div>
+            <input type="text" name="buscar" value="{{ buscar or '' }}"
+                placeholder="Buscar ticket..."
+                class="w-full pl-11 pr-4 py-2.5 bg-white border border-dark-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all shadow-sm">
+            {% if buscar %}
+            <a href="{{ url_for('soporte.tickets_kanban', categoria_id=filtro_categoria) }}"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-dark-400 hover:text-red-500 transition-colors">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+            </a>
+            {% endif %}
+        </form>
+
+        <!-- Filtros de Categoría -->
+        <div class="flex items-center space-x-2 pb-1 no-scrollbar" x-data="{ openFilter: false }">
+            <a href="{{ url_for('soporte.tickets_kanban', buscar=buscar) }}"
+                class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border {{ 'bg-white text-primary-600 border-primary-200 shadow-sm' if not filtro_categoria else 'bg-dark-50 text-dark-400 border-transparent hover:bg-dark-100' }}">Todos</a>
+            <div class="relative">
+                <button @click="openFilter = !openFilter"
+                    class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border flex items-center gap-1.5 {{ 'bg-primary-100 text-primary-700 border-primary-200' if filtro_categoria else 'bg-dark-50 text-dark-400 border-transparent hover:bg-dark-100' }}">
+                    <span>{% if filtro_categoria_nombre %}{{ filtro_categoria_nombre }}{% else %}Categoría{% endif %}</span>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform" :class="openFilter && 'rotate-180'"></i>
+                </button>
+                <div x-show="openFilter" @click.away="openFilter = false" x-transition x-cloak
+                    class="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-dark-100 py-1 max-h-96 overflow-y-auto z-[100]">
+                    {% for cat in categorias_principales %}
+                    <a href="{{ url_for('soporte.tickets_kanban') }}?categoria_id={{ cat.id }}"
+                        class="block px-4 py-2 text-sm hover:bg-dark-50 transition-colors {% if filtro_categoria == cat.id %}text-primary-600 font-semibold bg-primary-50{% else %}text-dark-700{% endif %}">
+                        {{ cat.nombre }}
+                    </a>
+                    {% if cat.subcategorias %}
+                    {% for sub in cat.subcategorias %}
+                    <a href="{{ url_for('soporte.tickets_kanban') }}?categoria_id={{ sub.id }}"
+                        class="block px-4 py-2 text-sm pl-8 hover:bg-dark-50 transition-colors {% if filtro_categoria == sub.id %}text-primary-600 font-semibold bg-primary-50{% else %}text-dark-500{% endif %}">
+                            {{ sub.nombre }}
+                        </a>
+                    {% endfor %}
+                    {% endif %}
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="flex items-center gap-3 overflow-x-auto pb-1 mb-6 no-scrollbar">
+        <div class="bg-white rounded-lg px-4 py-2 border border-dark-100 flex items-center gap-2 flex-shrink-0">
+            <span class="text-xl font-bold text-dark-900">{{ stats.total|default(0) }}</span>
+            <span class="text-xs text-dark-400 uppercase">Total</span>
+        </div>
+        <div class="bg-blue-50 rounded-lg px-4 py-2 border border-blue-100 flex items-center gap-2 flex-shrink-0">
+            <span class="text-xl font-bold text-blue-700">{{ stats.abierto|default(0) }}</span>
+            <span class="text-xs text-blue-500 uppercase">Abiertos</span>
+        </div>
+        <div class="bg-amber-50 rounded-lg px-4 py-2 border border-amber-100 flex items-center gap-2 flex-shrink-0">
+            <span class="text-xl font-bold text-amber-700">{{ stats.en_progreso|default(0) }}</span>
+            <span class="text-xs text-amber-500 uppercase">En Progreso</span>
+        </div>
+        <div class="bg-emerald-50 rounded-lg px-4 py-2 border border-emerald-100 flex items-center gap-2 flex-shrink-0">
+            <span class="text-xl font-bold text-emerald-700">{{ stats.resuelto|default(0) }}</span>
+            <span class="text-xs text-emerald-500 uppercase">Resueltos</span>
+        </div>
+        <div class="bg-dark-50 rounded-lg px-4 py-2 border border-dark-100 flex items-center gap-2 flex-shrink-0">
+            <span class="text-xl font-bold text-dark-600">{{ stats.cancelado|default(0) }}</span>
+            <span class="text-xs text-dark-400 uppercase">Cancelados</span>
+        </div>
+        {% if stats['criticos']|default(0) > 0 %}
+        <div class="bg-red-50 rounded-lg px-4 py-2 border border-red-200 flex items-center gap-2 flex-shrink-0">
+            <span class="text-xl font-bold text-red-600">{{ stats['criticos']|default(0) }}</span>
+            <span class="text-xs text-red-500 uppercase">⚠️ Críticos</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Barra indicadora personalizada -->
+    <div id="scroll-bar-container" class="mb-4 bg-white rounded-lg border border-dark-100 p-3" style="display: none;">
+        <div class="scroll-indicator-bar">
+            <div id="scroll-indicator" class="scroll-indicator-thumb"></div>
+        </div>
+    </div>
+
+    <!-- Kanban Board con ancho fijo -->
+    <div class="kanban-scroll relative" style="width: 100%; overflow-x: auto;">
+        <div class="flex gap-4 items-start" style="width: max-content; min-width: 100%;">
+            {% for col in kanban.columnas %}
+            <div class="kanban-col w-[320px] flex-shrink-0">
+            <div class="flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center">
+                    <div class="w-3 h-3 rounded-full mr-2" style="--col-main: {{ col.color or '#64748b' }}; background-color: var(--col-main);"></div>
+                    <h3 class="font-semibold text-dark-800">{{ col.nombre }}</h3>
+                </div>
+                <span class="text-xs font-medium px-2 py-0.5 rounded-full" 
+                      style="--col-base: {{ col.color or '#64748b' }}; background-color: color-mix(in srgb, var(--col-base), transparent 85%); color: var(--col-base);">
+                    {{ col.tickets|length }}
+                </span>
+            </div>
+            <div class="space-y-3 bg-dark-50/50 rounded-2xl p-3 min-h-[400px]">
+                {% for ticket in col.tickets %}
+                <div @click="loadDetail('{{ ticket.id }}')"
+                    class="ticket-card bg-white rounded-xl border border-dark-100 overflow-hidden transition-all duration-200 cursor-pointer hover:shadow-md
+                    {% if ticket.prioridad == 'critica' %}ring-2 ring-red-500/20 border-red-200 shadow-[0_0_15px_rgba(239,68,68,0.1)]{% endif %}">
+                    <div class="flex min-w-0">
+                        <div class="priority-bar priority-{{ ticket.prioridad }}"></div>
+                        <div class="flex-1 p-4 min-w-0">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-mono font-medium text-primary-600">T-{{ "%05d"|format(ticket.numero|int) }}</span>
+                                {% if col.clave == 'resuelto' %}
+                                <i data-lucide="check-circle" class="w-4 h-4 text-emerald-500"></i>
+                                {% else %}
+                                <span class="text-xs px-2 py-0.5 rounded-full font-medium
+                                    {% if ticket.prioridad == 'critica' %}bg-red-100 text-red-700
+                                    {% elif ticket.prioridad == 'alta' %}bg-orange-100 text-orange-700
+                                    {% elif ticket.prioridad == 'media' %}bg-yellow-100 text-yellow-700
+                                    {% else %}bg-green-100 text-green-700{% endif %}
+                                ">{{ ticket.prioridad|capitalize }}</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-sm font-medium text-dark-800 mb-2 line-clamp-2">{{ ticket.titulo }}</p>
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs px-2 py-0.5 bg-dark-100 text-dark-500 rounded-lg truncate">
+                                    {{ ticket.subcategoria.nombre_display if ticket.subcategoria else 'S/C' }}
+                                </span>
+                                <span class="text-xs text-dark-400 flex-shrink-0 ml-2">Hace poco</span>
+                            </div>
+                            {% if ticket.activo %}
+                            <div class="flex items-center mt-2 pt-2 border-t border-dark-100 min-w-0">
+                                <i data-lucide="monitor" class="w-3.5 h-3.5 text-primary-500 mr-1.5 flex-shrink-0"></i>
+                                <span class="text-xs text-dark-600 font-medium truncate">{{ ticket.activo.nombre }}</span>
+                            </div>
+                            {% endif %}
+                            {% if ticket.asignado %}
+                            <div class="flex items-center mt-2 {% if ticket.activo %}pt-1{% else %}pt-2 border-t border-dark-100{% endif %} min-w-0">
+                                <div
+                                    class="w-5 h-5 bg-gradient-to-br from-primary-400 to-accent-purple rounded-full flex items-center justify-center text-white text-[10px] font-semibold mr-1.5 flex-shrink-0">
+                                    {{ ticket.asignado.nombre[0]|upper }}
+                                </div>
+                                <span class="text-xs text-dark-500 truncate">{{ ticket.asignado.nombre }} {{ ticket.asignado.apellido }}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="flex flex-col items-center justify-center py-8 text-dark-300">
+                    <i data-lucide="inbox" class="w-8 h-8 mb-2"></i>
+                    <p class="text-xs">Sin tickets en {{ col.nombre }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Modal: Crear Ticket -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-dark-900/50 backdrop-blur-sm" @click="showCreateModal = false"></div>
+        <div x-show="showCreateModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg z-10 overflow-hidden max-h-[90vh] flex flex-col">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-5 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center tracking-tight">
+                    <i data-lucide="plus-circle" class="w-5 h-5 mr-2.5"></i>Nuevo Ticket
+                </h2>
+                <button @click="showCreateModal = false"
+                    class="bg-white/10 hover:bg-white/20 p-1.5 rounded-lg text-white transition-all">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <!-- Form -->
+            <form action="{{ url_for('soporte.crear_ticket') }}" method="POST" enctype="multipart/form-data" class="flex flex-col flex-1 overflow-hidden" x-data="{
+                      categoria: '',
+                      subcategoria: '',
+                      tipo_ticket: '',
+                      categorias_lista: [],
+                      subcategorias_actuales: [],
+                      colaboradores_lista: [],
+                      dispositivos_lista: [],
+                      dispositivo_id: '',
+                      isLoading: false,
+                      searchQuery: '',
+                      colab_id: '',
+                      colab_nombre: '',
+                      openSearch: false,
+                      colaboradorInfo: {},
+                      // Buscador de equipo para mantenimiento
+                      equipoMantQuery: '',
+                      equipoMantId: '',
+                      equipoMantResultados: [],
+                      equipoMantCargando: false,
+                      get esAltaBaja() {
+                          return this.tipo_ticket === 'alta_baja';
+                      },
+                      get esAlta() {
+                          // subcategoria contiene 'alta' pero no 'baja'
+                          return this.tipo_ticket === 'alta_baja' && this.subcategoria && !this.subcategoria.includes('baja') && !this.subcategoria.includes('devolucion');
+                      },
+                      get esBaja() {
+                          return this.tipo_ticket === 'alta_baja' && !this.esAlta;
+                      },
+                      get mostrarDispositivo() {
+                          return this.tipo_ticket === 'reparacion';
+                      },
+                      get mostrarEquipoMantenimiento() {
+                          return this.tipo_ticket === 'mantenimiento';
+                      },
+                      init() {
+                          this.cargarCategorias();
+                          this.cargarDispositivos();
+                      },
+                      async cargarCategorias() {
+                          try {
+                              const resp = await fetch('/soporte/categorias-api');
+                              if (resp.ok) {
+                                  const data = await resp.json();
+                                  this.categorias_lista = data.categorias || [];
+                                  this.renderizarSelectCategorias();
+                              } else {
+                                  this.categorias_lista = [];
+                              }
+                          } catch (e) {
+                              this.categorias_lista = [];
+                          }
+                      },
+                      renderizarSelectCategorias() {
+                          const select = document.getElementById('select-categoria-kanban');
+                          if (!select) return;
+                          while (select.options.length > 1) { select.remove(1); }
+                          for (let cat of this.categorias_lista) {
+                              const option = document.createElement('option');
+                              option.value = cat.nombre_normalizado;
+                              option.textContent = cat.nombre_display || cat.nombre;
+                              select.appendChild(option);
+                          }
+                      },
+                      renderizarSelectSubcategorias() {
+                          const select = document.getElementById('select-subcategoria-kanban');
+                          if (!select) return;
+                          while (select.options.length > 1) { select.remove(1); }
+                          for (let sub of this.subcategorias_actuales) {
+                              const option = document.createElement('option');
+                              option.value = sub.nombre_normalizado;
+                              option.textContent = sub.nombre_display || sub.nombre;
+                              select.appendChild(option);
+                          }
+                      },
+                      seleccionarCategoria(cat) {
+                          if (!cat) return;
+                          this.categoria = cat.nombre_normalizado;
+                          this.tipo_ticket = cat.tipo_ticket_asociado;
+                          this.subcategoria = '';
+                          this.subcategorias_actuales = cat.subcategorias || [];
+                          if (this.subcategorias_actuales.length > 0) {
+                              this.$nextTick(() => this.renderizarSelectSubcategorias());
+                          }
+                          this.cargarDispositivos();
+                      },
+                      seleccionarSubcategoria(sub) {
+                          if (!sub) return;
+                          this.subcategoria = sub.nombre_normalizado;
+                          // Actualizar tipo_ticket si la subcategoría tiene uno específico
+                          if (sub.tipo_ticket_asociado) {
+                              this.tipo_ticket = sub.tipo_ticket_asociado;
+                          }
+                          this.cargarDispositivos();
+                      },
+                      async buscarColab() {
+                          if (this.colab_id && this.searchQuery !== this.colab_nombre) { this.colab_id = ''; }
+                          const query = this.searchQuery.trim();
+                          if (query.length < 2) {
+                              this.colaboradores_lista = [];
+                              this.openSearch = false;
+                              return;
+                          }
+                          this.isLoading = true;
+                          this.openSearch = true;
+                          try {
+                              const resp = await fetch(`/soporte/buscar-empleado?q=${encodeURIComponent(query)}`);
+                              if (resp.ok) {
+                                  const data = await resp.json();
+                                  this.colaboradores_lista = data.items || [];
+                              }
+                          } catch (e) {
+                          } finally { this.isLoading = false; }
+                      },
+                      selectColab(colab) {
+                          this.colab_id = colab.id;
+                          this.colab_nombre = colab.nombre;
+                          this.searchQuery = colab.nombre;
+                          this.openSearch = false;
+                          // Autocompletar datos del colaborador para alta IT
+                          fetch('/soporte/colaborador-alta-info/' + colab.id)
+                              .then(r => r.ok ? r.json() : {})
+                              .then(data => { this.colaboradorInfo = data; })
+                              .catch(() => { this.colaboradorInfo = {}; });
+                      },
+                      clearColab() {
+                          this.colab_id = '';
+                          this.colab_nombre = '';
+                          this.searchQuery = '';
+                          this.openSearch = false;
+                          this.colaboradorInfo = {};
+                      },
+                      async cargarDispositivos() {
+                          if (!this.mostrarDispositivo && !this.mostrarEquipoMantenimiento) {
+                              this.dispositivos_lista = [];
+                              this.dispositivo_id = '';
+                              return;
+                          }
+                          try {
+                              const resp = await fetch('/soporte/mis-dispositivos');
+                              if (resp.ok) {
+                                  const data = await resp.json();
+                                  this.dispositivos_lista = data.dispositivos || [];
+                              }
+                          } catch (e) {}
+                      },
+                      async buscarEquipoMant() {
+                          if (this.equipoMantQuery.length < 2) { this.equipoMantResultados = []; return; }
+                          this.equipoMantCargando = true;
+                          try {
+                              const r = await fetch('/soporte/buscar-equipo-disponible?q=' + encodeURIComponent(this.equipoMantQuery) + '&todos=1');
+                              this.equipoMantResultados = await r.json();
+                          } catch(e) {}
+                          this.equipoMantCargando = false;
+                      },
+                      seleccionarEquipoMant(eq) {
+                          this.equipoMantId = eq.id;
+                          this.equipoMantQuery = eq.display || eq.nombre;
+                          this.equipoMantResultados = [];
+                      },
+                      handleFormSubmit(e) {
+                          if (this.esAltaBaja && !this.colab_id) {
+                               e.preventDefault();
+                               Alpine.store('toasts').error('Debes seleccionar un colaborador de la lista desplegable.');
+                               this.openSearch = true;
+                               return false;
+                          }
+                          return true;
+                      }
+                   }" @submit="handleFormSubmit($event)"
+                   hx-post="{{ url_for('soporte.crear_ticket') }}" hx-swap="none">
+                <div class="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Título *</label>
+                        <input type="text" name="titulo" required minlength="3" maxlength="200"
+                            placeholder="Describe brevemente el problema..."
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Descripción</label>
+                        <textarea name="descripcion" rows="2" maxlength="1000" placeholder="Detalla el problema o solicitud..."
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Prioridad</label>
+                            <select name="prioridad" required
+                                class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                <option value="baja">🟢 Baja</option>
+                                <option value="media" selected>🟡 Media</option>
+                                <option value="alta">🟠 Alta</option>
+                                <option value="critica">🔴 Crítica</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Tipo de problema</label>
+                            <div class="space-y-2">
+                                <!-- Selector de categoría padre -->
+                                <select id="select-categoria-kanban" @change="seleccionarCategoria(categorias_lista.find(c => c.nombre_normalizado === $event.target.value))" required
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 font-medium">
+                                    <option value="">-- Seleccionar categoría --</option>
+                                </select>
+                                
+                                <!-- Selector de subcategoría (si existen) -->
+                                <select id="select-subcategoria-kanban" x-show="subcategorias_actuales && subcategorias_actuales.length > 0" @change="seleccionarSubcategoria(subcategorias_actuales.find(s => s.nombre_normalizado === $event.target.value))" :required="subcategorias_actuales && subcategorias_actuales.length > 0"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 font-medium">
+                                    <option value="">-- Seleccionar subcategoría --</option>
+                                </select>
+                            </div>
+                            <!-- Input hidden para enviar la categoría final -->
+                            <input type="hidden" name="categoria" :value="subcategoria || categoria">
+                        </div>
+                    </div>
+
+                    <!-- Campo equipo: aparece para reparacion y mantenimiento -->
+                    <div x-show="mostrarDispositivo || mostrarEquipoMantenimiento" x-cloak>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">
+                            <span x-show="mostrarDispositivo">📱 Dispositivo Afectado *</span>
+                            <span x-show="mostrarEquipoMantenimiento">🔧 Equipo a Mantener *</span>
+                        </label>
+                        <input type="hidden" name="activo_id" :value="equipoMantId">
+                        <div class="relative">
+                            <input type="text"
+                                   x-model="equipoMantQuery"
+                                   @input.debounce.300ms="buscarEquipoMant()"
+                                   :required="mostrarDispositivo || mostrarEquipoMantenimiento"
+                                   placeholder="Buscar por nombre, marca, modelo, serie, inventario..."
+                                   class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                            <div x-show="equipoMantCargando" class="absolute right-3 top-3">
+                                <svg class="animate-spin h-4 w-4 text-primary-500" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                </svg>
+                            </div>
+                            <div x-show="equipoMantResultados.length > 0"
+                                 class="absolute z-20 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                                <template x-for="eq in equipoMantResultados" :key="eq.id">
+                                    <div @click="seleccionarEquipoMant(eq)"
+                                         class="px-4 py-2.5 hover:bg-dark-50 cursor-pointer border-b border-dark-100 last:border-b-0">
+                                        <p class="text-sm font-medium text-dark-900" x-text="eq.nombre"></p>
+                                        <p class="text-xs text-dark-500">
+                                            <span x-show="eq.marca" x-text="eq.marca"></span>
+                                            <span x-show="eq.marca && eq.modelo"> · </span>
+                                            <span x-show="eq.modelo" x-text="eq.modelo"></span>
+                                        </p>
+                                        <p class="text-xs text-dark-400">
+                                            <span x-show="eq.numero_inventario" x-text="'Inv: ' + eq.numero_inventario"></span>
+                                            <span x-show="eq.numero_inventario && eq.numero_serie"> · </span>
+                                            <span x-show="eq.numero_serie" x-text="'S/N: ' + eq.numero_serie"></span>
+                                        </p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <p x-show="equipoMantId" class="text-xs text-emerald-600 mt-1">✓ Equipo seleccionado</p>
+                        <p x-show="!equipoMantId && equipoMantQuery.length > 0 && !equipoMantCargando && equipoMantResultados.length === 0"
+                           class="text-xs text-amber-600 mt-1">Sin resultados. Probá con otro término.</p>
+                        <p class="text-xs text-blue-500 mt-1">💡 Podés buscar por cualquier dato del equipo: nombre, marca, modelo, serie o inventario</p>
+                    </div>
+
+                    <!-- Campos alta/baja: colaborador + datos IT -->
+                    <div x-show="esAltaBaja" x-cloak class="space-y-4">
+
+                        <!-- Buscador de colaborador -->
+                        <div class="relative" @click.away="openSearch = false">
+                            <label class="block text-sm font-bold text-indigo-700 mb-1">Colaborador Implicado (En Alta/Baja) *</label>
+                            <input type="hidden" name="colaborador_id" x-model="colab_id">
+                            <div class="relative">
+                                <input type="text" x-model="searchQuery" name="colab_search"
+                                    @input.debounce.300ms="buscarColab()" @focus="openSearch = true"
+                                    x-effect="if(esAltaBaja) { if(colab_id) { $el.setCustomValidity('') } else { $el.setCustomValidity('Debe seleccionar un colaborador de la lista desplegable')} } else { $el.setCustomValidity('') }"
+                                    :required="esAltaBaja"
+                                    placeholder="Buscar por nombre o código de empleado..." minlength="2" maxlength="100"
+                                    class="w-full px-4 py-3 bg-white border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm pr-10">
+
+                                <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
+                                    <template x-if="isLoading">
+                                        <div class="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+                                    </template>
+                                    <button type="button" @click="clearColab()" x-show="colab_id"
+                                        class="text-dark-400 hover:text-red-500 transition-colors">
+                                        <i data-lucide="x" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                                <div x-show="openSearch && (colaboradores_lista.length > 0 || isLoading || (searchQuery.length >= 2 && !isLoading))"
+                                    @click.away="openSearch = false"
+                                    class="absolute z-[9999] w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden py-1 border-t-4 border-t-primary-500">
+                                    <template x-for="colab in colaboradores_lista" :key="colab.id">
+                                        <button type="button" @click="selectColab(colab)"
+                                            class="w-full text-left px-3 py-2.5 text-sm rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex flex-col group">
+                                            <span class="font-bold text-dark-800 group-hover:text-indigo-800" x-text="colab.nombre"></span>
+                                            <span class="text-[10px] text-dark-400 uppercase tracking-wider" x-text="colab.codigo"></span>
+                                        </button>
+                                    </template>
+                                    <template x-if="colaboradores_lista.length === 0 && !isLoading && searchQuery.length >= 2">
+                                        <div class="px-4 py-6 text-center">
+                                            <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-dark-50 text-dark-400 mb-2">
+                                                <i data-lucide="search-x" class="w-5 h-5"></i>
+                                            </div>
+                                            <p class="text-sm text-dark-500 font-medium">No se encontraron colaboradores</p>
+                                            <p class="text-xs text-dark-400 mt-1">Verificá el nombre o código ingresado</p>
+                                        </div>
+                                    </template>
+                                    <template x-if="isLoading">
+                                        <div class="px-4 py-6 text-center">
+                                            <div class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-primary-500 rounded-full" role="status" aria-label="loading">
+                                                <span class="sr-only">Cargando...</span>
+                                            </div>
+                                            <p class="text-sm text-dark-500 mt-2 font-medium italic">Buscando en la base de datos...</p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Datos autocompletados (readonly) -->
+                        <div x-show="colab_id" x-cloak class="p-3 bg-blue-50 rounded-xl border border-blue-200">
+                            <p class="text-xs font-semibold text-blue-700 uppercase mb-2">Datos del colaborador</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs text-dark-600">
+                                <div><span class="font-medium">Área:</span> <span x-text="colaboradorInfo.departamento || 'Sin asignar'"></span></div>
+                                <div><span class="font-medium">Puesto:</span> <span x-text="colaboradorInfo.puesto || 'Sin asignar'"></span></div>
+                                <div><span class="font-medium">Líder:</span> <span x-text="colaboradorInfo.lider || 'Sin asignar'"></span></div>
+                                <div><span class="font-medium">Mail líder:</span> <span x-text="colaboradorInfo.lider_email || 'Sin asignar'"></span></div>
+                            </div>
+                            <p x-show="!colaboradorInfo.departamento && !colaboradorInfo.puesto"
+                               class="text-xs text-amber-600 mt-2">⚠ Este colaborador no tiene área ni puesto asignados en nómina.</p>
+                        </div>
+
+                        <!-- Cliente y servicio (solo para alta) -->
+                        <div x-show="esAlta">
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Cliente y Servicio</label>
+                            <input type="text" name="cliente_servicio"
+                                   :value="colaboradorInfo.cliente_servicio || ''"
+                                   placeholder="Ej: Cliente ABC - Servicio de desarrollo"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                        </div>
+
+                        <!-- Configuración IT (solo para alta) -->
+                        <div x-show="esAlta" class="space-y-3 pt-2 border-t border-dark-100"
+                             x-data="{ sistemasDisponibles: [], sistemasSeleccionados: [], necesitaPC: false,
+                                       async init() {
+                                           try {
+                                               const r = await fetch('/soporte/sistemas-disponibles');
+                                               const d = await r.json();
+                                               this.sistemasDisponibles = d.sistemas || [];
+                                           } catch(e) {}
+                                       },
+                                       toggleSistema(clave) {
+                                           const idx = this.sistemasSeleccionados.indexOf(clave);
+                                           if (idx >= 0) this.sistemasSeleccionados.splice(idx, 1);
+                                           else this.sistemasSeleccionados.push(clave);
+                                       },
+                                       estaSeleccionado(clave) { return this.sistemasSeleccionados.includes(clave); }
+                                     }">
+                            <p class="text-xs font-semibold text-dark-500 uppercase">Configuración IT</p>
+
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Modalidad de trabajo *</label>
+                                <select name="modalidad_trabajo"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Presencial">Presencial</option>
+                                    <option value="Remoto">Remoto</option>
+                                    <option value="Híbrido">Híbrido</option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="necesita_computadora" value="1" x-model="necesitaPC"
+                                           class="w-4 h-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                    <span class="text-sm text-dark-700">Necesita computadora</span>
+                                </label>
+                            </div>
+
+                            <div x-show="necesitaPC" x-cloak>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Gama de computadora</label>
+                                <select name="gama_computadora"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                    <option value="">No aplica / Seleccionar...</option>
+                                    <option value="Básica">Básica</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Alta gama">Alta gama</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-2">Sistemas a habilitar *</label>
+                                <div class="bg-dark-50 rounded-xl border border-dark-200 p-3 space-y-2">
+                                    <template x-for="s in sistemasDisponibles" :key="s.clave">
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" name="sistemas_habilitados" :value="s.clave"
+                                                   :checked="estaSeleccionado(s.clave)" @change="toggleSistema(s.clave)"
+                                                   class="w-4 h-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                            <span class="text-sm text-dark-700" x-text="s.label"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Listas de correo a incluir</label>
+                                <textarea name="listas_correo" rows="2"
+                                    placeholder="Ej: equipo-dev@empresa.com, all-staff@empresa.com"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Adjuntar imagen (solo para tickets que no son alta/baja) -->
+                    <div x-show="!esAltaBaja" x-data="{ preview: null }">
+                        <label class="block text-sm font-medium text-dark-700 mb-1">📷 Adjuntar captura (opcional)</label>
+                        <div class="relative">
+                            <input type="file" name="imagen" accept="image/*" 
+                                @change="preview = URL.createObjectURL($event.target.files[0])"
+                                class="block w-full text-sm text-dark-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer border border-dark-200 rounded-xl">
+                            <p class="text-xs text-dark-400 mt-1">JPG, PNG, WebP — hasta 5MB</p>
+                        </div>
+                        <template x-if="preview">
+                            <img :src="preview" class="mt-2 max-h-32 rounded-xl border border-dark-200 object-contain">
+                        </template>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Asignar a</label>
+                        <select name="asignado_id"
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                            <option value="">Sin asignar</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <!-- Footer -->
+                <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                    <button type="button" @click="showCreateModal = false"
+                        class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                        class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-medium rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft">
+                        Crear Ticket
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Detalle Ticket -->
+    <div x-show="showDetailModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showDetailModal = false; document.getElementById('detail-content').innerHTML = ''"></div>
+        <div x-show="showDetailModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl z-10 overflow-hidden max-h-[85vh] overflow-y-auto">
+            <div
+                class="sticky top-0 bg-white border-b border-dark-100 px-6 py-3 flex items-center justify-between z-10">
+                <h2 class="text-lg font-semibold text-dark-900">Detalle del Ticket</h2>
+                <button @click="showDetailModal = false; document.getElementById('detail-content').innerHTML = ''"
+                    class="p-1.5 hover:bg-dark-100 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-dark-500"></i>
+                </button>
+            </div>
+            <div id="detail-content" hx-on::after-swap="lucide.createIcons()">
+                <div class="flex items-center justify-center py-12">
+                    <div class="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Gestionar Categorías (Admin Only) -->
+    <div x-show="showManageCategoriesModal" 
+         x-cloak 
+         class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showManageCategoriesModal = false"></div>
+        <div x-show="showManageCategoriesModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl z-10 overflow-hidden max-h-[85vh] flex flex-col">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-5 flex items-center justify-between flex-shrink-0">
+                <h2 class="text-lg font-bold text-white flex items-center tracking-tight">
+                    <i data-lucide="tag" class="w-5 h-5 mr-2.5"></i>Gestionar Categorías
+                </h2>
+                <button @click="showManageCategoriesModal = false"
+                    class="bg-white/10 hover:bg-white/20 p-1.5 rounded-lg text-white transition-all">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Crear nueva categoría -->
+                <div class="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-4">
+                    <label class="block text-sm font-bold text-amber-900 mb-3">➕ Crear Nueva Categoría</label>
+                    <form hx-post="{{ url_for('soporte.crear_categoria') }}" 
+                          hx-swap="none"
+                          hx-on::after-request="if(event.detail.successful) { this.reset(); }">
+                        <div class="flex gap-2">
+                            <input type="text" name="nombre" placeholder="Ej: Hardware, Software, Red..." required
+                                class="flex-1 px-4 py-2.5 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 bg-white">
+                            <button type="submit"
+                                class="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all shadow-md">
+                                Crear
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Buscador de categorías -->
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-lucide="search" class="w-4 h-4 text-dark-400"></i>
+                    </div>
+                    <input type="text" x-model="buscarCategoria" placeholder="Buscar categoría..."
+                        @input="document.querySelectorAll('#categorias-table .categoria-row').forEach(row => { const nombre = row.dataset.nombre || ''; const q = buscarCategoria.toLowerCase(); row.style.display = (!q || nombre.includes(q)) ? '' : 'none'; })"
+                        class="w-full pl-10 pr-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+                </div>
+
+                <!-- Tabla de categorías -->
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">📋 Categorías y Subcategorías</label>
+                    <div id="categorias-table" 
+                         hx-get="{{ url_for('soporte.listar_categorias') }}" 
+                         hx-trigger="load, categoriaCreated from:body, categoriaUpdated from:body, categoriaDeleted from:body"
+                         hx-swap="innerHTML"
+                         hx-on::after-swap="lucide.createIcons()">
+                        <div class="flex items-center justify-center py-8">
+                            <div class="animate-spin w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end flex-shrink-0">
+                <button type="button" @click="showManageCategoriesModal = false"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Eliminación -->
+    <div x-show="showConfirmDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showConfirmDeleteModal = false; categoriaAEliminar = null"></div>
+        <div x-show="showConfirmDeleteModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center">
+                    <i data-lucide="alert-circle" class="w-5 h-5 mr-2.5"></i>Confirmar eliminación
+                </h2>
+            </div>
+
+            <!-- Content -->
+            <div class="px-6 py-4">
+                <p class="text-dark-700 mb-2">¿Estás seguro de que querés eliminar esta categoría?</p>
+                <p class="text-sm text-dark-500" x-show="categoriaAEliminar">
+                    <strong x-text="categoriaAEliminar?.nombre"></strong>
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                <button type="button" @click="showConfirmDeleteModal = false; categoriaAEliminar = null"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarEliminar()"
+                    class="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Categoría -->
+    <div x-show="showEditCategoriaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showEditCategoriaModal = false; categoriaAEditar = null"></div>
+        <div x-show="showEditCategoriaModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center">
+                    <i data-lucide="edit-2" class="w-5 h-5 mr-2.5"></i>Editar Categoría
+                </h2>
+            </div>
+
+            <!-- Content -->
+            <div class="px-6 py-4 space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Nuevo nombre</label>
+                    <input type="text" x-model="nuevoNombreCategoria" placeholder="Ingresá el nuevo nombre..."
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                        @keyup.enter="confirmarEditarCategoria()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Tipo de Ticket</label>
+                    <select x-model="tipoTicketAsociado"
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+                        {% for t in tipos_ticket %}
+                        <option value="{{ t.clave }}">{{ t.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                <button type="button" @click="showEditCategoriaModal = false; categoriaAEditar = null"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarEditarCategoria()"
+                    class="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear Subcategoría -->
+    <div x-show="showCreateSubcategoriaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showCreateSubcategoriaModal = false; subcategoriaParent = null"></div>
+        <div x-show="showCreateSubcategoriaModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center">
+                    <i data-lucide="plus" class="w-5 h-5 mr-2.5"></i>Nueva Subcategoría
+                </h2>
+            </div>
+
+            <!-- Content -->
+            <div class="px-6 py-4 space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1">Categoría padre</label>
+                    <p class="text-sm text-dark-600 px-3 py-2 bg-dark-50 rounded-lg" x-text="subcategoriaParent?.nombre"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Nombre de la subcategoría</label>
+                    <input type="text" x-model="nuevoNombreCategoria" placeholder="Ingresá el nombre..."
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        @keyup.enter="confirmarCrearSubcategoria()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Tipo de Ticket</label>
+                    <select x-model="tipoTicketAsociado"
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                        {% for t in tipos_ticket %}
+                        <option value="{{ t.clave }}">{{ t.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                <button type="button" @click="showCreateSubcategoriaModal = false; subcategoriaParent = null"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarCrearSubcategoria()"
+                    class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors">
+                    Crear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Scroll indicator personalizado para Kanban
+document.addEventListener('DOMContentLoaded', function() {
+    const kanbanScroll = document.querySelector('.kanban-scroll');
+    const scrollIndicator = document.getElementById('scroll-indicator');
+    const scrollBar = document.getElementById('scroll-bar-container');
+    const scrollBarTrack = scrollBar?.querySelector('.scroll-indicator-bar');
+    
+    if (!kanbanScroll || !scrollIndicator || !scrollBar || !scrollBarTrack) return;
+    
+    let isDragging = false, dragStartX = 0;
+    
+    // Actualizar posición del thumb
+    function updateScrollIndicator() {
+        const { scrollWidth, clientWidth, scrollLeft } = kanbanScroll;
+        
+        if (scrollWidth <= clientWidth + 1) {
+            scrollBar.style.display = 'none';
+            return;
+        }
+        scrollBar.style.display = 'block';
+        
+        const visiblePercent = Math.min(100, (clientWidth / scrollWidth) * 100);
+        const scrollableWidth = Math.max(0, scrollWidth - clientWidth);
+        const scrollPercent = scrollableWidth > 0 ? (scrollLeft / scrollableWidth) * (100 - visiblePercent) : 0;
+        
+        scrollIndicator.style.width = visiblePercent + '%';
+        scrollIndicator.style.left = Math.max(0, Math.min(100 - visiblePercent, scrollPercent)) + '%';
+    }
+    
+    // Mover thumb a posición del mouse
+    function moveThumbToPosition(mouseX, trackRect, offset) {
+        const thumbWidth = scrollIndicator.getBoundingClientRect().width;
+        const maxThumbLeft = trackRect.width - thumbWidth;
+        const clampedThumbLeft = Math.max(0, Math.min(maxThumbLeft, mouseX - trackRect.left - offset));
+        const scrollPercent = maxThumbLeft > 0 ? clampedThumbLeft / maxThumbLeft : 0;
+        
+        kanbanScroll.scrollLeft = scrollPercent * (kanbanScroll.scrollWidth - kanbanScroll.clientWidth);
+    }
+    
+    // Scroll horizontal con rueda del mouse
+    kanbanScroll.addEventListener('wheel', function(e) {
+        if (this.scrollWidth > this.clientWidth) {
+            e.preventDefault();
+            this.scrollLeft += e.deltaY * 1.5;
+            updateScrollIndicator();
+        }
+    }, { passive: false });
+    
+    // Click en track para saltar
+    scrollBarTrack.addEventListener('click', function(e) {
+        if (e.target === scrollIndicator) return;
+        const rect = this.getBoundingClientRect();
+        kanbanScroll.scrollTo({
+            left: ((e.clientX - rect.left) / rect.width) * (kanbanScroll.scrollWidth - kanbanScroll.clientWidth),
+            behavior: 'smooth'
+        });
+    });
+    
+    // Drag del thumb
+    scrollBarTrack.addEventListener('mousedown', function(e) {
+        isDragging = true;
+        const trackRect = scrollBarTrack.getBoundingClientRect();
+        const thumbRect = scrollIndicator.getBoundingClientRect();
+        
+        dragStartX = e.target === scrollIndicator ? e.clientX - thumbRect.left : thumbRect.width / 2;
+        if (e.target !== scrollIndicator) moveThumbToPosition(e.clientX, trackRect, dragStartX);
+        
+        scrollIndicator.style.cursor = 'grabbing';
+        document.body.style.userSelect = 'none';
+        e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => isDragging && moveThumbToPosition(e.clientX, scrollBarTrack.getBoundingClientRect(), dragStartX));
+    document.addEventListener('mouseup', () => {
+        if (isDragging) {
+            isDragging = false;
+            scrollIndicator.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+    });
+    
+    // Actualizar en scroll con RAF
+    let ticking = false;
+    kanbanScroll.addEventListener('scroll', () => {
+        if (!ticking) {
+            requestAnimationFrame(() => {
+                updateScrollIndicator();
+                ticking = false;
+            });
+            ticking = true;
+        }
+    });
+    
+    // Actualizar en resize y cambios de sidebar
+    let resizeTimeout;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(updateScrollIndicator, 100);
+    });
+    
+    const sidebar = document.querySelector('aside');
+    if (sidebar) {
+        new MutationObserver(() => setTimeout(updateScrollIndicator, 350))
+            .observe(sidebar, { attributes: true, attributeFilter: ['class'] });
+    }
+    
+    // Inicializar
+    [50, 200, 500].forEach(delay => setTimeout(updateScrollIndicator, delay));
+    window.addEventListener('load', updateScrollIndicator);
+});
+
+function ticketsData() {
+    return {
+        showCreateModal: false,
+        showDetailModal: false,
+        showManageCategoriesModal: false,
+        showConfirmDeleteModal: false,
+        showEditCategoriaModal: false,
+        showCreateSubcategoriaModal: false,
+        categoriaAEliminar: null,
+        categoriaAEditar: null,
+        subcategoriaParent: null,
+        nuevoNombreCategoria: '',
+        tipoTicketAsociado: 'generico',
+        
+        loadDetail(ticketId) {
+            this.showDetailModal = true;
+            const container = document.getElementById('detail-content');
+            container.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full"></div></div>';
+            fetch(`{{ url_for('soporte.detalle_ticket', ticket_id='TICKET_ID') }}`.replace('TICKET_ID', ticketId))
+                .then(r => r.text())
+                .then(html => {
+                    container.innerHTML = html;
+                    Alpine.initTree(container);
+                    htmx.process(container);
+                    lucide.createIcons();
+                })
+                .catch(() => container.innerHTML = '<div class="p-4 text-red-600">Error al cargar el ticket</div>');
+        },
+        
+        recargarCategorias() {
+            htmx.ajax('GET', '/soporte/categorias', { target: '#categorias-table', swap: 'innerHTML' });
+        },
+        
+        abrirEditarCategoria(id, nombre, tipoTicket = 'generico') {
+            this.categoriaAEditar = { id, nombre };
+            this.nuevoNombreCategoria = nombre;
+            this.tipoTicketAsociado = tipoTicket;
+            this.showEditCategoriaModal = true;
+        },
+        
+        confirmarEditarCategoria() {
+            if (!this.nuevoNombreCategoria.trim()) {
+                this.showEditCategoriaModal = false;
+                return;
+            }
+            htmx.ajax('POST', '/soporte/categorias/' + this.categoriaAEditar.id + '/editar', {
+                values: { nombre: this.nuevoNombreCategoria.trim(), tipo_ticket_asociado: this.tipoTicketAsociado },
+                target: '#categorias-table',
+                swap: 'none'
+            }).then(() => this.recargarCategorias());
+            this.showEditCategoriaModal = false;
+        },
+        
+        abrirEliminarCategoria(id, nombre) {
+            this.categoriaAEliminar = { id, nombre };
+            this.showConfirmDeleteModal = true;
+        },
+        
+        confirmarEliminar() {
+            htmx.ajax('DELETE', '/soporte/categorias/' + this.categoriaAEliminar.id + '/eliminar', { 
+                target: '#categorias-table', 
+                swap: 'none' 
+            }).then(() => {
+                this.recargarCategorias();
+                this.showConfirmDeleteModal = false;
+                this.categoriaAEliminar = null;
+            });
+        },
+        
+        abrirCrearSubcategoria(parentId, parentNombre) {
+            this.subcategoriaParent = { id: parentId, nombre: parentNombre };
+            this.nuevoNombreCategoria = '';
+            this.tipoTicketAsociado = 'generico';
+            this.showCreateSubcategoriaModal = true;
+        },
+        
+        confirmarCrearSubcategoria() {
+            if (!this.nuevoNombreCategoria.trim()) {
+                this.showCreateSubcategoriaModal = false;
+                return;
+            }
+            htmx.ajax('POST', '/soporte/categorias/crear', {
+                values: { 
+                    nombre: this.nuevoNombreCategoria.trim(), 
+                    parent_id: this.subcategoriaParent.id,
+                    tipo_ticket_asociado: this.tipoTicketAsociado 
+                },
+                target: '#categorias-table',
+                swap: 'none'
+            }).then(() => this.recargarCategorias());
+            this.showCreateSubcategoriaModal = false;
+        }
+    }
+}
+
+// Modal de pedidos (NO TOCAR)
+function openPedidoModal(pedidoId) {
+    let overlay = document.getElementById('pedido-modal-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'pedido-modal-overlay';
+        overlay.className = 'fixed inset-0 z-[200] hidden items-center justify-center p-4';
+        overlay.onclick = function(e) { if (e.target === overlay) closePedidoModal(); };
+        overlay.innerHTML = `
+            <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm"></div>
+            <div id="pedido-modal-content" class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10">
+                <div class="p-8 text-center text-dark-400"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto"></i></div>
+            </div>`;
+        document.body.appendChild(overlay);
+    }
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    htmx.ajax('GET', '/soporte/pedidos/' + pedidoId, {target: '#pedido-modal-content'});
+}
+
+function closePedidoModal() {
+    const overlay = document.getElementById('pedido-modal-overlay');
+    if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+}
+
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePedidoModal(); });
+</script>
+{% endblock %}

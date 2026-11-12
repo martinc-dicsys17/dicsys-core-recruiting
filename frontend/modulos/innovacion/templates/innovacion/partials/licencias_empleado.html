@@ -1,0 +1,80 @@
+                    <div class="flex flex-wrap gap-2">
+                        {% for lic in fila.licencias %}
+                        {# El tooltip va en position:fixed: la tarjeta y el contenedor
+                           de la tabla recortan, y un absolute no puede escapar de ahi.
+                           Si no hay lugar arriba, se abre hacia abajo. #}
+                        <div x-data="{ abierto: false, arriba: true, x: 0, y: 0 }"
+                             @mouseenter="const r = $el.getBoundingClientRect();
+                                          arriba = r.top > 190;
+                                          x = r.left;
+                                          y = arriba ? r.top - 8 : r.bottom + 8;
+                                          abierto = true"
+                             @mouseleave="abierto = false"
+                             class="inline-flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl border transition-colors
+                                    {% if lic.activa %}bg-emerald-50 border-emerald-200
+                                    {% else %}bg-dark-50 border-dark-200{% endif %}">
+                            <input type="checkbox"
+                                   {{ 'checked' if lic.activa else '' }}
+                                   hx-put="{{ url_for('innovacion.licencias_cambiar_activa', id=lic.id, activa='false' if lic.activa else 'true') }}"
+                                   hx-trigger="change"
+                                   hx-swap="none"
+                                   title="{{ 'Desactivar' if lic.activa else 'Activar' }}"
+                                   class="w-4 h-4 rounded border-dark-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer">
+                            <a href="{{ url_for('innovacion.licencias_edit', id=lic.id) }}"
+                               class="text-sm font-medium
+                                      {% if lic.activa %}text-emerald-800
+                                      {% else %}text-dark-500 line-through{% endif %}">{{ lic.herramienta }}</a>
+
+                            {# Borrar la licencia, para las cargadas por error.
+                               Desactivar deja de pagarla; borrar la saca. #}
+                            <button type="button"
+                                    @click="abierto = false; borrarLicencia($el)"
+                                    data-url="{{ url_for('innovacion.licencias_delete', id=lic.id) }}"
+                                    data-herramienta="{{ lic.herramienta }}"
+                                    data-empleado="{{ fila.empleado_nombre }}"
+                                    title="Quitar esta licencia"
+                                    aria-label="Quitar licencia de {{ lic.herramienta }} de {{ fila.empleado_nombre }}"
+                                    class="text-dark-300 hover:text-red-600 transition-colors">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                            </button>
+
+                            <!-- Tooltip: proveedor, costo registrado y desde cuando -->
+                            <div x-show="abierto" x-cloak
+                                 :style="`left: ${x}px; top: ${y}px;` + (arriba ? ' transform: translateY(-100%);' : '')"
+                                 class="fixed z-50 w-56
+                                        bg-dark-900 text-white text-xs rounded-xl px-3 py-2 shadow-lg pointer-events-none">
+                                <p class="font-semibold">{{ lic.herramienta }}</p>
+                                <p class="text-dark-300">{{ lic.proveedor or 'Sin proveedor' }}</p>
+                                <div class="mt-1.5 pt-1.5 border-t border-white/15 space-y-0.5">
+                                    <p>
+                                        {% if lic.costo_mensual %}
+                                        {{ 'U$D' if lic.moneda == 'USD' else '$' }} {{ "%.2f"|format(lic.costo_mensual) }} / mes
+                                        {% else %}
+                                        Sin costo registrado
+                                        {% endif %}
+                                    </p>
+                                    <p class="text-dark-300">
+                                        Desde {{ lic.fecha_inicio }}
+                                        {%- if lic.fecha_fin %} hasta {{ lic.fecha_fin }}{% else %} · indefinida{% endif %}
+                                    </p>
+                                    {% if lic.nro_pedido_compra %}
+                                    <p class="text-dark-300 font-mono">{{ lic.nro_pedido_compra }}</p>
+                                    {% endif %}
+                                    <p class="text-dark-300">{{ 'Activa' if lic.activa else 'Inactiva' }}
+                                        {%- if lic.esta_vencida %} <span class="text-red-300">· vencida</span>{% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+
+                        {# Alta rapida: abre el modal con este empleado ya elegido. #}
+                        <button type="button"
+                                @click="$dispatch('nueva-licencia-para', { empleadoId: '{{ fila.empleado_id }}', empleadoNombre: $el.dataset.empleadoNombre })"
+                                data-empleado-nombre="{{ fila.empleado_nombre }}"
+                                title="Agregar una licencia a {{ fila.empleado_nombre }}"
+                                class="inline-flex items-center justify-center w-8 h-8 rounded-xl border border-dashed border-dark-300
+                                       text-dark-400 hover:border-primary-400 hover:text-primary-600 hover:bg-primary-50 transition-colors">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>

@@ -1,0 +1,71 @@
+{% extends "core/base.html" %}
+
+{% block title %}Admin Desafíos - Star Miles{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ showDeleteModal: false, deleteId: null }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">⚙️ Administrar Desafíos</h1>
+            <p class="text-dark-500">ABM de desafíos del programa</p>
+        </div>
+        <a href="{{ url_for('starmiles.admin_desafio_crear') }}" class="mt-4 md:mt-0 flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Desafío
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar desafío..." name="buscar"
+                       hx-get="{{ url_for('starmiles.admin_desafios') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#desafios-table"
+                       hx-include="[name='categoria_id']"
+                       hx-vals='{"por_pagina": "100"}'
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            <select name="categoria_id"
+                    hx-get="{{ url_for('starmiles.admin_desafios') }}"
+                    hx-trigger="change"
+                    hx-target="#desafios-table"
+                    hx-include="[name='buscar']"
+                    hx-vals='{"por_pagina": "100"}'
+                    class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-dark-700">
+                <option value="">Todas las categorías</option>
+                {% for cat in categorias %}
+                <option value="{{ cat.id }}">{{ cat.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="desafios-table" hx-get="{{ url_for('starmiles.admin_desafios', por_pagina=100) }}" hx-trigger="desafioDeleted from:body">
+            {% include "starmiles/partials/admin_desafios_table.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar desafío?</h3>
+                <p class="text-dark-500 mb-6">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button @click="htmx.ajax('DELETE', '/starmiles/admin/desafios/' + deleteId + '/eliminar', {target: '#desafios-table'}); showDeleteModal = false" class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,231 @@
+{% extends "core/base.html" %}
+
+{% block title %}Categorías - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="categoriasFiltros()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Categorías</h1>
+            <p class="text-dark-500">Gestión de categorías de perfiles</p>
+        </div>
+        <a href="{{ url_for('nomina.categorias_create') }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Categoría
+        </a>
+    </div>
+    
+    <!-- Barra de Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <!-- Búsqueda -->
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar por nombre..." 
+                       x-model="buscar"
+                       @input.debounce.300ms="aplicarFiltros()"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            
+            <!-- Filtro Departamento -->
+            <div class="relative" x-data="{ openDepto: false }">
+                <button @click="openDepto = !openDepto" 
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="filtros.departamento_id ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="building-2" class="w-4 h-4 mr-2"></i>
+                    <span x-text="filtros.departamento_id ? 'Depto: ' + getNombreDepto(filtros.departamento_id) : 'Departamento'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="openDepto" @click.away="openDepto = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-dark-100 shadow-lg z-20 max-h-64 overflow-y-auto">
+                    <div class="p-2">
+                        <button @click="filtros.departamento_id = ''; aplicarFiltros(); openDepto = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': !filtros.departamento_id }">
+                            Todos
+                        </button>
+                        {% for dep in departamentos %}
+                        <button @click="filtros.departamento_id = '{{ dep.id }}'; aplicarFiltros(); openDepto = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': filtros.departamento_id === '{{ dep.id }}' }">
+                            {{ dep.nombre }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ordenar -->
+            <div class="relative" x-data="{ openOrdenar: false }">
+                <button @click="openOrdenar = !openOrdenar" 
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="ordenarPor ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="arrow-up-down" class="w-4 h-4 mr-2"></i>
+                    <span x-text="ordenarPor ? 'Orden: ' + ordenarLabels[ordenarPor] : 'Ordenar'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="openOrdenar" @click.away="openOrdenar = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-dark-100 shadow-lg z-20">
+                    <div class="p-2">
+                        <button @click="setOrdenar(null); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': !ordenarPor }">
+                            Por defecto (Nombre)
+                        </button>
+                        <button @click="setOrdenar('nombre', 'asc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'nombre' && ordenarDir === 'asc' }">
+                            <span>Nombre A-Z</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('nombre', 'desc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'nombre' && ordenarDir === 'desc' }">
+                            <span>Nombre Z-A</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                        <div class="border-t border-dark-100 my-1"></div>
+                        <button @click="setOrdenar('created_at', 'desc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'created_at' && ordenarDir === 'desc' }">
+                            <span>Más recientes</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('created_at', 'asc'); openOrdenar = false" 
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'created_at' && ordenarDir === 'asc' }">
+                            <span>Más antiguas</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Limpiar filtros -->
+            <button x-show="tieneFilrosActivos()" @click="limpiarFiltros()"
+                    class="flex items-center px-3 py-2.5 text-sm text-dark-500 hover:text-dark-700 transition-colors">
+                <i data-lucide="x" class="w-4 h-4 mr-1"></i>
+                Limpiar
+            </button>
+            
+            <!-- Total -->
+            <div class="flex items-center text-sm text-dark-500 ml-auto">
+                <i data-lucide="folder" class="w-4 h-4 mr-2"></i>
+                <span>{{ total }} categorías</span>
+            </div>
+        </div>
+        
+        <!-- Chips de filtros activos -->
+        <div x-show="tieneFilrosActivos()" class="mt-4 pt-4 border-t border-dark-100 flex flex-wrap gap-2">
+            <template x-if="filtros.departamento_id">
+                <span class="inline-flex items-center px-3 py-1 bg-primary-50 text-primary-700 rounded-full text-sm">
+                    <span x-text="'Depto: ' + getNombreDepto(filtros.departamento_id)"></span>
+                    <button @click="filtros.departamento_id = ''; aplicarFiltros()" class="ml-2 hover:text-primary-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            <template x-if="ordenarPor">
+                <span class="inline-flex items-center px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-sm">
+                    <span x-text="'Orden: ' + ordenarLabels[ordenarPor] + (ordenarDir === 'desc' ? ' ↓' : ' ↑')"></span>
+                    <button @click="setOrdenar(null); " class="ml-2 hover:text-violet-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="categorias-table" hx-get="{{ url_for('nomina.categorias_list') }}" hx-trigger="categoriaDeleted from:body">
+            {% include "nomina/partials/categorias_table.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar categoría?</h3>
+                <p class="text-dark-500 mb-2">Estás por eliminar:</p>
+                <p class="text-dark-800 font-semibold mb-6" x-text="deleteNombre"></p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors">Cancelar</button>
+                <button @click="htmx.ajax('DELETE', '/nomina/categorias/' + deleteId + '/eliminar', {target: '#categorias-table'}); showDeleteModal = false" class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function categoriasFiltros() {
+    return {
+        buscar: '{{ buscar }}',
+        ordenarPor: '{{ ordenar_por or "" }}',
+        ordenarDir: '{{ ordenar_dir or "asc" }}',
+        filtros: {
+            departamento_id: '{{ filtro_departamento or "" }}'
+        },
+        ordenarLabels: {
+            'nombre': 'Nombre',
+            'created_at': 'Fecha creación'
+        },
+        departamentos: {{ departamentos | tojson | safe }},
+        showDeleteModal: false,
+        deleteId: null,
+        deleteNombre: '',
+        
+        init() {
+            document.body.addEventListener('categoriaDeleted', () => this.aplicarFiltros());
+        },
+        
+        tieneFilrosActivos() {
+            return this.filtros.departamento_id || this.ordenarPor;
+        },
+        
+        setOrdenar(campo, dir) {
+            if (campo === null) {
+                this.ordenarPor = '';
+                this.ordenarDir = 'asc';
+            } else {
+                this.ordenarPor = campo;
+                this.ordenarDir = dir || 'asc';
+            }
+            this.aplicarFiltros();
+        },
+        
+        limpiarFiltros() {
+            this.filtros.departamento_id = '';
+            this.ordenarPor = '';
+            this.ordenarDir = 'asc';
+            this.buscar = '';
+            this.aplicarFiltros();
+        },
+        
+        getNombreDepto(id) {
+            const dep = this.departamentos.find(d => d.id === id);
+            return dep ? dep.nombre : id;
+        },
+        
+        aplicarFiltros() {
+            let params = new URLSearchParams();
+            if (this.buscar) params.append('buscar', this.buscar);
+            if (this.filtros.departamento_id) params.append('departamento_id', this.filtros.departamento_id);
+            if (this.ordenarPor) params.append('ordenar_por', this.ordenarPor);
+            if (this.ordenarDir) params.append('ordenar_dir', this.ordenarDir);
+            
+            htmx.ajax('GET', '{{ url_for("nomina.categorias_list") }}?' + params.toString(), {
+                target: '#categorias-table',
+                swap: 'innerHTML'
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

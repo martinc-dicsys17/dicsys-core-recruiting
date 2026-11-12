@@ -1,0 +1,36 @@
+# Desarrollo local. Compose lo carga solo, junto a docker-compose.yml, cuando no se pasa -f; producción no lo lee
+# (deploy.yml usa docker compose -f docker-compose.yml).
+#   - código montado de solo lectura sobre el de la imagen
+#   - ENVIRONMENT=development: uvicorn --reload en el backend y el dev server de Flask (python app.py) en el
+#     frontend; los Dockerfiles conmutan el comando por esa variable
+#   - Postgres publicado en el host (6000 por defecto)
+#   - migraciones con el código montado, para crear revisiones nuevas desde el contenedor
+services:
+  postgresql:
+    ports:
+      - "${POSTGRES_EXTERNAL_PORT:-6000}:${POSTGRES_PORT}"
+
+  # Código montado con escritura: `docker compose run --rm migraciones alembic revision --autogenerate -m "..."` deja la
+  # revisión nueva en backend/migraciones/versions (docs/Migraciones.md)
+  migraciones:
+    volumes:
+      - ./backend:/app/backend
+
+  backend:
+    environment:
+      ENVIRONMENT: development
+    volumes:
+      - ./backend:/app/backend:ro
+
+  scheduler:
+    environment:
+      ENVIRONMENT: development
+    volumes:
+      - ./backend:/app/backend:ro
+    command: ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port $${PORT} --workers 1 --reload --reload-dir /app/backend"]
+
+  frontend:
+    environment:
+      - ENVIRONMENT=development
+    volumes:
+      - ./frontend:/app:ro

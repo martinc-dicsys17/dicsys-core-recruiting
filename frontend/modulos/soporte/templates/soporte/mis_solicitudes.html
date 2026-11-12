@@ -1,0 +1,650 @@
+{% extends "core/base.html" %}
+
+{% block title %}Mis Solicitudes - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div x-data="{ showCreateModal: false, showCancelModal: false, cancelTicketId: null, cancelTicketNumero: '' }"
+    class="animate-fade-in">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Mis Solicitudes</h1>
+            <p class="text-dark-500">Solicita ayuda al equipo de soporte técnico 📩</p>
+        </div>
+        {% set user_rol = session.get('user', {}).get('rol', '') %}
+        {% set is_hrbp = puede_alta_baja|default(false) or user_rol == 'admin' %}
+        <div class="flex items-center space-x-3 mt-4 md:mt-0">
+            {% if is_hrbp %}
+            <button @click="showCreateModal = true"
+                class="flex items-center px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-700 text-white rounded-2xl hover:from-indigo-700 hover:to-violet-800 transition-all shadow-lg hover:shadow-indigo-500/20 group border border-white/10">
+                <div
+                    class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center mr-3 group-hover:scale-110 transition-all duration-300">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-white"></i>
+                </div>
+                <span class="font-bold tracking-tight">Nueva Solicitud / Gestión</span>
+            </button>
+            {% else %}
+            <button @click="showCreateModal = true"
+                class="flex items-center px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft group">
+                <i data-lucide="plus-circle"
+                    class="w-5 h-5 mr-3 group-hover:rotate-90 transition-transform duration-300"></i>
+                <span class="font-bold tracking-tight">Nueva Solicitud</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Resumen rápido -->
+    {% set activos = tickets|selectattr('estado_rel.clave', 'in', ['abierto', 'en_progreso', 'en_espera', 'pendiente_usuario', 'pendiente_proveedor'])|list if tickets else [] %}
+    {% set resueltos = tickets|selectattr('estado_rel.clave', 'in', ['resuelto', 'cerrado'])|list if tickets else [] %}
+    <div class="grid grid-cols-3 gap-4 mb-6">
+        <div class="bg-blue-50 rounded-xl p-4 border border-blue-100 text-center">
+            <p class="text-2xl font-bold text-blue-700">{{ activos|length }}</p>
+            <p class="text-xs text-blue-500">Activas</p>
+        </div>
+        <div class="bg-emerald-50 rounded-xl p-4 border border-emerald-100 text-center">
+            <p class="text-2xl font-bold text-emerald-700">{{ resueltos|length }}</p>
+            <p class="text-xs text-emerald-500">Resueltas</p>
+        </div>
+        <div class="bg-dark-50 rounded-xl p-4 border border-dark-100 text-center">
+            <p class="text-2xl font-bold text-dark-700">{{ tickets|length }}</p>
+            <p class="text-xs text-dark-400">Total</p>
+        </div>
+    </div>
+
+    <!-- Lista de solicitudes -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-dark-100">
+            <h2 class="text-lg font-semibold text-dark-900">Historial de solicitudes</h2>
+        </div>
+
+        {% if tickets %}
+        <div class="divide-y divide-dark-100">
+            {% for ticket in tickets %}
+            <div class="px-6 py-3 hover:bg-dark-50/50 transition-colors">
+                <!-- Fila principal -->
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3 min-w-0 flex-1">
+                        <span
+                            class="text-xs font-mono font-medium text-primary-600 bg-primary-50 px-2 py-0.5 rounded flex-shrink-0">
+                            T-{{ "%05d"|format(ticket.numero) }}
+                        </span>
+
+                        {% if ticket.estado_rel %}
+                        <span class="text-xs px-2.5 py-0.5 rounded-full font-medium flex-shrink-0"
+                              :style="'background-color: ' + '{{ ticket.estado_rel.color or '#6b7280' }}' + '20; color: ' + '{{ ticket.estado_rel.color or '#6b7280' }}'">
+                            {{ ticket.estado_rel.nombre }}
+                        </span>
+                        {% endif %}
+
+                        <p class="text-sm font-medium text-dark-800 truncate">{{ ticket.titulo }}</p>
+                    </div>
+
+                    <div class="flex items-center space-x-2 ml-4 flex-shrink-0">
+                        <span class="text-xs text-dark-400 hidden sm:inline">{{ ticket.created_at[:10] if
+                            ticket.created_at else '' }}</span>
+
+                        <button @click="$refs.detail_{{ loop.index }}.classList.toggle('hidden')"
+                            class="p-1.5 text-dark-400 hover:text-primary-500 hover:bg-primary-50 rounded-lg transition-colors">
+                            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Detalle desplegable -->
+                <div x-ref="detail_{{ loop.index }}" class="hidden mt-3 space-y-2 ml-0 sm:ml-16">
+                    <div class="flex flex-wrap gap-2 mb-2">
+                        <span class="text-xs px-2 py-0.5 rounded-full font-medium
+                            {% if ticket.prioridad == 'critica' %}bg-red-100 text-red-700
+                            {% elif ticket.prioridad == 'alta' %}bg-orange-100 text-orange-700
+                            {% elif ticket.prioridad == 'media' %}bg-yellow-100 text-yellow-700
+                            {% else %}bg-green-100 text-green-700{% endif %}">
+                            {{ ticket.prioridad|capitalize }}
+                        </span>
+                        <span class="text-xs px-2 py-0.5 bg-dark-100 text-dark-600 rounded-full">
+                            {{ ticket.subcategoria.nombre_display if ticket.subcategoria else 'S/C' }}
+                        </span>
+                    </div>
+                    {% if ticket.solicitante %}
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span
+                            class="text-[10px] font-bold uppercase bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-lg border border-indigo-100">
+                            Colaborador: {{ ticket.solicitante.nombre }} {{ ticket.solicitante.apellido }}
+                        </span>
+                    </div>
+                    {% endif %}
+                    {% if ticket.descripcion %}
+                    <div class="bg-dark-50 rounded-xl p-3">
+                        <p class="text-xs font-semibold text-dark-500 mb-1">Descripción</p>
+                        <p class="text-sm text-dark-600">{{ ticket.descripcion }}</p>
+                    </div>
+                    {% endif %}
+                    {% if ticket.resolucion %}
+                    <div class="bg-emerald-50 rounded-xl p-3 border border-emerald-100">
+                        <p class="text-xs font-semibold text-emerald-700 mb-1 flex items-center">
+                            <i data-lucide="check-circle" class="w-3.5 h-3.5 mr-1"></i>Resolución Técnica
+                        </p>
+                        <p class="text-sm text-emerald-800">{{ ticket.resolucion }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="px-6 py-12 flex flex-col items-center justify-center text-dark-400">
+            <i data-lucide="inbox" class="w-12 h-12 mb-3 text-dark-300"></i>
+            <p class="text-lg font-medium text-dark-500 mb-1">No tenés solicitudes aún</p>
+            <p class="text-sm text-dark-400 mb-6">Creá tu primera solicitud para recibir ayuda del equipo de soporte</p>
+            {% if is_hrbp %}
+            <button @click="showCreateModal = true"
+                class="flex items-center px-6 py-3 bg-gradient-to-r from-indigo-600 to-violet-700 text-white rounded-2xl hover:shadow-lg transition-all shadow-soft group">
+                <i data-lucide="user-plus" class="w-5 h-5 mr-3 group-hover:scale-110 transition-transform"></i>
+                <span class="font-bold">Nueva Gestión</span>
+            </button>
+            {% else %}
+            <button @click="showCreateModal = true"
+                class="flex items-center px-6 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-2xl hover:shadow-lg transition-all shadow-soft group">
+                <i data-lucide="plus-circle" class="w-5 h-5 mr-3 group-hover:rotate-90 transition-transform"></i>
+                <span class="font-bold">Nueva Solicitud</span>
+            </button>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Modal: Nueva Solicitud -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-dark-900/50 backdrop-blur-sm" @click="showCreateModal = false"></div>
+        <div x-show="showCreateModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg z-10 overflow-hidden max-h-[90vh] flex flex-col">
+
+            <!-- Header -->
+            <div
+                class="bg-gradient-to-r {% if is_hrbp %}from-indigo-600 to-violet-700{% else %}from-primary-500 to-primary-600{% endif %} px-6 py-5 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center tracking-tight">
+                    <i data-lucide="{% if is_hrbp %}briefcase{% else %}help-circle{% endif %}"
+                        class="w-5 h-5 mr-2.5"></i>
+                    {% if is_hrbp %}Nueva Gestión / Solicitud{% else %}Solicitar Soporte Técnico{% endif %}
+                </h2>
+                <button @click="showCreateModal = false"
+                    class="bg-white/10 hover:bg-white/20 p-1.5 rounded-lg text-white transition-all">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Form -->
+            <form action="{{ url_for('soporte.crear_solicitud') }}" method="POST" enctype="multipart/form-data" class="flex flex-col flex-1 overflow-hidden" x-data="{
+                      categoria: '',
+                      subcategoria: '',
+                      tipo_ticket: '',
+                      categorias_lista: [],
+                      subcategorias_actuales: [],
+                      colaboradores_lista: [],
+                      dispositivos_lista: [],
+                      dispositivo_id: '',
+                      isLoading: false,
+                      searchQuery: '',
+                      colab_id: '',
+                      colab_nombre: '',
+                      openSearch: false,
+                      colaboradorInfo: {},
+                      // Buscador de equipo para mantenimiento
+                      equipoMantQuery: '',
+                      equipoMantId: '',
+                      equipoMantResultados: [],
+                      equipoMantCargando: false,
+                      get esAltaBaja() {
+                          return this.tipo_ticket === 'alta_baja';
+                      },
+                      get esAlta() {
+                          // subcategoria contiene 'alta' pero no 'baja'
+                          return this.tipo_ticket === 'alta_baja' && this.subcategoria && !this.subcategoria.includes('baja') && !this.subcategoria.includes('devolucion');
+                      },
+                      get esBaja() {
+                          return this.tipo_ticket === 'alta_baja' && !this.esAlta;
+                      },
+                      get mostrarDispositivo() {
+                          return this.tipo_ticket === 'reparacion';
+                      },
+                      get mostrarEquipoMantenimiento() {
+                          return this.tipo_ticket === 'mantenimiento';
+                      },
+                      init() {
+                          this.cargarCategorias();
+                          this.cargarDispositivos();
+                      },
+                      async cargarCategorias() {
+                          try {
+                              const resp = await fetch('/soporte/categorias-api');
+                              if (resp.ok) {
+                                  const data = await resp.json();
+                                  this.categorias_lista = data.categorias || [];
+                                  this.renderizarSelectCategorias();
+                              } else {
+                                  this.categorias_lista = [];
+                              }
+                          } catch (e) {
+                              this.categorias_lista = [];
+                          }
+                      },
+                      renderizarSelectCategorias() {
+                          const select = document.getElementById('select-categoria');
+                          if (!select) return;
+                          while (select.options.length > 1) { select.remove(1); }
+                          for (let cat of this.categorias_lista) {
+                              const option = document.createElement('option');
+                              option.value = cat.nombre_normalizado;
+                              option.textContent = cat.nombre_display || cat.nombre;
+                              select.appendChild(option);
+                          }
+                      },
+                      renderizarSelectSubcategorias() {
+                          const select = document.getElementById('select-subcategoria');
+                          if (!select) return;
+                          while (select.options.length > 1) { select.remove(1); }
+                          for (let sub of this.subcategorias_actuales) {
+                              const option = document.createElement('option');
+                              option.value = sub.nombre_normalizado;
+                              option.textContent = sub.nombre_display || sub.nombre;
+                              select.appendChild(option);
+                          }
+                      },
+                      seleccionarCategoria(cat) {
+                          if (!cat) return;
+                          this.categoria = cat.nombre_normalizado;
+                          this.tipo_ticket = cat.tipo_ticket_asociado;
+                          this.subcategoria = '';
+                          this.subcategorias_actuales = cat.subcategorias || [];
+                          if (this.subcategorias_actuales.length > 0) {
+                              this.$nextTick(() => this.renderizarSelectSubcategorias());
+                          }
+                          this.cargarDispositivos();
+                      },
+                      seleccionarSubcategoria(sub) {
+                          if (!sub) return;
+                          this.subcategoria = sub.nombre_normalizado;
+                          // Actualizar tipo_ticket si la subcategoría tiene uno específico
+                          if (sub.tipo_ticket_asociado) {
+                              this.tipo_ticket = sub.tipo_ticket_asociado;
+                          }
+                          this.cargarDispositivos();
+                      },
+                      async buscarColab() {
+                          if (this.colab_id && this.searchQuery !== this.colab_nombre) { this.colab_id = ''; }
+                          const query = this.searchQuery.trim();
+                          if (query.length < 2) {
+                              this.colaboradores_lista = [];
+                              this.openSearch = false;
+                              return;
+                          }
+                          this.isLoading = true;
+                          this.openSearch = true;
+                          try {
+                              const resp = await fetch(`/soporte/buscar-empleado?q=${encodeURIComponent(query)}`);
+                              if (resp.ok) {
+                                  const data = await resp.json();
+                                  this.colaboradores_lista = data.items || [];
+                              }
+                          } catch (e) {
+                          } finally { this.isLoading = false; }
+                      },
+                      selectColab(colab) {
+                          this.colab_id = colab.id;
+                          this.colab_nombre = colab.nombre;
+                          this.searchQuery = colab.nombre;
+                          this.openSearch = false;
+                          // Autocompletar datos del colaborador para alta IT
+                          fetch('/soporte/colaborador-alta-info/' + colab.id)
+                              .then(r => r.ok ? r.json() : {})
+                              .then(data => { this.colaboradorInfo = data; })
+                              .catch(() => { this.colaboradorInfo = {}; });
+                      },
+                      clearColab() {
+                          this.colab_id = '';
+                          this.colab_nombre = '';
+                          this.searchQuery = '';
+                          this.openSearch = false;
+                          this.colaboradorInfo = {};
+                      },
+                      async cargarDispositivos() {
+                          if (!this.mostrarDispositivo && !this.mostrarEquipoMantenimiento) {
+                              this.dispositivos_lista = [];
+                              this.dispositivo_id = '';
+                              return;
+                          }
+                          try {
+                              const resp = await fetch('/soporte/mis-dispositivos');
+                              if (resp.ok) {
+                                  const data = await resp.json();
+                                  this.dispositivos_lista = data.dispositivos || [];
+                              }
+                          } catch (e) {}
+                      },
+                      async buscarEquipoMant() {
+                          if (this.equipoMantQuery.length < 2) { this.equipoMantResultados = []; return; }
+                          this.equipoMantCargando = true;
+                          try {
+                              const r = await fetch('/soporte/buscar-equipo-disponible?q=' + encodeURIComponent(this.equipoMantQuery) + '&todos=1');
+                              this.equipoMantResultados = await r.json();
+                          } catch(e) {}
+                          this.equipoMantCargando = false;
+                      },
+                      seleccionarEquipoMant(eq) {
+                          this.equipoMantId = eq.id;
+                          this.equipoMantQuery = eq.display || eq.nombre;
+                          this.equipoMantResultados = [];
+                      },
+                      handleFormSubmit(e) {
+                          if (this.esAltaBaja && !this.colab_id) {
+                               e.preventDefault();
+                               Alpine.store('toasts').error('Debes seleccionar un colaborador de la lista desplegable.');
+                               this.openSearch = true;
+                               return false;
+                          }
+                          return true;
+                      }
+                   }" @submit="handleFormSubmit($event)">
+                <div class="p-6 space-y-4 overflow-y-auto flex-1">
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">¿Qué necesitás? *</label>
+                        <input type="text" name="titulo" required minlength="3" maxlength="200"
+                            placeholder="Ej: No puedo acceder al sistema, Alta de nuevo empleado..."
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Detalle del problema</label>
+                        <textarea name="descripcion" rows="3" maxlength="1000"
+                            placeholder="Describí con detalle qué problema tenés, qué pasos seguiste, qué error te aparece..."
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Urgencia</label>
+                            <select name="prioridad" required
+                                class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                <option value="baja">🟢 Puede esperar (Baja)</option>
+                                <option value="media" selected>🟡 Normal (Media)</option>
+                                <option value="alta">🟠 Urgente (Alta)</option>
+                                <option value="critica">🔴 No puedo trabajar (Crítica)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Tipo de problema</label>
+                            <div class="space-y-2">
+                                <!-- Selector de categoría padre -->
+                                <select id="select-categoria" @change="seleccionarCategoria(categorias_lista.find(c => c.nombre_normalizado === $event.target.value))" required
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 font-medium">
+                                    <option value="">-- Seleccionar categoría --</option>
+                                </select>
+                                
+                                <!-- Selector de subcategoría (si existen) -->
+                                <select id="select-subcategoria" x-show="subcategorias_actuales && subcategorias_actuales.length > 0" @change="seleccionarSubcategoria(subcategorias_actuales.find(s => s.nombre_normalizado === $event.target.value))" :required="subcategorias_actuales && subcategorias_actuales.length > 0"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 font-medium">
+                                    <option value="">-- Seleccionar subcategoría --</option>
+                                </select>
+                            </div>
+                            <!-- Input hidden para enviar la categoría final -->
+                            <input type="hidden" name="categoria" :value="subcategoria || categoria">
+                        </div>
+                    </div>
+
+                    <!-- Selección de Dispositivo (solo para Reparaciones) -->
+                    <div x-show="mostrarDispositivo" x-cloak>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">📱 Mi Dispositivo Afectado *</label>
+                        <select name="activo_id" x-model="dispositivo_id" :required="mostrarDispositivo"
+                            class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                            <option value="">-- Seleccionar dispositivo --</option>
+                            <template x-for="dispositivo in dispositivos_lista" :key="dispositivo.id">
+                                <option :value="dispositivo.id" x-text="`${dispositivo.tipo_display} - ${dispositivo.numero_inventario || dispositivo.numero_serie || 'N/A'}`"></option>
+                            </template>
+                        </select>
+                        <p class="text-xs text-dark-400 mt-1" x-show="dispositivos_lista.length === 0">No tenés dispositivos asignados actualmente</p>
+                        <p class="text-xs text-red-500 mt-1 font-medium" x-show="dispositivos_lista.length > 0">⚠️ Obligatorio: Selecciona el dispositivo que tiene la falla</p>
+                    </div>
+
+                    <!-- Selección de Equipo (para Mantenimiento) -->
+                    <div x-show="mostrarEquipoMantenimiento" x-cloak>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">🔧 Equipo a Mantener *</label>
+                        <select name="activo_id" :required="mostrarEquipoMantenimiento"
+                            class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                            <option value="">-- Seleccionar mi dispositivo --</option>
+                            <template x-for="dispositivo in dispositivos_lista" :key="dispositivo.id">
+                                <option :value="dispositivo.id" x-text="`${dispositivo.tipo_display} - ${dispositivo.numero_inventario || dispositivo.numero_serie || 'N/A'}`"></option>
+                            </template>
+                        </select>
+                        <p class="text-xs text-dark-400 mt-1" x-show="dispositivos_lista.length === 0">No tenés dispositivos asignados actualmente</p>
+                        <p class="text-xs text-red-500 mt-1 font-medium" x-show="dispositivos_lista.length > 0">⚠️ Obligatorio: Seleccioná el equipo que necesita mantenimiento</p>
+                    </div>
+
+                    <!-- HRBP ONLY: Select Colaborador (Searchable) -->
+                    <div x-show="esAltaBaja" x-cloak class="mt-4 relative"
+                        @click.away="openSearch = false">
+                        <label class="block text-sm font-bold text-indigo-700 mb-1">Colaborador Implicado (En Alta/Baja)
+                            *</label>
+                        <input type="hidden" name="colaborador_id" x-model="colab_id">
+
+                        <div class="relative">
+                            <input type="text" x-model="searchQuery" name="colab_search"
+                                @input.debounce.300ms="buscarColab()" @focus="openSearch = true"
+                                x-effect="if(esAltaBaja) { if(colab_id) { $el.setCustomValidity('') } else { $el.setCustomValidity('Debe seleccionar un colaborador de la lista desplegable')} } else { $el.setCustomValidity('') }"
+                                :required="esAltaBaja"
+                                placeholder="Buscar por nombre o código de empleado..." minlength="2" maxlength="100"
+                                class="w-full px-4 py-3 bg-white border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-sm pr-10">
+
+                            <div class="absolute right-3 top-1/2 -translate-y-1/2 flex items-center space-x-2">
+                                <template x-if="isLoading">
+                                    <div
+                                        class="animate-spin h-4 w-4 border-2 border-primary-500 border-t-transparent rounded-full">
+                                    </div>
+                                </template>
+                                <button type="button" @click="clearColab()" x-show="colab_id"
+                                    class="text-dark-400 hover:text-red-500 transition-colors">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                            <div x-show="openSearch && (colaboradores_lista.length > 0 || isLoading || (searchQuery.length >= 2 && !isLoading))"
+                                @click.away="openSearch = false"
+                                class="absolute z-[9999] w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-xl max-h-60 overflow-y-auto overflow-x-hidden py-1 border-t-4 border-t-primary-500">
+                                <template x-for="colab in colaboradores_lista" :key="colab.id">
+                                    <button type="button" @click="selectColab(colab)"
+                                        class="w-full text-left px-3 py-2.5 text-sm rounded-lg hover:bg-indigo-50 hover:text-indigo-700 transition-colors flex flex-col group">
+                                        <span class="font-bold text-dark-800 group-hover:text-indigo-800"
+                                            x-text="colab.nombre"></span>
+                                        <span class="text-[10px] text-dark-400 uppercase tracking-wider"
+                                            x-text="colab.codigo || 'S/N'"></span>
+                                    </button>
+                                </template>
+                                <template
+                                    x-if="colaboradores_lista.length === 0 && !isLoading && searchQuery.length >= 2">
+                                    <div class="px-4 py-6 text-center">
+                                        <div
+                                            class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-dark-50 text-dark-400 mb-2">
+                                            <i data-lucide="search-x" class="w-5 h-5"></i>
+                                        </div>
+                                        <p class="text-sm text-dark-500 font-medium">No se encontraron colaboradores</p>
+                                        <p class="text-xs text-dark-400 mt-1">Verificá el nombre o código ingresado</p>
+                                    </div>
+                                </template>
+
+                                <template x-if="isLoading">
+                                    <div class="px-4 py-6 text-center">
+                                        <div class="animate-spin inline-block w-6 h-6 border-[3px] border-current border-t-transparent text-primary-500 rounded-full"
+                                            role="status" aria-label="loading">
+                                            <span class="sr-only">Cargando...</span>
+                                        </div>
+                                        <p class="text-sm text-dark-500 mt-2 font-medium italic">Buscando en la base de
+                                            datos...</p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos IT para Alta de Colaborador -->
+                    <div x-show="esAltaBaja && colab_id" x-cloak class="space-y-4">
+
+                        <!-- Datos autocompletados (readonly) -->
+                        <div class="p-3 bg-blue-50 rounded-xl border border-blue-200">
+                            <p class="text-xs font-semibold text-blue-700 uppercase mb-2">Datos del colaborador</p>
+                            <div class="grid grid-cols-2 gap-2 text-xs text-dark-600">
+                                <div><span class="font-medium">Área:</span> <span x-text="colaboradorInfo.departamento || 'Sin asignar'"></span></div>
+                                <div><span class="font-medium">Puesto:</span> <span x-text="colaboradorInfo.puesto || 'Sin asignar'"></span></div>
+                                <div><span class="font-medium">Líder:</span> <span x-text="colaboradorInfo.lider || 'Sin asignar'"></span></div>
+                                <div><span class="font-medium">Mail líder:</span> <span x-text="colaboradorInfo.lider_email || 'Sin asignar'"></span></div>
+                            </div>
+                            <p x-show="!colaboradorInfo.departamento && !colaboradorInfo.puesto"
+                               class="text-xs text-amber-600 mt-2">⚠ Este colaborador no tiene área ni puesto asignados en nómina.</p>
+                        </div>
+
+                        <!-- Cliente y servicio (solo para alta) -->
+                        <div x-show="esAlta">
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Cliente y Servicio</label>
+                            <input type="text" name="cliente_servicio"
+                                   :value="colaboradorInfo.cliente_servicio || ''"
+                                   placeholder="Ej: Cliente ABC - Servicio de desarrollo"
+                                   class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                        </div>
+
+                        <!-- Configuración IT (solo para alta) -->
+                        <div x-show="esAlta" class="space-y-3 pt-2 border-t border-dark-100"
+                             x-data="{ sistemasDisponibles: [], sistemasSeleccionados: [], necesitaPC: false,
+                                       async init() {
+                                           try {
+                                               const r = await fetch('/soporte/sistemas-disponibles');
+                                               const d = await r.json();
+                                               this.sistemasDisponibles = d.sistemas || [];
+                                           } catch(e) {}
+                                       },
+                                       toggleSistema(clave) {
+                                           const idx = this.sistemasSeleccionados.indexOf(clave);
+                                           if (idx >= 0) this.sistemasSeleccionados.splice(idx, 1);
+                                           else this.sistemasSeleccionados.push(clave);
+                                       },
+                                       estaSeleccionado(clave) { return this.sistemasSeleccionados.includes(clave); }
+                                     }">
+                            <p class="text-xs font-semibold text-dark-500 uppercase">Configuración IT</p>
+
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Modalidad de trabajo *</label>
+                                <select name="modalidad_trabajo"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Presencial">Presencial</option>
+                                    <option value="Remoto">Remoto</option>
+                                    <option value="Híbrido">Híbrido</option>
+                                </select>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="necesita_computadora" value="1" x-model="necesitaPC"
+                                           class="w-4 h-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                    <span class="text-sm text-dark-700">Necesita computadora</span>
+                                </label>
+                            </div>
+
+                            <div x-show="necesitaPC" x-cloak>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Gama de computadora</label>
+                                <select name="gama_computadora"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                    <option value="">No aplica / Seleccionar...</option>
+                                    <option value="Básica">Básica</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Alta gama">Alta gama</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-2">Sistemas a habilitar *</label>
+                                <div class="bg-dark-50 rounded-xl border border-dark-200 p-3 space-y-2">
+                                    <template x-for="s in sistemasDisponibles" :key="s.clave">
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" name="sistemas_habilitados" :value="s.clave"
+                                                   :checked="estaSeleccionado(s.clave)" @change="toggleSistema(s.clave)"
+                                                   class="w-4 h-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                            <span class="text-sm text-dark-700" x-text="s.label"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Listas de correo a incluir</label>
+                                <textarea name="listas_correo" rows="2"
+                                    placeholder="Ej: equipo-dev@empresa.com, all-staff@empresa.com"
+                                    class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Adjuntar imagen (solo para tickets que no son alta/baja) -->
+                    <div x-show="!esAltaBaja" x-data="{ preview: null }">
+                        <label class="block text-sm font-medium text-dark-700 mb-1">📷 Adjuntar captura
+                            (opcional)</label>
+                        <div class="relative">
+                            <input type="file" name="imagen" accept="image/*" 
+                                @change="preview = URL.createObjectURL($event.target.files[0])"
+                                class="block w-full text-sm text-dark-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer border border-dark-200 rounded-xl">
+                            <p class="text-xs text-dark-400 mt-1">JPG, PNG, WebP — hasta 5MB</p>
+                        </div>
+                        <template x-if="preview">
+                            <img :src="preview" class="mt-2 max-h-32 rounded-xl border border-dark-200 object-contain">
+                        </template>
+                    </div>
+                </div>
+                <!-- Footer -->
+                <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                    <button type="button" @click="showCreateModal = false"
+                        class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                        class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-medium rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft">
+                        Enviar Solicitud
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar cancelación de solicitud -->
+    <div x-show="showCancelModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-dark-900/50 backdrop-blur-sm" @click="showCancelModal = false"></div>
+        <div x-show="showCancelModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            x-transition:leave="transition ease-in duration-150" x-transition:leave-start="opacity-100 scale-100"
+            x-transition:leave-end="opacity-0 scale-95"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+
+            <!-- Icon + Header -->
+            <div class="px-6 pt-6 pb-2 flex flex-col items-center text-center">
+                <div class="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                    <i data-lucide="alert-triangle" class="w-7 h-7 text-red-500"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-dark-900">Cancelar solicitud</h3>
+                <p class="text-sm text-dark-500 mt-1">¿Estás seguro de que querés cancelar la solicitud <span
+                        class="font-semibold text-dark-700" x-text="cancelTicketNumero"></span>?</p>
+                <p class="text-xs text-dark-400 mt-2">Esta acción no se puede deshacer.</p>
+            </div>
+
+            <!-- Actions -->
+            <div class="px-6 py-4 mt-2 flex items-center justify-center space-x-3">
+                <button type="button" @click="showCancelModal = false; cancelTicketId = null"
+                    class="px-5 py-2.5 text-sm font-medium text-dark-600 hover:text-dark-800 bg-dark-100 hover:bg-dark-200 rounded-xl transition-colors">
+                    No, volver
+                </button>
+                <form :action="'/soporte/mis-solicitudes/' + cancelTicketId + '/cancelar'" method="POST">
+                    <button type="submit"
+                        class="px-5 py-2.5 bg-gradient-to-r from-red-500 to-red-600 text-white text-sm font-medium rounded-xl hover:from-red-600 hover:to-red-700 transition-all shadow-soft">
+                        Sí, cancelar solicitud
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,337 @@
+{% extends "core/base.html" %}
+
+{% block title %}Canjes - Star Miles{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">🎁 Catálogo de Canjes</h1>
+            <p class="text-dark-500">Canjeá tus Star Miles por premios</p>
+        </div>
+        <div class="mt-4 md:mt-0 flex items-center space-x-4">
+            {% if mis_millas %}
+            <div class="bg-gradient-to-r from-amber-400 to-orange-500 rounded-xl px-4 py-2 text-white">
+                <span class="text-white/80 text-sm">Disponibles:</span>
+                <span class="font-bold text-lg ml-1">{{ mis_millas.millas_disponibles }}</span>
+                <i data-lucide="star" class="w-4 h-4 inline ml-1"></i>
+            </div>
+            {% endif %}
+            <a href="{{ url_for('starmiles.home') }}" class="text-primary-600 hover:text-primary-700 font-medium flex items-center">
+                <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>Volver
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="relative max-w-md">
+            <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+            <input type="text" placeholder="Buscar items..." name="search"
+                   hx-get="{{ url_for('starmiles.canjes_list') }}"
+                   hx-trigger="keyup changed delay:300ms"
+                   hx-target="#canjes-grid"
+                   class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+        </div>
+    </div>
+
+    <!-- Grid de items -->
+    <div id="canjes-grid">
+        {% include "starmiles/partials/canjes_grid.html" %}
+    </div>
+</div>
+
+<!-- Modal Canjear (Producto normal) -->
+<div id="modal-canjear" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" onclick="cerrarModalCanjear()"></div>
+    <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full relative">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="gift" class="w-8 h-8 text-emerald-600"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark-900 mb-2">Canjear item</h3>
+            <p class="text-dark-500" id="modal-item-nombre"></p>
+            <p class="text-amber-500 font-bold mt-2">
+                <i data-lucide="star" class="w-4 h-4 inline mr-1"></i>
+                <span id="modal-item-costo"></span> Star Miles
+            </p>
+        </div>
+        <form id="form-canjear" hx-post="" hx-target="#canje-result" method="POST">
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Cantidad</label>
+                <input type="number" name="cantidad" value="1" min="1" max="10"
+                       class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Comentario (opcional)</label>
+                <textarea name="comentario" rows="2" placeholder="Alguna aclaración..."
+                          class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500"></textarea>
+            </div>
+            <div id="canje-result" class="mb-4"></div>
+            <div class="flex space-x-3">
+                <button type="button" onclick="cerrarModalCanjear()" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button type="submit" class="flex-1 px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700">Canjear</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal Canjear MercadoLibre -->
+<div id="modal-canjear-ml" class="fixed inset-0 z-50 hidden items-center justify-center p-4" x-data="{ 
+    itemId: '', 
+    itemNombre: '', 
+    mlUrl: '', 
+    mlPrecio: null, 
+    starMiles: null, 
+    cotizacionUsd: null,
+    precioUsd: null,
+    loading: false,
+    error: '',
+    calculado: false
+}">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="cerrarModalCanjearML()"></div>
+    <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-lg w-full relative">
+        <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-yellow-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="shopping-cart" class="w-8 h-8 text-yellow-600"></i>
+            </div>
+            <h3 class="text-xl font-bold text-dark-900 mb-2">Canjear de MercadoLibre</h3>
+            <p class="text-dark-500" x-text="itemNombre"></p>
+        </div>
+        
+        <form id="form-canjear-ml" hx-post="" hx-target="#canje-ml-result" method="POST">
+            <!-- URL de MercadoLibre -->
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">
+                    <i data-lucide="link" class="w-4 h-4 inline mr-1"></i>
+                    URL del producto en MercadoLibre
+                </label>
+                <input type="url" name="mercadolibre_url" x-model="mlUrl" required
+                       placeholder="https://articulo.mercadolibre.com.ar/MLA-..."
+                       class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-yellow-500">
+                <p class="text-xs text-dark-400 mt-1">Pegá el link del producto que querés canjear</p>
+            </div>
+            
+            <!-- Precio manual -->
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">
+                    <i data-lucide="dollar-sign" class="w-4 h-4 inline mr-1"></i>
+                    Precio del producto (ARS)
+                </label>
+                <div class="flex space-x-2">
+                    <input type="number" x-model="mlPrecio" required min="1" step="0.01"
+                           placeholder="Ej: 150000"
+                           @input="calculado = false; error = ''"
+                           class="flex-1 px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-yellow-500">
+                    <button type="button" @click="calcularStarMiles()" 
+                            :disabled="loading || !mlPrecio || mlPrecio <= 0"
+                            class="px-4 py-3 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+                        <template x-if="loading">
+                            <i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i>
+                        </template>
+                        <template x-if="!loading">
+                            <span class="flex items-center">
+                                <i data-lucide="calculator" class="w-5 h-5 mr-1"></i>
+                                Calcular
+                            </span>
+                        </template>
+                    </button>
+                </div>
+                <p class="text-xs text-dark-400 mt-1">Ingresá el precio que figura en MercadoLibre</p>
+            </div>
+            
+            <!-- Resultado del cálculo - Error -->
+            <template x-if="error">
+                <div class="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl">
+                    <i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i>
+                    <span x-text="error"></span>
+                </div>
+            </template>
+
+            <!-- Resultado del cálculo - Éxito -->
+            <template x-if="calculado && !error">
+                <div class="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-xl">
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <span class="text-dark-400">Precio ARS:</span>
+                            <span class="font-bold text-dark-900 block" x-text="'$ ' + Number(mlPrecio).toLocaleString('es-AR')"></span>
+                        </div>
+                        <div>
+                            <span class="text-dark-400">Cotización USD:</span>
+                            <span class="font-bold text-dark-900 block" x-text="'$ ' + cotizacionUsd?.toLocaleString('es-AR', {minimumFractionDigits: 2})"></span>
+                        </div>
+                        <div>
+                            <span class="text-dark-400">Precio USD:</span>
+                            <span class="font-bold text-dark-900 block" x-text="'U$D ' + precioUsd?.toLocaleString('es-AR', {minimumFractionDigits: 2})"></span>
+                        </div>
+                        <div class="bg-yellow-100 rounded-lg p-2 -m-1">
+                            <span class="text-dark-500 text-xs">Costo Star Miles:</span>
+                            <span class="font-bold text-yellow-600 text-lg block">
+                                <i data-lucide="star" class="w-4 h-4 inline mr-1"></i>
+                                <span x-text="starMiles?.toLocaleString('es-AR')"></span>
+                            </span>
+                        </div>
+                    </div>
+                    <p class="text-xs text-dark-400 mt-2 pt-2 border-t border-yellow-200">
+                        <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                        10 Star Miles = 1 USD
+                    </p>
+                    {% if mis_millas %}
+                    <div class="mt-2 pt-2 border-t border-yellow-200">
+                        <template x-if="starMiles <= {{ mis_millas.millas_disponibles }}">
+                            <p class="text-sm text-emerald-600">
+                                <i data-lucide="check-circle" class="w-4 h-4 inline mr-1"></i>
+                                Tenés millas suficientes ({{ mis_millas.millas_disponibles }} disponibles)
+                            </p>
+                        </template>
+                        <template x-if="starMiles > {{ mis_millas.millas_disponibles }}">
+                            <p class="text-sm text-red-600">
+                                <i data-lucide="x-circle" class="w-4 h-4 inline mr-1"></i>
+                                Millas insuficientes (tenés {{ mis_millas.millas_disponibles }}, necesitás <span x-text="starMiles"></span>)
+                            </p>
+                        </template>
+                    </div>
+                    {% endif %}
+                </div>
+            </template>
+            
+            <!-- Campos ocultos para enviar -->
+            <input type="hidden" name="star_miles_calculado" :value="starMiles">
+            <input type="hidden" name="mercadolibre_precio" :value="mlPrecio">
+            
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Cantidad</label>
+                <input type="number" name="cantidad" value="1" min="1" max="10"
+                       class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-yellow-500">
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Comentario (opcional)</label>
+                <textarea name="comentario" rows="2" placeholder="Alguna aclaración..."
+                          class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-yellow-500"></textarea>
+            </div>
+            
+            <div id="canje-ml-result" class="mb-4"></div>
+            
+            <div class="flex space-x-3">
+                <button type="button" @click="cerrarModalCanjearML()" 
+                        class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">
+                    Cancelar
+                </button>
+                <button type="submit" 
+                        :disabled="!calculado || error || !mlUrl || (starMiles > {{ mis_millas.millas_disponibles if mis_millas else 0 }})"
+                        class="flex-1 px-5 py-2.5 bg-yellow-500 text-white rounded-xl hover:bg-yellow-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                    Canjear
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Modal producto normal
+function abrirModalCanjear(itemId, itemNombre, itemCosto) {
+    document.getElementById('modal-item-nombre').textContent = itemNombre;
+    document.getElementById('modal-item-costo').textContent = itemCosto;
+    document.getElementById('form-canjear').setAttribute('hx-post', '/starmiles/canjes/' + itemId + '/canjear');
+    htmx.process(document.getElementById('form-canjear'));
+    document.getElementById('canje-result').innerHTML = '';
+    document.getElementById('form-canjear').reset();
+    document.getElementById('modal-canjear').classList.remove('hidden');
+    document.getElementById('modal-canjear').classList.add('flex');
+}
+
+function cerrarModalCanjear() {
+    document.getElementById('modal-canjear').classList.add('hidden');
+    document.getElementById('modal-canjear').classList.remove('flex');
+}
+
+// Modal MercadoLibre
+function abrirModalCanjearML(itemId, itemNombre) {
+    const modal = document.getElementById('modal-canjear-ml');
+    const alpineData = Alpine.$data(modal);
+    
+    alpineData.itemId = itemId;
+    alpineData.itemNombre = itemNombre;
+    alpineData.mlUrl = '';
+    alpineData.mlPrecio = null;
+    alpineData.starMiles = null;
+    alpineData.cotizacionUsd = null;
+    alpineData.precioUsd = null;
+    alpineData.loading = false;
+    alpineData.error = '';
+    alpineData.calculado = false;
+    
+    document.getElementById('form-canjear-ml').setAttribute('hx-post', '/starmiles/canjes/' + itemId + '/canjear');
+    htmx.process(document.getElementById('form-canjear-ml'));
+    document.getElementById('canje-ml-result').innerHTML = '';
+    
+    modal.classList.remove('hidden');
+    modal.classList.add('flex');
+    
+    if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+    }
+}
+
+function cerrarModalCanjearML() {
+    const modal = document.getElementById('modal-canjear-ml');
+    modal.classList.add('hidden');
+    modal.classList.remove('flex');
+}
+
+// Función para calcular Star Miles llamando al backend (usa cotización USD)
+async function calcularStarMilesAPI() {
+    const modal = document.getElementById('modal-canjear-ml');
+    const data = Alpine.$data(modal);
+    
+    if (!data.mlPrecio || data.mlPrecio <= 0) {
+        data.error = 'Ingresá un precio válido';
+        return;
+    }
+    
+    data.loading = true;
+    data.error = '';
+    data.calculado = false;
+    
+    try {
+        const response = await fetch('/starmiles/calcular-millas', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ precio: Number(data.mlPrecio) })
+        });
+        
+        const result = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(result.error || result.detail || 'Error al calcular millas');
+        }
+        
+        data.cotizacionUsd = result.cotizacion_usd;
+        data.precioUsd = result.precio_usd;
+        data.starMiles = result.star_miles;
+        data.calculado = true;
+        
+    } catch (err) {
+        data.error = err.message || 'Error al calcular millas';
+    } finally {
+        data.loading = false;
+        if (typeof lucide !== 'undefined') {
+            setTimeout(() => lucide.createIcons(), 100);
+        }
+    }
+}
+
+// Agregar método al x-data del modal
+document.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('modal-canjear-ml');
+    if (modal && modal._x_dataStack) {
+        modal._x_dataStack[0].calcularStarMiles = calcularStarMilesAPI;
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,204 @@
+// Dicsys Core: Gestion de Licencias y conexiones con su periferia.
+// Capturado: 2026-09-06T19:41:48.212244+00:00
+// Tres tablas del submodulo completas; periferia acotada a campos relevantes.
+// Solo esquema public. Sin filas de negocio ni credenciales.
+// Los defaults reflejan PostgreSQL; los defaults Python no son defaults SQL.
+// Indices parciales/especiales: SQL exacto en Note para no inventar restricciones.
+// No utilizar este diagrama como migracion ni como garantia de aislamiento multiempresa.
+Project gestion_licencias_actual {
+  database_type: 'PostgreSQL'
+  Note: 'Licencias + empleados/equipos/empresa + permisos. Solo FK existentes entre columnas mostradas. La periferia es una proyeccion explicitada en cada tabla.'
+}
+
+Table "innovacion_licencias" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "nro_pedido_compra" "varchar(50)"
+  "costo_mensual" "numeric(10, 2)"
+  "moneda" "varchar(3)" [not null]
+  "fecha_inicio" "date" [not null]
+  "fecha_fin" "date"
+  "empleado_id" "uuid" [not null]
+  "deleted_at" "timestamp without time zone"
+  "created_at" "timestamp without time zone" [not null]
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "herramienta_id" "uuid" [not null]
+  "activa" "boolean" [not null]
+  Note: 'ASIGNACIONES DE LICENCIAS: cada fila asigna una herramienta a un empleado. empleado_id apunta a nomina_empleados, no a core_usuarios. Guarda costo mensual por persona, fechas y estado. Asignar a un equipo crea una fila por integrante; no hay FK directa a equipo.'
+}
+
+Table "innovacion_herramientas" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "nombre" "varchar(150)" [not null]
+  "nombre_normalizado" "varchar(150)" [not null]
+  "costo_referencia" "numeric(10, 2)"
+  "moneda" "varchar(3)" [not null]
+  "activo" "boolean" [not null]
+  "deleted_at" "timestamp without time zone"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "proveedor_id" "uuid"
+  Note: 'Catalogo propio de Licencias. costo_referencia propone un precio; cada licencia guarda su costo_mensual. proveedor_id es opcional.\nCREATE UNIQUE INDEX uq_herramienta_empresa_nombre ON public.innovacion_herramientas USING btree (empresa_id, nombre_normalizado) WHERE (deleted_at IS NULL)'
+}
+
+Table "innovacion_proveedores" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "nombre" "varchar(150)" [not null]
+  "nombre_normalizado" "varchar(150)" [not null]
+  "activo" "boolean" [not null]
+  "deleted_at" "timestamp without time zone"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  Note: 'Proveedor de herramientas; catalogo propio por empresa, independiente de clientes de Administracion.\nCREATE UNIQUE INDEX uq_proveedor_empresa_nombre ON public.innovacion_proveedores USING btree (empresa_id, nombre_normalizado) WHERE (deleted_at IS NULL)'
+}
+
+Table "nomina_empleados" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "codigo" "varchar(50)" [not null]
+  "apellido" "varchar(100)" [not null]
+  "nombre" "varchar(100)" [not null]
+  "activo" "boolean"
+  "deleted_at" "timestamp without time zone"
+  indexes {
+    ("codigo") [unique, name: 'nomina_empleados_codigo_key']
+  }
+  Note: 'PERIFERIA: proyeccion de columnas relevantes; se omiten otros campos e indices de esta tabla.'
+}
+
+Table "operaciones_equipos" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "nombre" "varchar(100)" [not null]
+  "lider_id" "uuid"
+  "activo" "boolean" [not null]
+  "deleted_at" "timestamp without time zone"
+  Note: 'PERIFERIA: proyeccion de columnas relevantes; se omiten otros campos e indices de esta tabla.\nLa agrupacion usa integrantes, no lider_id. Sin equipo es un grupo calculado, no una fila persistida.'
+}
+
+Table "operaciones_equipo_integrantes" {
+  "equipo_id" "uuid" [not null]
+  "empleado_id" "uuid" [not null]
+  "created_at" "timestamp without time zone" [not null]
+  indexes {
+    ("equipo_id", "empleado_id") [pk]
+  }
+  Note: 'Un empleado puede integrar varios equipos. Agrupar licencias usa la membresia actual; no existe historial temporal de asignacion a equipo.'
+}
+
+Table "core_empresas" {
+  "id" "uuid" [pk, not null]
+  "razon_social" "varchar(200)" [not null]
+  "nombre_fantasia" "varchar(200)"
+  "activo" "boolean" [not null]
+  "deleted_at" "timestamp without time zone"
+  Note: 'PERIFERIA: proyeccion de columnas relevantes; se omiten otros campos e indices de esta tabla.'
+}
+
+Table "core_usuarios" {
+  "id" "uuid" [pk, not null]
+  "nombre" "varchar(100)" [not null]
+  "apellido" "varchar(100)"
+  "rol" "varchar(50)" [not null]
+  "activo" "boolean" [not null]
+  "deleted_at" "timestamp without time zone"
+  indexes {
+    ("deleted_at") [name: 'ix_core_usuarios_deleted_at']
+  }
+  Note: 'PERIFERIA: proyeccion de columnas relevantes; se omiten otros campos e indices de esta tabla.\nIdentidad que opera la app; rol admin omite comprobaciones de modulo/submodulo. No es el destinatario de la licencia.'
+}
+
+Table "core_usuario_empresa" {
+  "usuario_id" "uuid" [not null]
+  "empresa_id" "uuid" [not null]
+  "created_at" "timestamp without time zone"
+  indexes {
+    ("usuario_id", "empresa_id") [pk]
+  }
+}
+
+Table "core_usuario_grupo" {
+  "usuario_id" "uuid" [not null]
+  "grupo_id" "uuid" [not null]
+  "empresa_id" "uuid" [not null]
+  "created_at" "timestamp without time zone"
+  indexes {
+    ("usuario_id", "grupo_id", "empresa_id") [pk]
+  }
+  Note: 'Membresia a un grupo por empresa. Distinta de core_usuario_empresa.'
+}
+
+Table "core_grupos" {
+  "id" "uuid" [pk, not null]
+  "nombre" "varchar(100)" [not null]
+  "activo" "boolean"
+  "deleted_at" "timestamp without time zone"
+  indexes {
+    ("nombre") [unique, name: 'core_grupos_nombre_key']
+    ("deleted_at") [name: 'ix_core_grupos_deleted_at']
+  }
+  Note: 'PERIFERIA: proyeccion de columnas relevantes; se omiten otros campos e indices de esta tabla.\nGrupo de autorizacion global; distinto del equipo operativo. Los permisos de este grupo se comparten entre sus empresas.'
+}
+
+Table "core_permisos_modulo" {
+  "id" "uuid" [pk, not null]
+  "grupo_id" "uuid" [not null]
+  "modulo" "varchar(100)" [not null]
+  "tiene_acceso" "boolean"
+  "created_at" "timestamp without time zone"
+  "updated_at" "timestamp without time zone"
+  "deleted_at" "timestamp without time zone"
+  indexes {
+    ("deleted_at") [name: 'ix_core_permisos_modulo_deleted_at']
+  }
+  Note: 'Licencias exige tiene_acceso en innovacion y en innovacion.licencias. Las claves son texto; no FK a menus. Sin distincion lectura/escritura.'
+}
+
+Ref "innovacion_licencias_empleado_id_fkey": "innovacion_licencias".("empleado_id") > "nomina_empleados".("id") [delete: no action, update: no action]
+Ref "innovacion_licencias_empresa_id_fkey": "innovacion_licencias".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "innovacion_licencias_herramienta_id_fkey": "innovacion_licencias".("herramienta_id") > "innovacion_herramientas".("id") [delete: no action, update: no action]
+Ref "innovacion_herramientas_empresa_id_fkey": "innovacion_herramientas".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "innovacion_herramientas_proveedor_id_fkey": "innovacion_herramientas".("proveedor_id") > "innovacion_proveedores".("id") [delete: no action, update: no action]
+Ref "innovacion_proveedores_empresa_id_fkey": "innovacion_proveedores".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "nomina_empleados_empresa_id_fkey": "nomina_empleados".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "operaciones_equipos_empresa_id_fkey": "operaciones_equipos".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "operaciones_equipos_lider_id_fkey": "operaciones_equipos".("lider_id") > "nomina_empleados".("id") [delete: no action, update: no action]
+Ref "operaciones_equipo_integrantes_empleado_id_fkey": "operaciones_equipo_integrantes".("empleado_id") > "nomina_empleados".("id") [delete: no action, update: no action]
+Ref "operaciones_equipo_integrantes_equipo_id_fkey": "operaciones_equipo_integrantes".("equipo_id") > "operaciones_equipos".("id") [delete: no action, update: no action]
+Ref "core_usuario_empresa_empresa_id_fkey": "core_usuario_empresa".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "core_usuario_empresa_usuario_id_fkey": "core_usuario_empresa".("usuario_id") > "core_usuarios".("id") [delete: no action, update: no action]
+Ref "core_usuario_grupo_empresa_id_fkey": "core_usuario_grupo".("empresa_id") > "core_empresas".("id") [delete: no action, update: no action]
+Ref "core_usuario_grupo_grupo_id_fkey": "core_usuario_grupo".("grupo_id") > "core_grupos".("id") [delete: no action, update: no action]
+Ref "core_usuario_grupo_usuario_id_fkey": "core_usuario_grupo".("usuario_id") > "core_usuarios".("id") [delete: no action, update: no action]
+Ref "core_permisos_modulo_grupo_id_fkey": "core_permisos_modulo".("grupo_id") > "core_grupos".("id") [delete: no action, update: no action]
+
+TableGroup core {
+  "core_empresas"
+  "core_usuarios"
+  "core_usuario_empresa"
+  "core_usuario_grupo"
+  "core_grupos"
+  "core_permisos_modulo"
+}
+
+TableGroup innovacion {
+  "innovacion_licencias"
+  "innovacion_herramientas"
+  "innovacion_proveedores"
+}
+
+TableGroup nomina {
+  "nomina_empleados"
+}
+
+TableGroup operaciones {
+  "operaciones_equipos"
+  "operaciones_equipo_integrantes"
+}

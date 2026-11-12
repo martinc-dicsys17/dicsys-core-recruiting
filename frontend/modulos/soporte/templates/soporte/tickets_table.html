@@ -1,0 +1,908 @@
+{% extends "core/base.html" %}
+
+{% block title %}Tickets - Soporte Técnico - {{ config.APP_NAME }}{% endblock %}
+
+{% block head %}
+<style>
+    .priority-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    
+    .priority-critica { background: #EF4444; }
+    .priority-alta { background: #F97316; }
+    .priority-media { background: #EAB308; }
+    .priority-baja { background: #22C55E; }
+    
+    .modal-backdrop {
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div x-data="ticketsTableData()" class="animate-fade-in bg-[#f8f9fa] min-h-screen p-6 rounded-2xl border border-dark-100">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <div class="flex items-center space-x-2 mb-1">
+                <a href="{{ url_for('soporte.dashboard') }}"
+                    class="text-dark-400 hover:text-primary-500 transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                </a>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-dark-300"></i>
+                <span class="text-sm font-medium text-dark-500">Tickets</span>
+            </div>
+            <h1 class="text-3xl font-bold text-dark-900 tracking-tight">Gestión de Tickets 🎫</h1>
+        </div>
+        <div class="flex items-center space-x-3 mt-4 md:mt-0">
+            <!-- Toggle Vista -->
+            <div class="flex bg-white p-1 rounded-xl border border-dark-100 items-center">
+                <a href="{{ url_for('soporte.tickets_kanban') }}"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all text-dark-400 hover:text-dark-700">
+                    <i data-lucide="columns" class="w-4 h-4 inline-block mr-1"></i>Kanban
+                </a>
+                <a href="{{ url_for('soporte.tickets_table') }}"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-primary-50 text-primary-600 shadow-sm">
+                    <i data-lucide="list" class="w-4 h-4 inline-block mr-1"></i>Tabla
+                </a>
+            </div>
+            
+            {% if session.get('user', {}).get('rol') == 'admin' %}
+            <button @click="showManageCategoriesModal = true"
+                class="p-2.5 bg-white border border-dark-200 text-dark-600 rounded-xl hover:bg-dark-50 transition-all shadow-sm active:scale-95"
+                title="Gestionar Categorías">
+                <i data-lucide="tag" class="w-5 h-5"></i>
+            </button>
+            {% endif %}
+            
+            <button @click="showCreateModal = true"
+                class="flex items-center px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-all shadow-md active:scale-95">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                <span>Nuevo Ticket</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros y Búsqueda -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <!-- Buscador -->
+            <form action="{{ url_for('soporte.tickets_table') }}" method="GET" class="relative group flex-1 max-w-md">
+                {% if filtro_estado %}<input type="hidden" name="estado" value="{{ filtro_estado }}">{% endif %}
+                {% if filtro_categoria %}<input type="hidden" name="categoria_id" value="{{ filtro_categoria }}">{% endif %}
+                <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <i data-lucide="search" class="w-4 h-4 text-dark-400 group-focus-within:text-primary-500 transition-colors"></i>
+                </div>
+                <input type="text" name="buscar" value="{{ buscar or '' }}"
+                    placeholder="Buscar por título, número o categoría..."
+                    class="w-full pl-11 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all">
+            </form>
+            
+            <!-- Filtros -->
+            <div class="flex items-center gap-2 flex-wrap">
+                <!-- Estados -->
+                <div class="flex items-center gap-1 bg-dark-50 p-1 rounded-lg">
+                    <a href="{{ url_for('soporte.tickets_table', buscar=buscar, categoria_id=filtro_categoria) }}"
+                        class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all {{ 'bg-white text-primary-600 shadow-sm' if not filtro_estado else 'text-dark-500 hover:text-dark-700' }}">
+                        Todos
+                    </a>
+                    <a href="{{ url_for('soporte.tickets_table', estado='abierto', buscar=buscar, categoria_id=filtro_categoria) }}"
+                        class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all {{ 'bg-blue-500 text-white shadow-sm' if filtro_estado == 'abierto' else 'text-dark-500 hover:text-dark-700' }}">
+                        Abiertos
+                    </a>
+                    <a href="{{ url_for('soporte.tickets_table', estado='en_progreso', buscar=buscar, categoria_id=filtro_categoria) }}"
+                        class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all {{ 'bg-amber-500 text-white shadow-sm' if filtro_estado == 'en_progreso' else 'text-dark-500 hover:text-dark-700' }}">
+                        En Progreso
+                    </a>
+                    <a href="{{ url_for('soporte.tickets_table', estado='resuelto', buscar=buscar, categoria_id=filtro_categoria) }}"
+                        class="px-3 py-1.5 rounded-md text-xs font-bold uppercase tracking-wider transition-all {{ 'bg-emerald-500 text-white shadow-sm' if filtro_estado == 'resuelto' else 'text-dark-500 hover:text-dark-700' }}">
+                        Resueltos
+                    </a>
+                </div>
+                
+                <!-- Categorías -->
+                <div class="relative" x-data="{ openFilter: false }">
+                    <button @click="openFilter = !openFilter"
+                        class="px-3 py-1.5 rounded-lg text-xs font-bold transition-all border flex items-center gap-1.5 {{ 'bg-primary-100 text-primary-700 border-primary-200' if filtro_categoria else 'bg-white text-dark-600 border-dark-200 hover:border-primary-300' }}">
+                        <i data-lucide="filter" class="w-3.5 h-3.5"></i>
+                        <span>{% if filtro_categoria_nombre %}{{ filtro_categoria_nombre }}{% else %}Categoría{% endif %}</span>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform" :class="openFilter && 'rotate-180'"></i>
+                    </button>
+                    <div x-show="openFilter" @click.away="openFilter = false" x-transition x-cloak
+                        class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-lg border border-dark-100 py-1 z-[100] max-h-96 overflow-y-auto">
+                        <a href="{{ url_for('soporte.tickets_table', estado=filtro_estado, buscar=buscar) }}"
+                            class="block px-4 py-2 text-sm hover:bg-dark-50 transition-colors {{ 'text-primary-600 font-semibold bg-primary-50' if not filtro_categoria else 'text-dark-700' }}">
+                            Todas las categorías
+                        </a>
+                        {% for cat in categorias_principales %}
+                        <a href="{{ url_for('soporte.tickets_table', estado=filtro_estado, buscar=buscar, categoria_id=cat.id) }}"
+                            class="block px-4 py-2 text-sm hover:bg-dark-50 transition-colors {{ 'text-primary-600 font-semibold bg-primary-50' if filtro_categoria == cat.id else 'text-dark-700' }}">
+                            {{ cat.nombre }}
+                        </a>
+                        {% if cat.subcategorias %}
+                        {% for sub in cat.subcategorias %}
+                        <a href="{{ url_for('soporte.tickets_table', estado=filtro_estado, buscar=buscar, categoria_id=sub.id) }}"
+                            class="block px-4 py-2 text-sm pl-8 hover:bg-dark-50 transition-colors {{ 'text-primary-600 font-semibold bg-primary-50' if filtro_categoria == sub.id else 'text-dark-500' }}">
+                            {{ sub.nombre }}
+                        </a>
+                        {% endfor %}
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Compactos -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+        <div class="bg-white rounded-xl px-4 py-3 border border-dark-100">
+            <div class="text-2xl font-bold text-dark-900">{{ stats.total|default(0) }}</div>
+            <div class="text-xs text-dark-400 uppercase font-semibold">Total</div>
+        </div>
+        <div class="bg-blue-50 rounded-xl px-4 py-3 border border-blue-100">
+            <div class="text-2xl font-bold text-blue-700">{{ stats.abierto|default(0) }}</div>
+            <div class="text-xs text-blue-500 uppercase font-semibold">Abiertos</div>
+        </div>
+        <div class="bg-amber-50 rounded-xl px-4 py-3 border border-amber-100">
+            <div class="text-2xl font-bold text-amber-700">{{ stats.en_progreso|default(0) }}</div>
+            <div class="text-xs text-amber-500 uppercase font-semibold">En Progreso</div>
+        </div>
+        <div class="bg-emerald-50 rounded-xl px-4 py-3 border border-emerald-100">
+            <div class="text-2xl font-bold text-emerald-700">{{ stats.resuelto|default(0) }}</div>
+            <div class="text-xs text-emerald-500 uppercase font-semibold">Resueltos</div>
+        </div>
+        {% if stats['criticos']|default(0) > 0 %}
+        <div class="bg-red-50 rounded-xl px-4 py-3 border border-red-200">
+            <div class="text-2xl font-bold text-red-600">{{ stats['criticos']|default(0) }}</div>
+            <div class="text-xs text-red-500 uppercase font-semibold">⚠️ Críticos</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Tabla de Tickets -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-dark-50 border-b border-dark-100">
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase w-24">#</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Título</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase w-44">Categoría</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase w-28">Prioridad</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase w-32">Estado</th>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase w-40">Asignado</th>
+                        <th class="px-4 py-3 text-right text-xs font-semibold text-dark-500 uppercase w-24">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100">
+                    {% for ticket in tickets %}
+                    <tr class="hover:bg-dark-50/50 transition-colors group">
+                        <td class="px-4 py-3">
+                            <span class="text-xs font-mono font-semibold text-primary-600">T-{{ "%05d"|format(ticket.numero|int) }}</span>
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-start gap-2">
+                                <span class="priority-dot priority-{{ ticket.prioridad }} mt-1.5 flex-shrink-0"></span>
+                                <div>
+                                    <p class="font-semibold text-dark-900 line-clamp-1">{{ ticket.titulo }}</p>
+                                    {% if ticket.activo %}
+                                    <p class="text-xs text-dark-500 flex items-center gap-1 mt-0.5">
+                                        <i data-lucide="monitor" class="w-3 h-3"></i>
+                                        {{ ticket.activo.nombre }}
+                                    </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if ticket.subcategoria %}
+                            <div class="flex flex-col gap-1">
+                                {% if ticket.subcategoria.categoria %}
+                                <span class="text-[10px] font-semibold text-dark-400 uppercase tracking-wide whitespace-nowrap">
+                                    {{ ticket.subcategoria.categoria.nombre_display }}
+                                </span>
+                                {% endif %}
+                                <span class="text-xs font-medium text-dark-700 whitespace-nowrap">
+                                    {{ ticket.subcategoria.nombre_display }}
+                                </span>
+                            </div>
+                            {% else %}
+                            <span class="text-xs text-dark-400 italic">Sin categoría</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <span class="text-xs px-2 py-1 rounded-lg font-semibold
+                                {% if ticket.prioridad == 'critica' %}bg-red-100 text-red-700
+                                {% elif ticket.prioridad == 'alta' %}bg-orange-100 text-orange-700
+                                {% elif ticket.prioridad == 'media' %}bg-yellow-100 text-yellow-700
+                                {% else %}bg-green-100 text-green-700{% endif %}">
+                                {{ ticket.prioridad|capitalize }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if ticket.estado_rel %}
+                            <span class="text-xs px-2 py-1 rounded-lg font-semibold
+                                {% if ticket.estado_rel.clave == 'abierto' %}bg-blue-100 text-blue-700
+                                {% elif ticket.estado_rel.clave == 'en_progreso' %}bg-amber-100 text-amber-700
+                                {% elif ticket.estado_rel.clave == 'resuelto' %}bg-emerald-100 text-emerald-700
+                                {% elif ticket.estado_rel.clave == 'cerrado' %}bg-dark-100 text-dark-600
+                                {% elif ticket.estado_rel.clave == 'cancelado' %}bg-red-100 text-red-700
+                                {% else %}bg-dark-100 text-dark-600{% endif %}">
+                                {{ ticket.estado_rel.nombre }}
+                            </span>
+                            {% else %}
+                            <span class="text-xs px-2 py-1 rounded-lg font-semibold bg-dark-100 text-dark-600">
+                                Sin estado
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            {% if ticket.asignado %}
+                            <div class="flex items-center gap-2">
+                                <div class="w-6 h-6 bg-gradient-to-br from-primary-400 to-accent-purple rounded-full flex items-center justify-center text-white text-[10px] font-semibold">
+                                    {{ ticket.asignado.nombre[0]|upper }}
+                                </div>
+                                <span class="text-xs text-dark-600 font-medium truncate">{{ ticket.asignado.nombre }}</span>
+                            </div>
+                            {% else %}
+                            <span class="text-xs text-dark-400">Sin asignar</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center justify-end gap-1">
+                                <button @click="loadDetail('{{ ticket.id }}')"
+                                    class="p-1.5 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                    title="Ver detalle">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="px-6 py-16 text-center">
+                            <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                <i data-lucide="inbox" class="w-10 h-10 text-dark-300"></i>
+                            </div>
+                            <p class="text-dark-900 font-semibold mb-1">No hay tickets</p>
+                            <p class="text-dark-500 text-sm">Probá cambiando los filtros o creá uno nuevo</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal: Crear Ticket -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showCreateModal = false"></div>
+        <div x-show="showCreateModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg z-10 overflow-hidden">
+            <div class="bg-gradient-to-r from-primary-500 to-primary-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-white flex items-center">
+                    <i data-lucide="plus-circle" class="w-5 h-5 mr-2"></i>Nuevo Ticket
+                </h2>
+                <button @click="showCreateModal = false" class="text-white/80 hover:text-white transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <form action="{{ url_for('soporte.crear_ticket') }}" method="POST"
+                hx-post="{{ url_for('soporte.crear_ticket') }}" hx-swap="none"
+                x-data="{
+                    tipoTicket: '',
+                    activoId: '',
+                    equiposDisponibles: [],
+                    busquedaEquipo: '',
+                    cargandoEquipos: false,
+                    colaboradorId: '',
+                    colaboradorNombre: '',
+                    colaboradorQuery: '',
+                    colaboradorResultados: [],
+                    colaboradorCargando: false,
+                    colaboradorInfo: {},
+                    async buscarEquipos() {
+                        if (this.busquedaEquipo.length < 2) { this.equiposDisponibles = []; return; }
+                        this.cargandoEquipos = true;
+                        try {
+                            const r = await fetch('/soporte/buscar-equipo-disponible?q=' + encodeURIComponent(this.busquedaEquipo) + '&todos=1');
+                            this.equiposDisponibles = await r.json();
+                        } catch(e) {}
+                        this.cargandoEquipos = false;
+                    },
+                    seleccionarEquipo(eq) {
+                        this.activoId = eq.id;
+                        this.busquedaEquipo = eq.display || eq.nombre;
+                        this.equiposDisponibles = [];
+                    },
+                    async buscarColaborador() {
+                        if (this.colaboradorQuery.length < 2) { this.colaboradorResultados = []; return; }
+                        this.colaboradorCargando = true;
+                        try {
+                            const r = await fetch('/soporte/buscar-empleado?q=' + encodeURIComponent(this.colaboradorQuery));
+                            const data = await r.json();
+                            this.colaboradorResultados = data.items || [];
+                        } catch(e) {}
+                        this.colaboradorCargando = false;
+                    },
+                    async seleccionarColaborador(c) {
+                        this.colaboradorId = c.id;
+                        this.colaboradorNombre = c.nombre;
+                        this.colaboradorQuery = c.nombre;
+                        this.colaboradorResultados = [];
+                        try {
+                            const r = await fetch('/soporte/colaborador-alta-info/' + c.id);
+                            this.colaboradorInfo = await r.json();
+                        } catch(e) { this.colaboradorInfo = {}; }
+                    },
+                    onCategoriaChange(el) {
+                        const opt = el.options[el.selectedIndex];
+                        this.tipoTicket = opt ? opt.dataset.tipo : '';
+                        this.activoId = '';
+                        this.busquedaEquipo = '';
+                        this.equiposDisponibles = [];
+                        this.colaboradorId = '';
+                        this.colaboradorQuery = '';
+                        this.colaboradorInfo = {};
+                    }
+                }">
+                <div class="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Título *</label>
+                        <input type="text" name="titulo" required minlength="3" maxlength="200"
+                            placeholder="Describe brevemente el problema..."
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Descripción</label>
+                        <textarea name="descripcion" rows="2" maxlength="1000" placeholder="Detalla el problema o solicitud..."
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Prioridad</label>
+                            <select name="prioridad" required
+                                class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                <option value="baja">🟢 Baja</option>
+                                <option value="media" selected>🟡 Media</option>
+                                <option value="alta">🟠 Alta</option>
+                                <option value="critica">🔴 Crítica</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Categoría</label>
+                            <select name="categoria" required
+                                @change="onCategoriaChange($el)"
+                                class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                <option value="" disabled selected>Seleccioná una categoría...</option>
+                                {% for cat in todas_categorias %}
+                                <optgroup label="{{ cat.nombre }}">
+                                    {% for sub in cat.subcategorias %}
+                                    <option value="{{ sub.nombre_normalizado }}" data-tipo="{{ sub.tipo_ticket_asociado }}">{{ sub.nombre }}</option>
+                                    {% endfor %}
+                                    {% if not cat.subcategorias %}
+                                    <option value="{{ cat.nombre_normalizado }}" data-tipo="{{ cat.tipo_ticket_asociado }}">{{ cat.nombre }}</option>
+                                    {% endif %}
+                                </optgroup>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Equipo: reparacion y mantenimiento -->
+                    <div x-show="tipoTicket === 'reparacion' || tipoTicket === 'mantenimiento'" x-cloak>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Equipo afectado *</label>
+                        <input type="hidden" name="activo_id" :value="activoId">
+                        <div class="relative">
+                            <input type="text" x-model="busquedaEquipo" @input.debounce.300ms="buscarEquipos()"
+                                   :required="tipoTicket === 'reparacion' || tipoTicket === 'mantenimiento'"
+                                   placeholder="Buscar por nombre, serie o inventario..."
+                                   class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                            <div x-show="equiposDisponibles.length > 0"
+                                 class="absolute z-20 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                <template x-for="eq in equiposDisponibles" :key="eq.id">
+                                    <div @click="seleccionarEquipo(eq)" class="px-4 py-2.5 hover:bg-dark-50 cursor-pointer border-b border-dark-100 last:border-b-0">
+                                        <p class="text-sm font-medium text-dark-900" x-text="eq.nombre"></p>
+                                        <p class="text-xs text-dark-400" x-text="(eq.numero_inventario ? 'Inv: '+eq.numero_inventario : '') + (eq.numero_inventario && eq.numero_serie ? ' · ' : '') + (eq.numero_serie ? 'S/N: '+eq.numero_serie : '')"></p>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <p x-show="activoId" class="text-xs text-emerald-600 mt-1">✓ Equipo seleccionado</p>
+                    </div>
+
+                    <!-- Alta/Baja: colaborador + datos IT -->
+                    <div x-show="tipoTicket === 'alta_baja'" x-cloak class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Colaborador *</label>
+                            <input type="hidden" name="colaborador_id" :value="colaboradorId">
+                            <div class="relative">
+                                <input type="text" x-model="colaboradorQuery" @input.debounce.300ms="buscarColaborador()"
+                                       :required="tipoTicket === 'alta_baja'"
+                                       placeholder="Buscar por nombre o código..."
+                                       class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                <div x-show="colaboradorResultados.length > 0"
+                                     class="absolute z-20 w-full mt-1 bg-white border border-dark-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                                    <template x-for="c in colaboradorResultados" :key="c.id">
+                                        <div @click="seleccionarColaborador(c)" class="px-4 py-2.5 hover:bg-dark-50 cursor-pointer border-b border-dark-100 last:border-b-0">
+                                            <p class="text-sm font-medium text-dark-900" x-text="c.nombre"></p>
+                                            <p class="text-xs text-dark-400" x-text="c.codigo || ''"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            <p x-show="colaboradorId" class="text-xs text-emerald-600 mt-1">✓ Colaborador seleccionado</p>
+                        </div>
+
+                        <div x-show="colaboradorId" x-cloak class="p-3 bg-blue-50 rounded-xl border border-blue-200 space-y-1">
+                            <p class="text-xs font-semibold text-blue-700 uppercase mb-1">Datos autocompletados</p>
+                            <div class="grid grid-cols-2 gap-1 text-xs text-dark-600">
+                                <div><span class="font-medium">Área:</span> <span x-text="colaboradorInfo.departamento || '-'"></span></div>
+                                <div><span class="font-medium">Puesto:</span> <span x-text="colaboradorInfo.puesto || '-'"></span></div>
+                                <div><span class="font-medium">Líder:</span> <span x-text="colaboradorInfo.lider || '-'"></span></div>
+                                <div><span class="font-medium">Mail líder:</span> <span x-text="colaboradorInfo.lider_email || '-'"></span></div>
+                            </div>
+                        </div>
+
+                        <div x-show="colaboradorId" x-cloak>
+                            <label class="block text-sm font-medium text-dark-700 mb-1">Cliente y Servicio</label>
+                            <input type="text" name="cliente_servicio" :value="colaboradorInfo.cliente_servicio || ''"
+                                   placeholder="Ej: Cliente ABC - Servicio de desarrollo"
+                                   class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                        </div>
+
+                        <div x-show="colaboradorId" x-cloak class="space-y-3 pt-2 border-t border-dark-100"
+                             x-data="{ sistemasDisponibles: [], sistemasSeleccionados: [], necesitaPC: false,
+                                       async init() {
+                                           try {
+                                               const r = await fetch('/soporte/sistemas-disponibles');
+                                               const d = await r.json();
+                                               this.sistemasDisponibles = d.sistemas || [];
+                                           } catch(e) {}
+                                       },
+                                       toggleSistema(clave) {
+                                           const idx = this.sistemasSeleccionados.indexOf(clave);
+                                           if (idx >= 0) this.sistemasSeleccionados.splice(idx, 1);
+                                           else this.sistemasSeleccionados.push(clave);
+                                       },
+                                       estaSeleccionado(clave) { return this.sistemasSeleccionados.includes(clave); }
+                                     }">
+                            <p class="text-xs font-semibold text-dark-500 uppercase">Configuración IT</p>
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Modalidad de trabajo *</label>
+                                <select name="modalidad_trabajo" :required="tipoTicket === 'alta_baja' && colaboradorId"
+                                    class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                    <option value="">Seleccionar...</option>
+                                    <option value="Presencial">Presencial</option>
+                                    <option value="Remoto">Remoto</option>
+                                    <option value="Híbrido">Híbrido</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="flex items-center gap-2 cursor-pointer">
+                                    <input type="checkbox" name="necesita_computadora" value="1" x-model="necesitaPC" class="w-4 h-4 rounded border-dark-300 text-primary-600">
+                                    <span class="text-sm text-dark-700">Necesita computadora</span>
+                                </label>
+                            </div>
+                            <div x-show="necesitaPC" x-cloak>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Gama de computadora</label>
+                                <select name="gama_computadora"
+                                    class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                                    <option value="">No aplica / Seleccionar...</option>
+                                    <option value="Básica">Básica</option>
+                                    <option value="Media">Media</option>
+                                    <option value="Alta gama">Alta gama</option>
+                                </select>
+                            </div>
+                            <!-- Sistemas a habilitar -->
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-2">Sistemas a habilitar *</label>
+                                <div class="bg-dark-50 rounded-xl border border-dark-200 p-3 space-y-2">
+                                    <template x-for="s in sistemasDisponibles" :key="s.clave">
+                                        <label class="flex items-center gap-2 cursor-pointer">
+                                            <input type="checkbox" name="sistemas_habilitados" :value="s.clave"
+                                                   :checked="estaSeleccionado(s.clave)" @change="toggleSistema(s.clave)"
+                                                   class="w-4 h-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                            <span class="text-sm text-dark-700" x-text="s.label"></span>
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-dark-700 mb-1">Listas de correo a incluir</label>
+                                <textarea name="listas_correo" rows="2"
+                                    placeholder="Ej: equipo-dev@empresa.com, all-staff@empresa.com"
+                                    class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 resize-none"></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-dark-700 mb-1">Asignar a</label>
+                        <select name="asignado_id"
+                            class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                            <option value="">Sin asignar</option>
+                            {% for u in usuarios %}
+                            <option value="{{ u.id }}">{{ u.nombre }} ({{ u.email }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                    <button type="button" @click="showCreateModal = false"
+                        class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                        class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white text-sm font-medium rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft">
+                        Crear Ticket
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Detalle Ticket -->
+    <div x-show="showDetailModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showDetailModal = false; document.getElementById('detail-content').innerHTML = ''"></div>
+        <div x-show="showDetailModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl z-10 overflow-hidden max-h-[85vh] overflow-y-auto">
+            <div class="sticky top-0 bg-white border-b border-dark-100 px-6 py-3 flex items-center justify-between z-10">
+                <h2 class="text-lg font-semibold text-dark-900">Detalle del Ticket</h2>
+                <button @click="showDetailModal = false; document.getElementById('detail-content').innerHTML = ''"
+                    class="p-1.5 hover:bg-dark-100 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5 text-dark-500"></i>
+                </button>
+            </div>
+            <div id="detail-content" hx-on::after-swap="lucide.createIcons()">
+                <div class="flex items-center justify-center py-12">
+                    <div class="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Gestionar Categorías (Admin Only) -->
+    <div x-show="showManageCategoriesModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showManageCategoriesModal = false"></div>
+        <div x-show="showManageCategoriesModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-3xl z-10 overflow-hidden max-h-[85vh] flex flex-col">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-5 flex items-center justify-between flex-shrink-0">
+                <h2 class="text-lg font-bold text-white flex items-center tracking-tight">
+                    <i data-lucide="tag" class="w-5 h-5 mr-2.5"></i>Gestionar Categorías
+                </h2>
+                <button @click="showManageCategoriesModal = false"
+                    class="bg-white/10 hover:bg-white/20 p-1.5 rounded-lg text-white transition-all">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto p-6 space-y-6">
+                <!-- Crear nueva categoría -->
+                <div class="bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-200 rounded-xl p-4">
+                    <label class="block text-sm font-bold text-amber-900 mb-3">➕ Crear Nueva Categoría</label>
+                    <form hx-post="{{ url_for('soporte.crear_categoria') }}" 
+                          hx-swap="none"
+                          hx-on::after-request="if(event.detail.successful) { this.reset(); }">
+                        <div class="flex gap-2">
+                            <input type="text" name="nombre" placeholder="Ej: Hardware, Software, Red..." required
+                                class="flex-1 px-4 py-2.5 border border-amber-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 bg-white">
+                            <button type="submit"
+                                class="px-6 py-2.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-bold rounded-lg hover:from-amber-600 hover:to-orange-600 transition-all shadow-md">
+                                Crear
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Buscador de categorías -->
+                <div class="relative">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <i data-lucide="search" class="w-4 h-4 text-dark-400"></i>
+                    </div>
+                    <input type="text" x-model="buscarCategoria" placeholder="Buscar categoría..."
+                        @input="document.querySelectorAll('#categorias-table .categoria-row').forEach(row => { const nombre = row.dataset.nombre || ''; const q = buscarCategoria.toLowerCase(); row.style.display = (!q || nombre.includes(q)) ? '' : 'none'; })"
+                        class="w-full pl-10 pr-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+                </div>
+
+                <!-- Tabla de categorías -->
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">📋 Categorías y Subcategorías</label>
+                    <div id="categorias-table" 
+                         hx-get="{{ url_for('soporte.listar_categorias') }}" 
+                         hx-trigger="load, categoriaCreated from:body, categoriaUpdated from:body, categoriaDeleted from:body"
+                         hx-swap="innerHTML"
+                         hx-on::after-swap="lucide.createIcons()">
+                        <div class="flex items-center justify-center py-8">
+                            <div class="animate-spin w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end flex-shrink-0">
+                <button type="button" @click="showManageCategoriesModal = false"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Confirmar Eliminación -->
+    <div x-show="showConfirmDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showConfirmDeleteModal = false; categoriaAEliminar = null"></div>
+        <div x-show="showConfirmDeleteModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-red-500 to-red-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center">
+                    <i data-lucide="alert-circle" class="w-5 h-5 mr-2.5"></i>Confirmar eliminación
+                </h2>
+            </div>
+
+            <!-- Content -->
+            <div class="px-6 py-4">
+                <p class="text-dark-700 mb-2">¿Estás seguro de que querés eliminar esta categoría?</p>
+                <p class="text-sm text-dark-500" x-show="categoriaAEliminar">
+                    <strong x-text="categoriaAEliminar?.nombre"></strong>
+                </p>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                <button type="button" @click="showConfirmDeleteModal = false; categoriaAEliminar = null"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarEliminar()"
+                    class="px-4 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Editar Categoría -->
+    <div x-show="showEditCategoriaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showEditCategoriaModal = false; categoriaAEditar = null"></div>
+        <div x-show="showEditCategoriaModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+            
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-amber-500 to-amber-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center">
+                    <i data-lucide="edit-2" class="w-5 h-5 mr-2.5"></i>Editar Categoría
+                </h2>
+            </div>
+
+            <!-- Content -->
+            <div class="px-6 py-4 space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Nuevo nombre</label>
+                    <input type="text" x-model="nuevoNombreCategoria" placeholder="Ingresá el nuevo nombre..."
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                        @keyup.enter="confirmarEditarCategoria()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Tipo de Ticket</label>
+                    <select x-model="tipoTicketAsociado"
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500">
+                        {% for t in tipos_ticket %}
+                        <option value="{{ t.clave }}">{{ t.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                <button type="button" @click="showEditCategoriaModal = false; categoriaAEditar = null"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarEditarCategoria()"
+                    class="px-4 py-2 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors">
+                    Guardar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Crear Subcategoría -->
+    <div x-show="showCreateSubcategoriaModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="modal-backdrop absolute inset-0" @click="showCreateSubcategoriaModal = false; subcategoriaParent = null"></div>
+        <div x-show="showCreateSubcategoriaModal" x-transition:enter="transition ease-out duration-200"
+            x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+            class="relative bg-white rounded-2xl shadow-xl w-full max-w-sm z-10 overflow-hidden">
+
+            <div class="bg-gradient-to-r from-blue-500 to-blue-600 px-6 py-4 flex items-center justify-between">
+                <h2 class="text-lg font-bold text-white flex items-center">
+                    <i data-lucide="plus" class="w-5 h-5 mr-2.5"></i>Nueva Subcategoría
+                </h2>
+            </div>
+
+            <div class="px-6 py-4 space-y-3">
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-1">Categoría padre</label>
+                    <p class="text-sm text-dark-600 px-3 py-2 bg-dark-50 rounded-lg" x-text="subcategoriaParent?.nombre"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Nombre de la subcategoría</label>
+                    <input type="text" x-model="nuevoNombreCategoria" placeholder="Ingresá el nombre..."
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                        @keyup.enter="confirmarCrearSubcategoria()">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-dark-700 mb-2">Tipo de Ticket</label>
+                    <select x-model="tipoTicketAsociado"
+                        class="w-full px-4 py-2.5 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500">
+                        {% for t in tipos_ticket %}
+                        <option value="{{ t.clave }}">{{ t.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end space-x-3">
+                <button type="button" @click="showCreateSubcategoriaModal = false; subcategoriaParent = null"
+                    class="px-4 py-2 text-sm font-medium text-dark-600 hover:text-dark-800 transition-colors">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarCrearSubcategoria()"
+                    class="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors">
+                    Crear
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function ticketsTableData() {
+    return {
+        showCreateModal: false,
+        showDetailModal: false,
+        showManageCategoriesModal: false,
+        showConfirmDeleteModal: false,
+        showEditCategoriaModal: false,
+        showCreateSubcategoriaModal: false,
+        categoriaAEliminar: null,
+        categoriaAEditar: null,
+        subcategoriaParent: null,
+        nuevoNombreCategoria: '',
+        tipoTicketAsociado: 'generico',
+        buscarCategoria: '',
+        
+        loadDetail(ticketId) {
+            this.showDetailModal = true;
+            var container = document.getElementById('detail-content');
+            container.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin w-8 h-8 border-2 border-primary-500 border-t-transparent rounded-full"></div></div>';
+            fetch(`{{ url_for('soporte.detalle_ticket', ticket_id='TICKET_ID') }}`.replace('TICKET_ID', ticketId))
+                .then(r => r.text())
+                .then(html => {
+                    container.innerHTML = html;
+                    Alpine.initTree(container);
+                    htmx.process(container);
+                    lucide.createIcons();
+                })
+                .catch(() => {
+                    container.innerHTML = '<div class="p-4 text-red-600">Error al cargar el ticket</div>';
+                });
+        },
+        
+        recargarCategorias() {
+            htmx.ajax('GET', '/soporte/categorias', {
+                target: '#categorias-table',
+                swap: 'innerHTML'
+            });
+        },
+        
+        abrirEditarCategoria(id, nombre, tipoTicket = 'generico') {
+            this.categoriaAEditar = { id, nombre };
+            this.nuevoNombreCategoria = nombre;
+            this.tipoTicketAsociado = tipoTicket;
+            this.showEditCategoriaModal = true;
+        },
+        
+        confirmarEditarCategoria() {
+            if (!this.nuevoNombreCategoria.trim()) {
+                this.showEditCategoriaModal = false;
+                return;
+            }
+            const url = '/soporte/categorias/' + this.categoriaAEditar.id + '/editar';
+            htmx.ajax('POST', url, {
+                values: { nombre: this.nuevoNombreCategoria.trim(), tipo_ticket_asociado: this.tipoTicketAsociado },
+                target: '#categorias-table',
+                swap: 'none'
+            }).then(() => this.recargarCategorias());
+            this.showEditCategoriaModal = false;
+        },
+        
+        abrirEliminarCategoria(id, nombre) {
+            this.categoriaAEliminar = { id, nombre };
+            this.showConfirmDeleteModal = true;
+        },
+        
+        confirmarEliminar() {
+            const url = '/soporte/categorias/' + this.categoriaAEliminar.id + '/eliminar';
+            htmx.ajax('DELETE', url, { target: '#categorias-table', swap: 'none' })
+                .then(() => {
+                    this.recargarCategorias();
+                    this.showConfirmDeleteModal = false;
+                    this.categoriaAEliminar = null;
+                });
+        },
+
+        abrirCrearSubcategoria(parentId, parentNombre) {
+            this.subcategoriaParent = { id: parentId, nombre: parentNombre };
+            this.nuevoNombreCategoria = '';
+            this.tipoTicketAsociado = 'generico';
+            this.showCreateSubcategoriaModal = true;
+        },
+
+        confirmarCrearSubcategoria() {
+            if (!this.nuevoNombreCategoria.trim()) {
+                this.showCreateSubcategoriaModal = false;
+                return;
+            }
+            htmx.ajax('POST', '/soporte/categorias/crear', {
+                values: {
+                    nombre: this.nuevoNombreCategoria.trim(),
+                    parent_id: this.subcategoriaParent.id,
+                    tipo_ticket_asociado: this.tipoTicketAsociado
+                },
+                target: '#categorias-table',
+                swap: 'none'
+            }).then(() => this.recargarCategorias());
+            this.showCreateSubcategoriaModal = false;
+        }
+    }
+}
+
+function openPedidoModal(pedidoId) {
+    let overlay = document.getElementById('pedido-modal-overlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'pedido-modal-overlay';
+        overlay.className = 'fixed inset-0 z-[200] hidden items-center justify-center p-4';
+        overlay.onclick = function(e) { if (e.target === overlay) closePedidoModal(); };
+        overlay.innerHTML = `
+            <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm"></div>
+            <div id="pedido-modal-content" class="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto z-10">
+                <div class="p-8 text-center text-dark-400"><i data-lucide="loader" class="w-8 h-8 animate-spin mx-auto"></i></div>
+            </div>`;
+        document.body.appendChild(overlay);
+    }
+    overlay.classList.remove('hidden');
+    overlay.classList.add('flex');
+    htmx.ajax('GET', '/soporte/pedidos/' + pedidoId, {target: '#pedido-modal-content'});
+}
+
+function closePedidoModal() {
+    const overlay = document.getElementById('pedido-modal-overlay');
+    if (overlay) { overlay.classList.add('hidden'); overlay.classList.remove('flex'); }
+}
+
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closePedidoModal(); });
+</script>
+{% endblock %}

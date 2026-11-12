@@ -1,0 +1,963 @@
+{
+  "version": "1.0.0",
+  "darkMode": true,
+  "gridEnabling": false,
+  "detailLevel": "All",
+  "tablePositions": [
+    {
+      "name": "nomina_departamentos",
+      "schemaName": "public",
+      "x": 496,
+      "y": 720
+    },
+    {
+      "name": "nomina_empleados",
+      "schemaName": "public",
+      "x": 1280,
+      "y": 992
+    },
+    {
+      "name": "soporte_tickets_estados",
+      "schemaName": "public",
+      "x": 1032,
+      "y": 2960
+    },
+    {
+      "name": "soporte_pedidos_estados",
+      "schemaName": "public",
+      "x": 824,
+      "y": 48
+    },
+    {
+      "name": "soporte_activos_marcas",
+      "schemaName": "public",
+      "x": 1592,
+      "y": 352
+    },
+    {
+      "name": "soporte_activos_tipos",
+      "schemaName": "public",
+      "x": 2016,
+      "y": 3008
+    },
+    {
+      "name": "soporte_sistemas_disponibles",
+      "schemaName": "public",
+      "x": 3190.9424411022014,
+      "y": 2357.2746990832384
+    },
+    {
+      "name": "soporte_categorias",
+      "schemaName": "public",
+      "x": 48,
+      "y": 1168
+    },
+    {
+      "name": "soporte_subcategorias",
+      "schemaName": "public",
+      "x": 952,
+      "y": 576
+    },
+    {
+      "name": "soporte_matriz_estado",
+      "schemaName": "public",
+      "x": 2168,
+      "y": 2000
+    },
+    {
+      "name": "soporte_tickets",
+      "schemaName": "public",
+      "x": 1528,
+      "y": 1848
+    },
+    {
+      "name": "soporte_tickets_reparacion",
+      "schemaName": "public",
+      "x": 1480,
+      "y": 2680
+    },
+    {
+      "name": "soporte_tickets_alta_baja",
+      "schemaName": "public",
+      "x": 928,
+      "y": 1808
+    },
+    {
+      "name": "soporte_tickets_mantenimiento",
+      "schemaName": "public",
+      "x": 1072,
+      "y": 2360
+    },
+    {
+      "name": "soporte_activos",
+      "schemaName": "public",
+      "x": 1960,
+      "y": 1256
+    },
+    {
+      "name": "soporte_activos_especificaciones",
+      "schemaName": "public",
+      "x": 2984,
+      "y": 1232
+    },
+    {
+      "name": "soporte_insumos",
+      "schemaName": "public",
+      "x": 520,
+      "y": 2112
+    },
+    {
+      "name": "soporte_tickets_insumos",
+      "schemaName": "public",
+      "x": 1888,
+      "y": 2448
+    },
+    {
+      "name": "soporte_movimientos_insumos",
+      "schemaName": "public",
+      "x": 1296,
+      "y": 1368
+    },
+    {
+      "name": "soporte_evidencias",
+      "schemaName": "public",
+      "x": 2600,
+      "y": 1552
+    },
+    {
+      "name": "soporte_pedidos_compra",
+      "schemaName": "public",
+      "x": 720,
+      "y": 1008
+    },
+    {
+      "name": "soporte_pedidos_presupuestos",
+      "schemaName": "public",
+      "x": 240,
+      "y": 112
+    },
+    {
+      "name": "soporte_pedidos_aprobaciones",
+      "schemaName": "public",
+      "x": 312,
+      "y": 1544
+    },
+    {
+      "name": "soporte_historial_activo",
+      "schemaName": "public",
+      "x": 1752,
+      "y": 768
+    },
+    {
+      "name": "soporte_ticket_checklist_items",
+      "schemaName": "public",
+      "x": 2680,
+      "y": 2392
+    },
+    {
+      "name": "soporte_mantenimiento_evento",
+      "schemaName": "public",
+      "x": 2272,
+      "y": 808
+    }
+  ],
+  "tableGroupCollapseStates": [],
+  "stickyNoteLayouts": [],
+  "referencePaths": [
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "manager_id"
+      ],
+      "secondTableName": "nomina_departamentos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_departamentos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "departamento_id"
+      ],
+      "secondTableName": "soporte_categorias",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_categorias",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "categoria_id"
+      ],
+      "secondTableName": "soporte_subcategorias",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_departamentos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "departamento_id"
+      ],
+      "secondTableName": "soporte_subcategorias",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets_estados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "estado_id"
+      ],
+      "secondTableName": "soporte_tickets",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_subcategorias",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "subcategoria_id"
+      ],
+      "secondTableName": "soporte_tickets",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "solicitante_id"
+      ],
+      "secondTableName": "soporte_tickets",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "asignado_id"
+      ],
+      "secondTableName": "soporte_tickets",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id"
+      ],
+      "secondTableName": "soporte_tickets_reparacion",
+      "secondSchemaName": "public",
+      "secondRelation": "1",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_tickets_reparacion",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_matriz_estado",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "matriz_entrada_id"
+      ],
+      "secondTableName": "soporte_tickets_reparacion",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_matriz_estado",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "matriz_salida_id"
+      ],
+      "secondTableName": "soporte_tickets_reparacion",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id"
+      ],
+      "secondTableName": "soporte_tickets_alta_baja",
+      "secondSchemaName": "public",
+      "secondRelation": "1",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "colaborador_id"
+      ],
+      "secondTableName": "soporte_tickets_alta_baja",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_tickets_alta_baja",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_matriz_estado",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "matriz_estado_id"
+      ],
+      "secondTableName": "soporte_tickets_alta_baja",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id"
+      ],
+      "secondTableName": "soporte_tickets_mantenimiento",
+      "secondSchemaName": "public",
+      "secondRelation": "1",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_tickets_mantenimiento",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_mantenimiento_evento",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "mantenimiento_id"
+      ],
+      "secondTableName": "soporte_tickets_mantenimiento",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos_tipos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "tipo_id"
+      ],
+      "secondTableName": "soporte_activos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos_marcas",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "marca_id"
+      ],
+      "secondTableName": "soporte_activos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "asignado_id"
+      ],
+      "secondTableName": "soporte_activos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_matriz_estado",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "matriz_estado_id"
+      ],
+      "secondTableName": "soporte_activos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "id"
+      ],
+      "secondTableName": "soporte_activos_especificaciones",
+      "secondSchemaName": "public",
+      "secondRelation": "1",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_categorias",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "categoria_id"
+      ],
+      "secondTableName": "soporte_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "ticket_id"
+      ],
+      "secondTableName": "soporte_tickets_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_insumos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "insumo_id"
+      ],
+      "secondTableName": "soporte_tickets_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_movimientos_insumos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "movimiento_insumo_id"
+      ],
+      "secondTableName": "soporte_tickets_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_pedidos_compra",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "pedido_compra_id"
+      ],
+      "secondTableName": "soporte_tickets_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_insumos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "insumo_id"
+      ],
+      "secondTableName": "soporte_movimientos_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_movimientos_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "empleado_id"
+      ],
+      "secondTableName": "soporte_movimientos_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "empleado_asignador_id"
+      ],
+      "secondTableName": "soporte_movimientos_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_pedidos_compra",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "pedido_compra_id"
+      ],
+      "secondTableName": "soporte_movimientos_insumos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "ticket_id"
+      ],
+      "secondTableName": "soporte_evidencias",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_evidencias",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_historial_activo",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "historial_id"
+      ],
+      "secondTableName": "soporte_evidencias",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_pedidos_estados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "estado_id"
+      ],
+      "secondTableName": "soporte_pedidos_compra",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "solicitante_id"
+      ],
+      "secondTableName": "soporte_pedidos_compra",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "ticket_id"
+      ],
+      "secondTableName": "soporte_pedidos_compra",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_pedidos_compra",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "pedido_id"
+      ],
+      "secondTableName": "soporte_pedidos_presupuestos",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_pedidos_compra",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "pedido_id"
+      ],
+      "secondTableName": "soporte_pedidos_aprobaciones",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_departamentos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "departamento_id"
+      ],
+      "secondTableName": "soporte_pedidos_aprobaciones",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "aprobador_id"
+      ],
+      "secondTableName": "soporte_pedidos_aprobaciones",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_historial_activo",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "colaborador_id"
+      ],
+      "secondTableName": "soporte_historial_activo",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "responsable_id"
+      ],
+      "secondTableName": "soporte_historial_activo",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_matriz_estado",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "matriz_estado_id"
+      ],
+      "secondTableName": "soporte_historial_activo",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_pedidos_compra",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "pedido_compra_id"
+      ],
+      "secondTableName": "soporte_historial_activo",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_tickets",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "ticket_id"
+      ],
+      "secondTableName": "soporte_ticket_checklist_items",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_sistemas_disponibles",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "sistema_id"
+      ],
+      "secondTableName": "soporte_ticket_checklist_items",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "soporte_activos",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "activo_id"
+      ],
+      "secondTableName": "soporte_mantenimiento_evento",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    },
+    {
+      "firstFieldNames": [
+        "id"
+      ],
+      "firstTableName": "nomina_empleados",
+      "firstSchemaName": "public",
+      "firstRelation": "1",
+      "secondFieldNames": [
+        "asignado_id"
+      ],
+      "secondTableName": "soporte_mantenimiento_evento",
+      "secondSchemaName": "public",
+      "secondRelation": "*",
+      "checkPoints": []
+    }
+  ]
+}

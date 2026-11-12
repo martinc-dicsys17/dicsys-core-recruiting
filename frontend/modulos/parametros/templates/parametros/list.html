@@ -1,0 +1,145 @@
+{% extends "core/base.html" %}
+
+{% block title %}Parámetros - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ showCreateModal: false, showDeleteModal: false, deleteId: null, deleteName: '' }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1 flex items-center gap-2">
+                <i data-lucide="sliders-horizontal" class="w-7 h-7 text-primary-500"></i>Parámetros del Sistema
+            </h1>
+            <p class="text-dark-500">Configuración de parámetros utilizados por los módulos del sistema</p>
+        </div>
+        <button @click="showCreateModal = true" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Parámetro
+        </button>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div id="parametros-filtros" class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" name="buscar" placeholder="Buscar por nombre, key o descripción..."
+                       value="{{ filtros.buscar }}"
+                       hx-get="{{ url_for('parametros.listar') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#parametros-table"
+                       hx-include="#parametros-filtros"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+            </div>
+            <div>
+                <select name="categoria"
+                        hx-get="{{ url_for('parametros.listar') }}"
+                        hx-trigger="change"
+                        hx-target="#parametros-table"
+                        hx-include="#parametros-filtros"
+                        class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500">
+                    <option value="">Todas las categorías</option>
+                    {% for cat in categorias %}
+                    <option value="{{ cat }}" {% if filtros.categoria == cat %}selected{% endif %}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex items-center text-sm text-dark-500 whitespace-nowrap ml-auto">
+                <i data-lucide="hash" class="w-4 h-4 mr-2"></i><span>{{ total }} parámetros</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="parametros-table">
+            {% include "parametros/partials/tabla.html" %}
+        </div>
+    </div>
+
+    <!-- Contenedor del modal de edición (se carga vía HTMX) -->
+    <div id="modal-editar"></div>
+
+    <!-- Modal Crear Parámetro -->
+    <div x-show="showCreateModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div x-show="showCreateModal" x-transition class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showCreateModal = false"></div>
+        <div x-show="showCreateModal" x-transition class="bg-white rounded-2xl shadow-soft z-10 max-w-lg w-full border border-dark-100 overflow-hidden max-h-[90vh] overflow-y-auto">
+            <div class="px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-dark-900">Nuevo Parámetro</h3>
+                <button @click="showCreateModal = false" class="p-2 text-dark-400 hover:text-dark-600 hover:bg-dark-100 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form hx-post="{{ url_for('parametros.listar') }}" hx-target="#parametros-table" hx-swap="innerHTML" hx-include="#parametros-filtros"
+                  @htmx:after-request.camel="if(event.detail.successful) { showCreateModal = false; $el.reset(); }"
+                  class="p-6 space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Categoría *</label>
+                        <input type="text" name="categoria" required list="categorias-list" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all" placeholder="Ej: Notificaciones">
+                        <datalist id="categorias-list">
+                            {% for cat in categorias %}<option value="{{ cat }}">{% endfor %}
+                        </datalist>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Subcategoría</label>
+                        <input type="text" name="subcategoria" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all" placeholder="Ej: Webex">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                    <input type="text" name="nombre" required class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all" placeholder="Ej: Sala de Notificación de Cumpleaños">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Key *</label>
+                    <input type="text" name="key" required pattern="[a-z0-9][a-z0-9_.\-]*" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all" placeholder="Ej: webex_room_birthdate_id">
+                    <p class="text-xs text-dark-400 mt-1">Identificador único usado por el código (minúsculas, números, _ . -)</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Descripción</label>
+                    <textarea name="descripcion" rows="2" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all resize-none" placeholder="¿Para qué se usa este parámetro?"></textarea>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Valor por defecto</label>
+                        <input type="text" name="valor_default" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Valor</label>
+                        <input type="text" name="valor" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+                <div class="flex space-x-3 pt-4">
+                    <button type="button" @click="showCreateModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+                    <button type="submit" class="flex-1 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                        <i data-lucide="check" class="w-4 h-4 inline mr-2"></i>Crear Parámetro
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Eliminar Parámetro -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div x-show="showDeleteModal" x-transition class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div x-show="showDeleteModal" x-transition class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full border border-dark-100">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar parámetro?</h3>
+                <p class="text-dark-500 mb-2">Estás por eliminar el parámetro:</p>
+                <p class="text-dark-900 font-semibold mb-4" x-text="deleteName"></p>
+                <p class="text-dark-400 text-sm mb-6">Los módulos que lo consulten pasarán a usar su valor por defecto en código.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+                <button @click="htmx.ajax('DELETE', '/parametros/' + deleteId + '/eliminar', {target: '#parametros-table'}); showDeleteModal = false" class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('htmx:afterSwap', () => lucide.createIcons());
+</script>
+{% endblock %}

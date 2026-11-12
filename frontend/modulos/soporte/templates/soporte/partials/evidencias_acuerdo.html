@@ -1,0 +1,73 @@
+<!-- Partial: Evidencias del Acuerdo Firmado (HTMX + Alpine, sin JS vanilla) -->
+<div id="evidencias-acuerdo-container" x-data="{ showDeleteModal: false, deleteId: null, deleteUrl: '' }">
+    {% if evidencias_acuerdo %}
+    <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 {% if not ticket_bloqueado %}mb-4{% endif %}">
+        {% for ev in evidencias_acuerdo %}
+        <div class="relative group rounded-xl border {% if ticket.tipo_operacion == 'alta' %}border-emerald-200{% else %}border-red-200{% endif %} overflow-hidden bg-white shadow-sm">
+            <img src="{{ ev.url }}" alt="Acuerdo firmado" 
+                 class="w-full h-32 object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                 onclick="window.open('{{ ev.url }}', '_blank')">
+            {% if not ticket_bloqueado %}
+            <button @click="deleteId = '{{ ev.id }}'; deleteUrl = '{{ url_for('soporte.eliminar_evidencia_acuerdo', ticket_id=ticket.id, evidencia_id=ev.id) }}'; showDeleteModal = true"
+                    class="absolute top-1.5 right-1.5 p-1 bg-red-500/80 hover:bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="flex items-center justify-center py-4 text-dark-400 text-xs">
+        <i data-lucide="image-off" class="w-4 h-4 mr-1.5"></i>
+        No hay imágenes del acuerdo todavía
+    </div>
+    {% endif %}
+
+    <!-- Modal de Confirmación de Eliminación -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar esta imagen?</h3>
+                <p class="text-dark-500 mb-6">Esta acción no se puede deshacer. La imagen del acuerdo será eliminada permanentemente.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">
+                    Cancelar
+                </button>
+                <button @click="htmx.ajax('DELETE', deleteUrl, {target: '#evidencias-acuerdo-container', swap: 'outerHTML'}); showDeleteModal = false" 
+                        class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-semibold">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {% if not ticket_bloqueado %}
+    <form hx-post="{{ url_for('soporte.subir_imagen_acuerdo', ticket_id=ticket.id) }}"
+          hx-target="#evidencias-acuerdo-container"
+          hx-swap="outerHTML"
+          hx-encoding="multipart/form-data"
+          hx-indicator="#upload-spinner-acuerdo"
+          hx-on::after-swap="lucide.createIcons(); htmx.process(document.getElementById('evidencias-acuerdo-container'))"
+          class="flex items-center gap-2">
+        <label class="flex-1 cursor-pointer">
+            <div class="flex items-center justify-center px-3 py-2 {% if ticket.tipo_operacion == 'alta' %}bg-emerald-50 border-emerald-300 hover:bg-emerald-100 hover:border-emerald-400{% else %}bg-red-50 border-red-300 hover:bg-red-100 hover:border-red-400{% endif %} border-2 border-dashed rounded-xl transition-all">
+                <i data-lucide="camera" class="w-4 h-4 {% if ticket.tipo_operacion == 'alta' %}text-emerald-600{% else %}text-red-600{% endif %} mr-2"></i>
+                <span class="text-xs font-medium {% if ticket.tipo_operacion == 'alta' %}text-emerald-700{% else %}text-red-700{% endif %}">Seleccionar foto del acuerdo</span>
+            </div>
+            <input type="file" name="archivo" accept="image/*,.pdf" class="hidden"
+                   onchange="this.closest('form').requestSubmit()">
+        </label>
+        <div id="upload-spinner-acuerdo" class="htmx-indicator">
+            <svg class="animate-spin h-5 w-5 {% if ticket.tipo_operacion == 'alta' %}text-emerald-500{% else %}text-red-500{% endif %}" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+            </svg>
+        </div>
+    </form>
+    {% endif %}
+</div>

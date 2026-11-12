@@ -1,0 +1,406 @@
+{% extends "core/base.html" %}
+
+{% block title %}Perfil - {{ empleado.nombre_completo }} - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="logrosData()">
+    <!-- Modal Lightbox -->
+    <div x-show="lightboxOpen" x-cloak
+         class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+         @keydown.escape.window="lightboxOpen = false">
+        <div class="fixed inset-0 bg-dark-900/80 backdrop-blur-sm" @click="lightboxOpen = false"></div>
+        <div class="relative z-10 max-w-4xl max-h-[90vh] w-full flex flex-col items-center">
+            <button @click="lightboxOpen = false"
+                    class="absolute -top-3 -right-3 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-dark-500 hover:text-dark-900 hover:bg-dark-50 transition-colors z-20"
+                    aria-label="Cerrar vista completa">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <template x-if="lightboxIsPdf">
+                <iframe :src="lightboxSrc" class="w-full rounded-2xl shadow-2xl bg-white" style="height: 80vh;"></iframe>
+            </template>
+            <template x-if="!lightboxIsPdf">
+                <img :src="lightboxSrc" :alt="lightboxAlt" class="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain bg-white">
+            </template>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('innovacion.cards') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver a cards">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div class="flex-1">
+            <h1 class="text-2xl font-bold text-dark-900">Perfil de Certificaci&oacute;n</h1>
+        </div>
+    </div>
+
+    <!-- PERFIL DEL EMPLEADO + MEDALLAS -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-6 mb-6">
+        <div class="flex flex-col sm:flex-row gap-6">
+            <!-- Foto -->
+            <div class="flex-shrink-0">
+                {% if empleado.foto %}
+                <img src="{{ (empleado.foto_thumbnail or empleado.foto)|storage_url }}" alt="Foto de {{ empleado.nombre_completo }}"
+                     class="w-24 h-24 rounded-2xl object-cover border-2 border-dark-100">
+                {% else %}
+                <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                    <span class="text-3xl font-bold text-white">{{ empleado.nombre[0] }}{{ empleado.apellido[0] }}</span>
+                </div>
+                {% endif %}
+            </div>
+            <!-- Info principal -->
+            <div class="flex-1 min-w-0">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-bold text-dark-900">{{ empleado.nombre_completo }}</h2>
+                        <p class="text-primary-600 font-medium text-sm">{{ empleado.puesto or 'Sin puesto asignado' }}</p>
+                    </div>
+                    {% if equipos %}
+                    <div class="flex flex-wrap gap-2 flex-shrink-0">
+                        {% for eq in equipos %}
+                        <span class="inline-flex items-center px-2.5 py-1 bg-primary-50 text-primary-700 rounded-lg text-xs font-medium border border-primary-200">
+                            <i data-lucide="users" class="w-3 h-3 mr-1"></i>
+                            {{ eq.nombre }}{% if eq.es_lider %} <span class="ml-1 text-amber-600">(L&iacute;der)</span>{% endif %}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="flex flex-wrap gap-x-6 gap-y-1 mt-2 text-sm">
+                    {% if empleado.departamento %}
+                    <div class="flex items-center gap-1.5 text-dark-600">
+                        <i data-lucide="building-2" class="w-3.5 h-3.5 text-dark-400"></i>
+                        {{ empleado.departamento }}
+                    </div>
+                    {% endif %}
+                </div>
+
+                <!-- BADGES / LOGROS -->
+                <div class="flex flex-wrap gap-4 mt-3 pt-3 border-t border-dark-100">
+                    {% for evento in eventos %}
+                    <div class="group relative flex flex-col items-center gap-1.5 w-16">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-sm cursor-default">
+                            <i data-lucide="medal" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <span class="text-[10px] font-semibold text-dark-600 text-center leading-tight">{{ evento.nombre }}</span>
+                        {% if evento.fecha_display or evento.tags %}
+                        <!-- Tooltip: fecha + tags al hacer hover -->
+                        <div class="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-20 hidden group-hover:block">
+                            <div class="bg-dark-900 text-white rounded-lg px-3 py-2 shadow-lg w-max max-w-[220px]">
+                                <p class="text-[11px] font-semibold leading-tight">{{ evento.nombre }}</p>
+                                {% if evento.fecha_display %}
+                                <p class="text-[10px] text-dark-300 mt-0.5">{{ evento.fecha_display }}</p>
+                                {% endif %}
+                                {% if evento.tags %}
+                                <div class="flex flex-wrap gap-1 mt-1.5">
+                                    {% for tag in evento.tags %}
+                                    <span class="px-1.5 py-0.5 text-[10px] font-medium bg-white/15 rounded">{{ tag }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            </div>
+                            <div class="w-2 h-2 bg-dark-900 rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1"></div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+
+                    {% if cert.estado == 'completada' and cert.fecha_aprobacion %}
+                    <a href="{{ url_for('certificates.certificate_public', cert_id=cert.id) }}" target="_blank" class="flex flex-col items-center gap-1.5 group">
+                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
+                            <i data-lucide="award" class="w-5 h-5 text-white"></i>
+                        </div>
+                        <span class="text-[10px] font-semibold text-emerald-600 text-center leading-tight">Certificado</span>
+                    </a>
+                    {% endif %}
+
+                    {% if not eventos and not (cert.estado == 'completada' and cert.fecha_aprobacion) %}
+                    <div class="flex items-center gap-2 text-dark-400 text-xs py-2">
+                        <i data-lucide="award" class="w-4 h-4"></i>
+                        Sin logros a&uacute;n
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if cert.tipo_certificacion %}
+    <!-- BARRA DE PROGRESO (basada en campos completados) -->
+    <div class="bg-white rounded-xl border border-dark-100 px-5 py-4 mb-6">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-semibold text-dark-700">Progreso de certificaci&oacute;n</span>
+            <span class="text-sm font-bold text-primary-600">
+                <span x-text="porcentaje + '%'"></span>
+                <span class="text-dark-400 font-medium" x-text="'(' + completados + '/' + total + ')'"></span>
+            </span>
+        </div>
+        <div class="w-full h-2.5 bg-dark-100 rounded-full overflow-hidden">
+            <div class="h-full rounded-full transition-all duration-500"
+                :class="porcentaje >= 100 ? 'bg-gradient-to-r from-emerald-500 to-emerald-600' : 'bg-gradient-to-r from-primary-500 to-primary-600'"
+                :style="'width: ' + porcentaje + '%'"></div>
+        </div>
+    </div>
+
+    <!-- CONTENIDO -->
+    <div class="flex gap-6 items-start">
+
+        <!-- COLUMNA PRINCIPAL -->
+        <div class="flex-1 min-w-0">
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50/50">
+                    <h3 class="font-semibold text-dark-900">Datos de la Certificaci&oacute;n</h3>
+                    <p class="text-dark-400 text-xs">Informaci&oacute;n del path</p>
+                </div>
+                <div class="p-6">
+
+                    {% if cert.tipo_certificacion == 'finalista' %}
+                    <!-- FINALISTA: Paso 1 - Configuraci&oacute;n -->
+                    <div class="mb-8">
+                        <div class="space-y-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-700 mb-1">Repositorio Presentaci&oacute;n</label>
+                                    {% if cert.repo_presentacion %}
+                                    <a href="{{ cert.repo_presentacion }}" target="_blank" class="text-primary-600 hover:text-primary-700 text-sm break-all">{{ cert.repo_presentacion }}</a>
+                                    {% else %}
+                                    <p class="text-dark-400 text-sm italic">No completado</p>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-700 mb-1">Repositorio Demo</label>
+                                    {% if cert.repo_demo %}
+                                    <a href="{{ cert.repo_demo }}" target="_blank" class="text-primary-600 hover:text-primary-700 text-sm break-all">{{ cert.repo_demo }}</a>
+                                    {% else %}
+                                    <p class="text-dark-400 text-sm italic">No completado</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FINALISTA: Paso 2 - Detalles -->
+                    <div class="mb-8">
+                        <div class="space-y-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-700 mb-1">Tem&aacute;tica</label>
+                                    <p class="text-dark-900 text-sm px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl">{{ cert.tematica or 'No completado' }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-700 mb-1">Fecha Presentaci&oacute;n</label>
+                                    <p class="text-dark-900 text-sm px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl">{{ cert.fecha_presentacion or 'No completado' }}</p>
+                                </div>
+                            </div>
+                            {% if cert.tecnologias and cert.tecnologias | length > 0 %}
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-2">Tecnolog&iacute;as</label>
+                                <div class="flex flex-wrap gap-2">
+                                    {% for tech in cert.tecnologias %}
+                                    <span class="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-700 rounded-lg text-sm font-medium">{{ tech }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-1">Tecnolog&iacute;as</label>
+                                <p class="text-dark-400 text-sm italic">No completado</p>
+                            </div>
+                            {% endif %}
+                            <!-- Fecha de aprobaci&oacute;n -->
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-1">Fecha de Aprobaci&oacute;n</label>
+                                {% if cert.fecha_aprobacion %}
+                                <div class="flex items-center px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl w-fit">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600 mr-2"></i>
+                                    <span class="font-semibold text-emerald-700">{{ cert.fecha_aprobacion }}</span>
+                                </div>
+                                {% else %}
+                                <div class="flex items-center px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl w-fit">
+                                    <i data-lucide="clock" class="w-5 h-5 text-dark-400 mr-2"></i>
+                                    <span class="text-dark-400">Pendiente</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% elif cert.tipo_certificacion == 'iniciativa' %}
+                    <!-- INICIATIVA: Paso 1 - Configuraci&oacute;n -->
+                    <div class="mb-8">
+                        <div class="space-y-5">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-700 mb-1">Repo Descripci&oacute;n Caso de Uso</label>
+                                    {% if cert.repo_presentacion %}
+                                    <a href="{{ cert.repo_presentacion }}" target="_blank" class="text-primary-600 hover:text-primary-700 text-sm break-all">{{ cert.repo_presentacion }}</a>
+                                    {% else %}
+                                    <p class="text-dark-400 text-sm italic">No completado</p>
+                                    {% endif %}
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-semibold text-dark-700 mb-1">Repo Implementaci&oacute;n</label>
+                                    {% if cert.repo_demo %}
+                                    <a href="{{ cert.repo_demo }}" target="_blank" class="text-primary-600 hover:text-primary-700 text-sm break-all">{{ cert.repo_demo }}</a>
+                                    {% else %}
+                                    <p class="text-dark-400 text-sm italic">No completado</p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- INICIATIVA: Paso 2 - Detalles -->
+                    <div class="mb-8">
+                        <div class="space-y-5">
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-1">Tem&aacute;tica</label>
+                                <p class="text-dark-900 text-sm px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl">{{ cert.tematica or 'No completado' }}</p>
+                            </div>
+                            {% if cert.tecnologias and cert.tecnologias | length > 0 %}
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-2">Tecnolog&iacute;as</label>
+                                <div class="flex flex-wrap gap-2">
+                                    {% for tech in cert.tecnologias %}
+                                    <span class="inline-flex items-center px-3 py-1 bg-primary-100 text-primary-700 rounded-lg text-sm font-medium">{{ tech }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% else %}
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-1">Tecnolog&iacute;as</label>
+                                <p class="text-dark-400 text-sm italic">No completado</p>
+                            </div>
+                            {% endif %}
+                            <!-- Fecha de aprobaci&oacute;n -->
+                            <div>
+                                <label class="block text-sm font-semibold text-dark-700 mb-1">Fecha de Aprobaci&oacute;n</label>
+                                {% if cert.fecha_aprobacion %}
+                                <div class="flex items-center px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl w-fit">
+                                    <i data-lucide="check-circle" class="w-5 h-5 text-emerald-600 mr-2"></i>
+                                    <span class="font-semibold text-emerald-700">{{ cert.fecha_aprobacion }}</span>
+                                </div>
+                                {% else %}
+                                <div class="flex items-center px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl w-fit">
+                                    <i data-lucide="clock" class="w-5 h-5 text-dark-400 mr-2"></i>
+                                    <span class="text-dark-400">Pendiente</span>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% elif cert.tipo_certificacion == 'training' %}
+                    <!-- TRAINING: certificados como cards -->
+                    {% macro cert_preview(value, alt) %}
+                    {% if value %}
+                    {% set is_pdf = value.endswith('.pdf') %}
+                    <div class="aspect-[4/3] rounded-xl overflow-hidden border border-dark-200 bg-white relative cursor-pointer group/img"
+                         @click="lightboxSrc = '{{ value|storage_url }}'; lightboxAlt = '{{ alt }}'; lightboxIsPdf = {{ 'true' if is_pdf else 'false' }}; lightboxOpen = true">
+                        <img src="{{ value|storage_thumb }}" alt="{{ alt }}" loading="lazy"
+                             class="w-full h-full object-contain group-hover/img:scale-105 transition-transform duration-200">
+                        {% if is_pdf %}
+                        <span class="absolute top-2 left-2 inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-dark-900/70 text-white">
+                            <i data-lucide="file-text" class="w-3 h-3"></i> PDF
+                        </span>
+                        {% endif %}
+                        <div class="absolute inset-0 group-hover/img:bg-dark-900/10 transition-colors flex items-center justify-center">
+                            <i data-lucide="maximize-2" class="w-5 h-5 text-white opacity-0 group-hover/img:opacity-100 transition-opacity drop-shadow-lg"></i>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="aspect-[4/3] rounded-xl border-2 border-dashed border-dark-200 bg-dark-50 flex flex-col items-center justify-center text-dark-300">
+                        <i data-lucide="image-off" class="w-8 h-8"></i>
+                        <span class="text-xs mt-1">Sin archivo</span>
+                    </div>
+                    {% endif %}
+                    {% endmacro %}
+
+                    {% macro cert_card(num, label, icon, accent, img, origen, fecha) %}
+                    {% set externa = (origen == 'externa') %}
+                    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden flex flex-col">
+                        <div class="px-4 pt-4 flex items-center gap-2">
+                            <i data-lucide="{{ icon }}" class="w-4 h-4 {{ accent }}"></i>
+                            <span class="font-semibold text-sm text-dark-900 truncate">#{{ num }} &middot; {{ label }}</span>
+                            {% if origen %}
+                            <span class="ml-auto text-[10px] font-semibold px-2 py-0.5 rounded-md {{ 'bg-amber-100 text-amber-700' if externa else 'bg-primary-100 text-primary-700' }}">{{ origen | upper }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="px-4 mt-3">{{ cert_preview(img, 'Certificado ' ~ label) }}</div>
+                        <div class="px-4 py-3 mt-auto flex items-center gap-1.5">
+                            <i data-lucide="calendar" class="w-3.5 h-3.5 text-dark-400"></i>
+                            {% if fecha %}
+                            <span class="text-xs text-dark-400">Finalizado</span>
+                            <span class="text-xs font-medium text-dark-600">{{ fecha }}</span>
+                            {% else %}
+                            <span class="text-xs font-medium text-dark-400">Sin fecha</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endmacro %}
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                        {{ cert_card('1', 'NoN-Code', 'code-2', 'text-primary-500', cert.cert_noncode_imagen, cert.cert_noncode_origen, cert.cert_noncode_fecha) }}
+
+                        {{ cert_card('2', 'n8n', 'workflow', 'text-orange-500', cert.cert_n8n_imagen, cert.cert_n8n_origen, cert.cert_n8n_fecha) }}
+
+                        {% set rutas = [
+                            {'campo': 'cert_ruta1_imagen', 'fecha': cert.cert_ruta1_fecha, 'label': 'Ruta 1 GCP', 'num': '3'},
+                            {'campo': 'cert_ruta2_imagen', 'fecha': cert.cert_ruta2_fecha, 'label': 'Ruta 2 GCP', 'num': '4'},
+                            {'campo': 'cert_ruta3_imagen', 'fecha': cert.cert_ruta3_fecha, 'label': 'Ruta 3 GCP', 'num': '5'}
+                        ] %}
+                        {% for ruta in rutas %}
+                        {{ cert_card(ruta.num, ruta.label, 'cloud', 'text-blue-500', cert[ruta.campo] if cert[ruta.campo] is defined else None, none, ruta.fecha) }}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- SIN CERTIFICACIÓN -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-8 text-center mb-6">
+        <div class="w-14 h-14 rounded-2xl bg-dark-100 flex items-center justify-center mx-auto mb-3">
+            <i data-lucide="award" class="w-7 h-7 text-dark-300"></i>
+        </div>
+        <p class="text-dark-900 font-semibold">Path no Iniciado</p>
+        <p class="text-dark-500 text-sm">Esta persona todav&iacute;a no inici&oacute; el Path de Certificaci&oacute;n de AI</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function logrosData() {
+    var cert = {{ cert | tojson }};
+    var camposReq = {{ campos_requeridos | tojson }};
+
+    return {
+        // Estado del visor de im\u00e1genes/PDF (lightbox)
+        lightboxOpen: false,
+        lightboxSrc: '',
+        lightboxAlt: '',
+        lightboxIsPdf: false,
+        // Progreso basado en campos requeridos completados (no depende de pasos)
+        get completados() {
+            let c = 0;
+            for (const campo of camposReq) {
+                if (this.campoCompletado(campo)) c++;
+            }
+            return c;
+        },
+        get total() { return camposReq.length; },
+        get porcentaje() { return this.total > 0 ? Math.round((this.completados / this.total) * 100) : 0; },
+        campoCompletado(campo) {
+            var val = cert[campo];
+            if (campo === 'tecnologias') return val && val.length > 0;
+            return val !== null && val !== undefined && val !== '' && val !== false;
+        }
+    }
+}
+</script>
+{% endblock %}

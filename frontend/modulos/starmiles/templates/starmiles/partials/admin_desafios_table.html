@@ -1,0 +1,90 @@
+<div class="overflow-x-auto">
+    <table class="w-full table-fixed">
+        <thead>
+            <tr class="bg-dark-50 border-b border-dark-100">
+                <th class="w-[35%] px-5 py-4 text-left text-xs font-semibold text-dark-500 uppercase">Desafío</th>
+                <th class="w-[10%] px-3 py-4 text-left text-xs font-semibold text-dark-500 uppercase">Categoría</th>
+                <th class="w-[8%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Millas</th>
+                <th class="w-[14%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Actividad</th>
+                <th class="w-[9%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Estado</th>
+                <th class="w-[15%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Acciones</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-dark-100">
+            {% for d in desafios %}
+            <tr class="hover:bg-dark-50/50 transition-colors group">
+                <td class="px-5 py-4">
+                    <p class="font-semibold text-dark-900 truncate">{{ d.nombre }}</p>
+                    {% if d.descripcion %}
+                    <p class="text-dark-500 text-sm line-clamp-2">{{ d.descripcion }}</p>
+                    {% endif %}
+                    {% if d.alcance %}
+                    <p class="text-dark-400 text-xs mt-0.5">
+                        <i data-lucide="users" class="w-3 h-3 inline mr-1"></i>{{ d.alcance }}
+                    </p>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-4">
+                    {% if d.categoria_nombre %}
+                    <span class="inline-block px-2 py-1 text-xs font-semibold bg-primary-100 text-primary-700 rounded-lg">
+                        {{ d.categoria_nombre }}
+                    </span>
+                    {% else %}
+                    <span class="text-dark-400">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-4 text-center">
+                    <div class="flex items-center justify-center text-amber-500">
+                        <i data-lucide="star" class="w-4 h-4 mr-1 fill-current"></i>
+                        <span class="font-bold">{{ d.star_miles }}</span>
+                    </div>
+                </td>
+                <td class="px-3 py-4">
+                    <div class="flex flex-col items-center gap-0.5 text-xs text-dark-500">
+                        <span><span class="font-semibold text-dark-700">{{ d.total_inscriptos }}</span> inscr.</span>
+                        <span><span class="font-semibold text-dark-700">{{ d.total_completados }}</span> compl.</span>
+                        {% if d.millas_distribuidas > 0 %}
+                        <span class="text-amber-500 font-semibold flex items-center">
+                            <i data-lucide="star" class="w-3 h-3 mr-0.5 fill-current"></i>{{ d.millas_distribuidas }}
+                        </span>
+                        {% else %}
+                        <span class="text-dark-400">-</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="px-3 py-4 text-center">
+                    {% if d.vigente %}
+                    <span class="px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg">Vigente</span>
+                    {% elif not d.activo %}
+                    <span class="px-3 py-1 text-xs font-semibold bg-dark-100 text-dark-700 rounded-lg">Inactivo</span>
+                    {% else %}
+                    <span class="px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg">Vencido</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-4">
+                    <div class="flex items-center justify-center space-x-1">
+                        <a href="{{ url_for('starmiles.admin_desafio_editar', id=d.id) }}" class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        </a>
+                        <button @click="deleteId = '{{ d.id }}'; showDeleteModal = true" class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" class="px-6 py-16 text-center">
+                    <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="target" class="w-10 h-10 text-dark-300"></i>
+                    </div>
+                    <p class="text-dark-900 font-semibold mb-1">No hay desafíos</p>
+                    <a href="{{ url_for('starmiles.admin_desafio_crear') }}" class="text-primary-600 hover:text-primary-700 font-medium">
+                        Crear primero →
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

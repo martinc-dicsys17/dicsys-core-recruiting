@@ -1,0 +1,1204 @@
+<!-- Detalle del ticket (cargado como partial en el modal) -->
+{% set ticket_bloqueado = ticket.estado_rel.clave in ('resuelto', 'cerrado', 'cancelado') %}
+<div class="p-6" x-data="{ lightboxOpen: false, lightboxSrc: '', lightboxAlt: '', confirmDelete: false, showMeta: false }"
+     id="detail-content-inner" data-ticket-id="{{ ticket.id }}">
+
+    <!-- Header compacto -->
+    <div class="flex items-start justify-between mb-4">
+        <div class="flex-1">
+            <div class="flex items-center flex-wrap gap-2 mb-1.5">
+                <span class="text-sm font-mono font-semibold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-lg">T-{{ "%05d"|format(ticket.numero) }}</span>
+                <span class="text-xs px-2.5 py-1 rounded-full font-medium
+                    {% if ticket.estado_rel.clave == 'abierto' %}bg-blue-100 text-blue-700
+                    {% elif ticket.estado_rel.clave == 'en_progreso' %}bg-amber-100 text-amber-700
+                    {% elif ticket.estado_rel.clave == 'en_espera' %}bg-purple-100 text-purple-700
+                    {% elif ticket.estado_rel.clave == 'resuelto' %}bg-emerald-100 text-emerald-700
+                    {% elif ticket.estado_rel.clave == 'cancelado' %}bg-red-100 text-red-700
+                    {% else %}bg-dark-100 text-dark-600{% endif %}
+                ">● {{ ticket.estado_rel.nombre }}</span>
+                <span class="text-xs px-2.5 py-1 rounded-full font-medium
+                    {% if ticket.prioridad == 'critica' %}bg-red-100 text-red-700
+                    {% elif ticket.prioridad == 'alta' %}bg-orange-100 text-orange-700
+                    {% elif ticket.prioridad == 'media' %}bg-yellow-100 text-yellow-700
+                    {% else %}bg-green-100 text-green-700{% endif %}
+                ">{{ ticket.prioridad|capitalize }}</span>
+            </div>
+            <h3 class="text-lg font-bold text-dark-900">{{ ticket.titulo }}</h3>
+        </div>
+    </div>
+
+    {% if ticket.tipo_ticket == 'alta_baja' %}
+    <!-- ═══ VISTA ALTA/BAJA: Colaborador en primer plano ═══ -->
+
+    <!-- Colaborador protagonista -->
+    {% set ci = ticket.get('colaborador_info', {}) or {} %}
+    <div class="mb-4 rounded-2xl border-2
+        {% if ticket.tipo_operacion == 'alta' %}bg-emerald-50 border-emerald-200{% else %}bg-red-50 border-red-200{% endif %}"
+         x-data="{ showDatos: false, checklist: [], cargandoChecklist: true, showChecklist: false,
+                   async init() {
+                       try {
+                           const r = await fetch('/soporte/tickets/{{ ticket.id }}/checklist');
+                           const d = await r.json();
+                           this.checklist = d.items || [];
+                       } catch(e) {}
+                       this.cargandoChecklist = false;
+                   },
+                   async toggleItem(item) {
+                       const prev = item.completado;
+                       item.completado = !item.completado;
+                       try {
+                           const r = await fetch('/soporte/checklist/' + item.id + '/toggle', {method: 'POST'});
+                           const d = await r.json();
+                           item.completado = d.completado;
+                           item.completado_por = d.completado_por;
+                       } catch(e) { item.completado = prev; }
+                   },
+                   get totalCompletados() { return this.checklist.filter(i => i.completado).length; }
+                 }">
+
+        <!-- Header: nombre + tipo -->
+        <div class="flex items-center gap-3 p-4">
+            <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0
+                {% if ticket.tipo_operacion == 'alta' %}bg-emerald-600{% else %}bg-red-600{% endif %}">
+                <i data-lucide="{{ 'user-plus' if ticket.tipo_operacion == 'alta' else 'user-minus' }}" class="w-5 h-5 text-white"></i>
+            </div>
+            <div class="flex-1">
+                <p class="text-xs font-bold uppercase {% if ticket.tipo_operacion == 'alta' %}text-emerald-700{% else %}text-red-700{% endif %}">
+                    {{ 'Alta' if ticket.tipo_operacion == 'alta' else 'Baja' }} de Colaborador
+                </p>
+                {% if ticket.colaborador %}
+                <p class="text-base font-bold text-dark-900">{{ ticket.colaborador.apellido }}, {{ ticket.colaborador.nombre }}</p>
+                {% endif %}
+            </div>
+            <!-- Toggle datos -->
+            <button type="button" @click="showDatos = !showDatos"
+                    class="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors
+                        {% if ticket.tipo_operacion == 'alta' %}border-emerald-300 text-emerald-700 hover:bg-emerald-100{% else %}border-red-300 text-red-700 hover:bg-red-100{% endif %}">
+                <i data-lucide="user" class="w-3.5 h-3.5"></i>
+                <span x-text="showDatos ? 'Ocultar datos' : 'Ver datos'"></span>
+                <i data-lucide="chevron-down" class="w-3.5 h-3.5 transition-transform" :class="showDatos && 'rotate-180'"></i>
+            </button>
+        </div>
+
+        <!-- Datos colapsables -->
+        <div x-show="showDatos" x-transition x-cloak class="px-4 pb-4 space-y-3">
+            <!-- Datos personales -->
+            <div class="bg-white rounded-xl border border-dark-100 overflow-hidden">
+                <div class="px-3 py-2 bg-dark-50 border-b border-dark-100">
+                    <p class="text-[10px] font-bold text-dark-500 uppercase tracking-wide">Datos Personales</p>
+                </div>
+                <div class="divide-y divide-dark-50">
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">DNI</span><span class="font-medium text-dark-800">{{ ci.get('dni') or '—' }}</span></div>
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Teléfono personal</span><span class="font-medium text-dark-800">{{ ci.get('telefono_personal') or '—' }}</span></div>
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Correo personal</span><span class="font-medium text-dark-800 break-all">{{ ci.get('email_personal') or '—' }}</span></div>
+                    {% set provincia = ci.get('dir_laboral_provincia') %}
+                    {% set localidad = ci.get('dir_laboral_localidad') %}
+                    {% if provincia or localidad %}
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Provincia / Localidad</span><span class="font-medium text-dark-800">{% if provincia and localidad %}{{ provincia }}, {{ localidad }}{% elif provincia %}{{ provincia }}{% else %}{{ localidad }}{% endif %}</span></div>
+                    {% endif %}
+                    {% set calle = ci.get('dir_laboral_calle') %}
+                    {% if calle %}
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Domicilio</span><span class="font-medium text-dark-800">{{ calle }}{% if ci.get('dir_laboral_numero') %} {{ ci.get('dir_laboral_numero') }}{% endif %}{% if ci.get('dir_laboral_codigo_postal') %} (CP: {{ ci.get('dir_laboral_codigo_postal') }}){% endif %}</span></div>
+                    {% endif %}
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Fecha de alta</span><span class="font-medium text-dark-800">{{ ci.get('fecha_alta') or '—' }}</span></div>
+                </div>
+            </div>
+            <!-- Datos laborales -->
+            <div class="bg-white rounded-xl border border-dark-100 overflow-hidden">
+                <div class="px-3 py-2 bg-dark-50 border-b border-dark-100">
+                    <p class="text-[10px] font-bold text-dark-500 uppercase tracking-wide">Datos Laborales</p>
+                </div>
+                <div class="divide-y divide-dark-50">
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Categoría / Puesto</span><span class="font-medium text-dark-800">{{ ci.get('puesto') or '—' }}</span></div>
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Área</span><span class="font-medium text-dark-800">{{ ci.get('departamento') or '—' }}</span></div>
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Líder</span><span class="font-medium text-dark-800">{{ ci.get('lider') or '—' }}</span></div>
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Mail del líder</span><span class="font-medium text-dark-800 break-all">{{ ci.get('lider_email') or '—' }}</span></div>
+                    <div class="flex px-3 py-2 text-xs"><span class="text-dark-400 w-36 shrink-0">Cliente y Servicio</span><span class="font-medium text-dark-800">{{ ticket.get('cliente_servicio') or ci.get('cliente_servicio') or '—' }}</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Checklist de proceso -->
+        <div class="px-4 pb-4">
+            <div class="bg-white rounded-xl border border-dark-100 overflow-hidden">
+                <button type="button" @click="showChecklist = !showChecklist"
+                        class="w-full px-3 py-2.5 bg-dark-50 border-b border-dark-100 flex items-center justify-between hover:bg-dark-100 transition-colors">
+                    <p class="text-[10px] font-bold text-dark-500 uppercase tracking-wide flex items-center gap-1.5">
+                        <i data-lucide="check-square" class="w-3.5 h-3.5"></i>
+                        Checklist de proceso
+                    </p>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold"
+                              :class="totalCompletados === checklist.length && checklist.length > 0 ? 'text-emerald-600' : 'text-dark-400'"
+                              x-text="cargandoChecklist ? '...' : totalCompletados + '/' + checklist.length"></span>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-dark-400 transition-transform" :class="showChecklist && 'rotate-180'"></i>
+                    </div>
+                </button>
+                <div x-show="showChecklist" x-transition x-cloak>
+                    <div x-show="cargandoChecklist" class="px-3 py-4 text-center">
+                        <svg class="animate-spin h-4 w-4 text-dark-400 mx-auto" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                        </svg>
+                    </div>
+                    <div x-show="!cargandoChecklist" class="divide-y divide-dark-50">
+                        <template x-for="item in checklist" :key="item.id">
+                            <label class="flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-dark-50 transition-colors">
+                                <input type="checkbox"
+                                       :checked="item.completado"
+                                       @change="toggleItem(item)"
+                                       class="w-4 h-4 rounded border-dark-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0">
+                                <div class="flex-1 min-w-0">
+                                    <span class="text-sm text-dark-800" :class="item.completado && 'line-through text-dark-400'" x-text="item.item_label"></span>
+                                    <p x-show="item.completado && item.completado_por" class="text-xs text-dark-400 mt-0.5" x-text="'✓ ' + (item.completado_por || '')"></p>
+                                </div>
+                            </label>
+                        </template>
+                        <div x-show="checklist.length === 0" class="px-3 py-4 text-center text-xs text-dark-400">
+                            Sin ítems de checklist
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuración IT -->
+    {% if ticket.tipo_operacion == 'alta' %}
+    <div class="mb-4 bg-white rounded-xl border border-dark-200 overflow-hidden">
+        <div class="px-4 py-2.5 bg-dark-50 border-b border-dark-100">
+            <p class="text-xs font-bold text-dark-600 uppercase tracking-wide">Configuración IT</p>
+        </div>
+        <div class="p-4 grid grid-cols-2 gap-3 text-sm">
+            <div class="flex items-center gap-2">
+                <i data-lucide="monitor" class="w-4 h-4 text-dark-400 shrink-0"></i>
+                <div>
+                    <p class="text-xs text-dark-400">Computadora</p>
+                    <p class="font-medium text-dark-800">
+                        {% if ticket.get('necesita_computadora') %}
+                            Sí{% if ticket.get('gama_computadora') %} — {{ ticket.get('gama_computadora') }}{% endif %}
+                        {% else %}No requiere{% endif %}
+                    </p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <i data-lucide="briefcase" class="w-4 h-4 text-dark-400 shrink-0"></i>
+                <div>
+                    <p class="text-xs text-dark-400">Modalidad</p>
+                    <p class="font-medium text-dark-800">{{ ticket.get('modalidad_trabajo') or '—' }}</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <i data-lucide="gift" class="w-4 h-4 text-dark-400 shrink-0"></i>
+                <div>
+                    <p class="text-xs text-dark-400">Kit bienvenida</p>
+                    <p class="font-medium {% if ticket.entrega_kit_bienvenida %}text-emerald-700{% else %}text-dark-500{% endif %}">
+                        {{ 'Incluido' if ticket.entrega_kit_bienvenida else 'No incluido' }}
+                    </p>
+                </div>
+            </div>
+            {% if ticket.get('listas_correo') %}
+            <div class="col-span-2 flex items-start gap-2">
+                <i data-lucide="mail" class="w-4 h-4 text-dark-400 shrink-0 mt-0.5"></i>
+                <div>
+                    <p class="text-xs text-dark-400">Listas de correo</p>
+                    <p class="font-medium text-dark-800 break-all">{{ ticket.get('listas_correo') }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Metadatos colapsables -->
+    <div class="mb-4">
+        <button type="button" @click="showMeta = !showMeta"
+                class="flex items-center gap-1.5 text-xs text-dark-400 hover:text-dark-600 transition-colors">
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 transition-transform" :class="showMeta && 'rotate-90'"></i>
+            <span x-text="showMeta ? 'Ocultar detalles del ticket' : 'Ver detalles del ticket'"></span>
+        </button>
+        <div x-show="showMeta" x-transition x-cloak class="mt-3 grid grid-cols-2 gap-3">
+            <div class="bg-dark-50 rounded-xl p-3">
+                <p class="text-xs text-dark-400 mb-1">Solicitante</p>
+                <p class="text-sm font-medium text-dark-800">{{ ticket.solicitante.apellido }}, {{ ticket.solicitante.nombre if ticket.solicitante else '—' }}</p>
+            </div>
+            <div class="bg-dark-50 rounded-xl p-3">
+                <p class="text-xs text-dark-400 mb-1">Asignado a</p>
+                {% if ticket.estado_rel.clave == 'abierto' %}
+                <!-- Modo editable cuando está abierto -->
+                <div id="asignado-section">
+                    {% include "soporte/partials/asignado_select.html" %}
+                </div>
+                {% else %}
+                <!-- Modo solo lectura cuando no está abierto -->
+                <p class="text-sm font-medium text-dark-800">{{ (ticket.asignado.apellido + ', ' + ticket.asignado.nombre) if ticket.asignado else 'Sin asignar' }}</p>
+                {% endif %}
+            </div>
+            <div class="bg-dark-50 rounded-xl p-3">
+                <p class="text-xs text-dark-400 mb-1">Categoría</p>
+                <p class="text-sm font-medium text-dark-700">{{ ticket.subcategoria.nombre_display if ticket.subcategoria else '—' }}</p>
+            </div>
+            <div class="bg-dark-50 rounded-xl p-3">
+                <p class="text-xs text-dark-400 mb-1">Creado</p>
+                <p class="text-sm font-medium text-dark-700">{{ ticket.created_at[:10] if ticket.created_at else 'N/A' }}</p>
+            </div>
+        </div>
+    </div>
+
+    {% else %}
+    <!-- ═══ VISTA GENÉRICA: people arriba, metadata abajo ═══ -->
+    {% set fecha_creado = ticket.created_at[:10] if ticket.created_at else None %}
+    <div class="space-y-3 mb-6">
+        <!-- Fila superior: personas -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <!-- Solicitante -->
+            <div class="bg-dark-50 rounded-xl p-4 flex flex-col">
+                <p class="text-[10px] font-bold text-dark-400 uppercase tracking-wide mb-2">Solicitante</p>
+                {% if ticket.solicitante %}
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-gradient-to-br from-primary-400 to-accent-purple rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
+                        {{ ticket.solicitante.nombre[0]|upper }}
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-dark-900 truncate">{{ ticket.solicitante.nombre }} {{ ticket.solicitante.apellido }}</p>
+                        {% if ticket.solicitante.email %}
+                        <p class="text-xs text-dark-500 truncate">{{ ticket.solicitante.email }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-sm text-dark-400 italic">Sin solicitante</p>
+                {% endif %}
+            </div>
+
+            <!-- Asignado a -->
+            <div class="bg-dark-50 rounded-xl p-4 flex flex-col">
+                <p class="text-[10px] font-bold text-dark-400 uppercase tracking-wide mb-2">Asignado a</p>
+                {% if ticket.estado_rel.clave == 'abierto' %}
+                <div id="asignado-section">
+                    {% include "soporte/partials/asignado_select.html" %}
+                </div>
+                {% elif ticket.asignado %}
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-gradient-to-br from-emerald-500 to-green-600 rounded-xl flex items-center justify-center text-white text-sm font-bold shadow-sm shrink-0">
+                        {{ ticket.asignado.nombre[0]|upper }}
+                    </div>
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold text-dark-900 truncate">{{ ticket.asignado.nombre }} {{ ticket.asignado.apellido }}</p>
+                        {% if ticket.asignado.email %}
+                        <p class="text-xs text-dark-500 truncate">{{ ticket.asignado.email }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-sm text-dark-400 italic">Sin asignar</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Fila inferior: metadata en una tira -->
+        <div class="flex flex-wrap items-center gap-x-5 gap-y-2 px-4 py-3 bg-white border border-dark-100 rounded-xl text-sm">
+            <div class="flex items-center gap-2 min-w-0">
+                <i data-lucide="folder" class="w-3.5 h-3.5 text-dark-400 shrink-0"></i>
+                <span class="text-[11px] font-semibold text-dark-400 uppercase tracking-wide">Categoría</span>
+                <span class="text-dark-800 font-medium truncate">
+                    {% if ticket.subcategoria.categoria %}{{ ticket.subcategoria.categoria.nombre_display }} / {% endif %}{{ ticket.subcategoria.nombre_display }}
+                </span>
+            </div>
+            <div class="h-4 w-px bg-dark-100 hidden sm:block"></div>
+            <div class="flex items-center gap-2">
+                <i data-lucide="calendar" class="w-3.5 h-3.5 text-dark-400 shrink-0"></i>
+                <span class="text-[11px] font-semibold text-dark-400 uppercase tracking-wide">Creado</span>
+                <span class="text-dark-800 font-medium">{{ fecha_creado or 'N/A' }}</span>
+            </div>
+        </div>
+
+        {% if ticket.colaborador %}
+        <!-- Colaborador implicado -->
+        <div class="bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-3 flex items-center gap-3">
+            <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shrink-0">
+                <i data-lucide="user-plus" class="w-4 h-4 text-white"></i>
+            </div>
+            <div class="min-w-0">
+                <p class="text-[10px] font-bold text-indigo-600 uppercase tracking-wide">Colaborador implicado</p>
+                <p class="text-sm font-semibold text-indigo-900 truncate">{{ ticket.colaborador.nombre }} {{ ticket.colaborador.apellido }}</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Información de Alta/Baja (Para tickets de tipo alta_baja) -->
+    {% if ticket.tipo_ticket == 'alta_baja' %}
+    <div class="mb-6 bg-orange-50 border border-orange-200 rounded-2xl p-5 shadow-sm" x-data="{ showAsignacionForm: false, showDevolucionForm: false }">
+        <!-- Acciones según tipo de operación -->
+        {% if ticket.tipo_operacion == 'alta' %}
+        
+        {% if ticket_bloqueado %}
+        <!-- ALTA RESUELTA: Mostrar info readonly del equipo asignado -->
+        {% if ticket.activo %}
+        <div class="bg-white rounded-xl p-4 border border-emerald-200 mb-4">
+            <p class="text-[10px] font-bold text-emerald-600 uppercase mb-2 flex items-center">
+                <i data-lucide="check-circle" class="w-4 h-4 mr-1.5"></i>Equipo Asignado
+            </p>
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-bold text-dark-900">{{ ticket.activo.nombre }}</p>
+                    <p class="text-xs text-dark-500">S/N: {{ ticket.activo.numero_serie or 'N/A' }}</p>
+                </div>
+                <span class="px-2.5 py-1 text-xs font-bold bg-emerald-100 text-emerald-700 rounded-full">Asignado</span>
+            </div>
+        </div>
+        {% endif %}
+        
+        {% else %}
+        <!-- ALTA: Asignar equipo y generar acuerdo -->
+        <div class="border-t border-orange-200 pt-4">
+            <button type="button" @click="showAsignacionForm = !showAsignacionForm"
+                class="w-full flex items-center justify-center px-4 py-2.5 bg-orange-600 text-white rounded-xl text-sm font-semibold hover:bg-orange-700 transition-all shadow-sm">
+                <i data-lucide="package-plus" class="w-4 h-4 mr-2"></i>
+                Asignar Equipo y Generar Acuerdo
+            </button>
+            
+            <!-- Formulario de asignación -->
+            <div x-show="showAsignacionForm" x-transition x-cloak style="display:none" class="mt-4 bg-white rounded-xl p-4 border border-orange-200">
+                <form action="{{ url_for('soporte.procesar_alta_colaborador', ticket_id=ticket.id) }}" method="POST" target="_blank" 
+                      x-data="{
+                          equiposDisponibles: [],
+                          busquedaEquipo: '',
+                          equipoSeleccionado: null,
+                          cargandoEquipos: false,
+                          matrizActual: null,
+                          async buscarEquipos() {
+                              if (this.busquedaEquipo.length < 2) {
+                                  this.equiposDisponibles = [];
+                                  return;
+                              }
+                              this.cargandoEquipos = true;
+                              try {
+                                  const response = await fetch('/soporte/buscar-equipo-disponible?q=' + encodeURIComponent(this.busquedaEquipo));
+                                  this.equiposDisponibles = await response.json();
+                              } catch (e) {
+                                  console.error('Error buscando equipos:', e);
+                              }
+                              this.cargandoEquipos = false;
+                          },
+                          seleccionarEquipo(equipo) {
+                              this.equipoSeleccionado = equipo;
+                              this.busquedaEquipo = equipo.display || equipo.nombre;
+                              this.equiposDisponibles = [];
+                              var h = document.getElementById('hidden-equipo-id');
+                              if (h) h.value = equipo.id;
+                              this.matrizActual = equipo.matriz_estado || null;
+                              if (this.matrizActual) {
+                                  var form = $el.closest('form');
+                                  var campos = ['pantalla','teclado','bateria','carcasa_superior','carcasa_inferior','touchpad','puertos','cargador'];
+                                  var me = this;
+                                  $nextTick(function() {
+                                      campos.forEach(function(c) {
+                                          var s = form.querySelector('select[name='+c+']');
+                                          if (s && me.matrizActual[c]) s.value = me.matrizActual[c];
+                                      });
+                                  });
+                              }
+                          }
+                      }"
+                      @submit="if (!document.getElementById('hidden-equipo-id').value) { Alpine.store('toasts').error('Debes seleccionar un equipo'); $event.preventDefault(); }">
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-[10px] font-bold text-orange-900 uppercase mb-1.5">Buscar Equipo Disponible</label>
+                            <div class="relative">
+                                <input type="text" 
+                                       x-model="busquedaEquipo" 
+                                       @input.debounce.300ms="buscarEquipos()"
+                                       placeholder="Buscar por nombre, serie, inventario..."
+                                       class="w-full px-3 py-2 bg-white border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 outline-none">
+                                <input type="hidden" name="equipo_id" id="hidden-equipo-id" :value="equipoSeleccionado ? equipoSeleccionado.id : ''">
+                                
+                                <!-- Dropdown de resultados -->
+                                <div x-show="equiposDisponibles.length > 0" 
+                                     class="absolute z-10 w-full mt-1 bg-white border border-orange-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                                    <template x-for="equipo in equiposDisponibles" :key="equipo.id">
+                                        <div @click="seleccionarEquipo(equipo)" 
+                                             class="px-3 py-2 hover:bg-orange-50 cursor-pointer border-b border-orange-100 last:border-b-0">
+                                            <p class="text-sm font-medium text-dark-900" x-text="equipo.nombre"></p>
+                                            <p class="text-xs text-dark-500" x-text="`${equipo.tipo} ${equipo.marca} - S/N: ${equipo.numero_serie || 'N/A'}`"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                                
+                                <!-- Indicador de carga -->
+                                <div x-show="cargandoEquipos" class="absolute right-3 top-2.5">
+                                    <svg class="animate-spin h-5 w-5 text-orange-500" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p class="text-xs text-orange-600 mt-1">Escribe al menos 2 caracteres para buscar</p>
+                        </div>
+                        
+                        <!-- Mostrar equipo seleccionado -->
+                        <div x-show="equipoSeleccionado" class="bg-orange-50 rounded-lg p-3 border border-orange-200">
+                            <p class="text-xs font-bold text-orange-900 uppercase mb-1">Equipo Seleccionado:</p>
+                            <p class="text-sm font-medium text-dark-900" x-text="equipoSeleccionado ? equipoSeleccionado.nombre : ''"></p>
+                            <p class="text-xs text-dark-600" x-text="equipoSeleccionado ? `${equipoSeleccionado.tipo} ${equipoSeleccionado.marca} - S/N: ${equipoSeleccionado.numero_serie}` : ''"></p>
+                        </div>
+                        
+                        <div>
+                            <label class="flex items-center text-sm">
+                                <input type="checkbox" name="entrega_kit" value="1" class="mr-2 rounded border-orange-300 text-orange-600 focus:ring-orange-500">
+                                <span class="font-medium text-dark-700">Entregar Kit de Bienvenida (Headset + Mouse)</span>
+                            </label>
+                        </div>
+                        
+                        <!-- Matriz de Estado -->
+                        <div class="bg-orange-50 rounded-xl p-4 border border-orange-100"
+                             data-matriz-previa='{{ ultima_matriz_activo | tojson }}'
+                             x-data="{ valoresMatriz: [], setearTodos(valor) { var form = $el.closest('form'); ['pantalla','teclado','bateria','carcasa_superior','carcasa_inferior','touchpad','puertos','cargador'].forEach(function(c) { var s = form.querySelector('select[name='+c+']'); if(s) s.value = valor; }); }, precargarMatriz() { try { var mp = JSON.parse($el.getAttribute('data-matriz-previa')||'{}'); var form = $el.closest('form'); ['pantalla','teclado','bateria','carcasa_superior','carcasa_inferior','touchpad','puertos','cargador'].forEach(function(c) { var s = form.querySelector('select[name='+c+']'); if(s&&mp[c]) s.value = mp[c]; }); } catch(e){} } }"
+                             x-init="fetch('/soporte/valores-matriz-api').then(function(r){return r.json()}).then(function(d){ valoresMatriz=d.valores||[]; $nextTick(function(){ precargarMatriz() }) })">
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="block text-[10px] font-bold text-orange-900 uppercase flex items-center">
+                                    <i data-lucide="clipboard-check" class="w-4 h-4 mr-1.5"></i>Estado Físico del Equipo
+                                </label>
+                                <div class="flex gap-1">
+                                    <button type="button" @click="setearTodos('Excelente')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors">
+                                        Todo Excelente
+                                    </button>
+                                    <button type="button" @click="setearTodos('Bueno')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-cyan-100 text-cyan-700 rounded hover:bg-cyan-200 transition-colors">
+                                        Todo Bueno
+                                    </button>
+                                    <button type="button" @click="setearTodos('Regular')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors">
+                                        Todo Regular
+                                    </button>
+                                    <button type="button" @click="setearTodos('Malo')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors">
+                                        Todo Malo
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+                                {% for campo in ['pantalla', 'teclado', 'bateria', 'carcasa_superior', 'carcasa_inferior', 'touchpad', 'puertos', 'cargador'] %}
+                                <div class="flex flex-col">
+                                    <span class="text-[9px] text-orange-500 font-bold uppercase mb-1 ml-1">{{ campo|replace('_', ' ') }}</span>
+                                    <select name="{{ campo }}" class="text-xs px-2 py-1.5 bg-white border border-orange-100 rounded-lg outline-none focus:border-orange-400" required>
+                                        <option value="">Seleccionar...</option>
+                                        <template x-for="valor in valoresMatriz" :key="valor.nombre">
+                                            <option :value="valor.nombre" x-text="valor.nombre"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-2 pt-2">
+                            <button type="button" @click="showAsignacionForm = false"
+                                class="flex-1 px-3 py-2 bg-white border border-orange-200 text-orange-700 rounded-lg text-sm font-medium hover:bg-orange-50 transition-colors">
+                                Cancelar
+                            </button>
+                            <button type="submit"
+                                class="flex-1 px-3 py-2 bg-orange-600 text-white rounded-lg text-sm font-bold hover:bg-orange-700 transition-colors">
+                                Generar Acuerdo PDF
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}{# fin ticket_bloqueado alta #}
+        
+        {% elif ticket.tipo_operacion == 'baja' %}
+        
+        {% if ticket_bloqueado %}
+        <!-- BAJA RESUELTA: Info readonly -->
+        <div class="bg-white rounded-xl p-4 border border-emerald-200">
+            <p class="text-[10px] font-bold text-emerald-600 uppercase mb-2 flex items-center">
+                <i data-lucide="check-circle" class="w-4 h-4 mr-1.5"></i>Devolución Completada
+            </p>
+            <p class="text-sm text-dark-700">El equipo fue devuelto y revisado correctamente.</p>
+        </div>
+        
+        {% else %}
+        <!-- BAJA: Recibir y revisar activo devuelto -->
+        <div class="border-t border-orange-200 pt-4">
+            <button type="button" @click="showDevolucionForm = !showDevolucionForm"
+                class="w-full flex items-center justify-center px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-semibold hover:bg-red-700 transition-all shadow-sm">
+                <i data-lucide="package-check" class="w-4 h-4 mr-2"></i>
+                Recibir y Revisar Activo Devuelto
+            </button>
+            
+            <!-- Formulario de devolución -->
+            <div x-show="showDevolucionForm" x-transition x-cloak style="display:none" class="mt-4 bg-white rounded-xl p-4 border border-red-200">
+                <form action="{{ url_for('soporte.procesar_baja_colaborador', ticket_id=ticket.id) }}" method="POST" target="_blank">
+                    <div class="space-y-3">
+                        <div class="bg-red-50 rounded-xl px-4 py-3 border border-red-200">
+                            <p class="text-xs text-red-700 font-medium">
+                                <i data-lucide="info" class="w-3.5 h-3.5 inline mr-1"></i>
+                                El colaborador debe devolver el equipo asignado. Revisá el estado físico antes de aceptar la devolución.
+                            </p>
+                        </div>
+                        
+                        <!-- Matriz de Estado de Devolución con botones de seteo rápido -->
+                        <div class="bg-red-50 rounded-xl p-4 border border-red-100"
+                             data-matriz-previa='{{ ultima_matriz_activo | tojson }}'
+                             x-data="{ valoresMatriz: [], setearTodos(valor) { var form = $el.closest('form'); ['pantalla','teclado','bateria','carcasa_superior','carcasa_inferior','touchpad','puertos','cargador'].forEach(function(c) { var s = form.querySelector('select[name='+c+']'); if(s) s.value = valor; }); }, precargarMatriz() { try { var mp = JSON.parse($el.getAttribute('data-matriz-previa')||'{}'); var form = $el.closest('form'); ['pantalla','teclado','bateria','carcasa_superior','carcasa_inferior','touchpad','puertos','cargador'].forEach(function(c) { var s = form.querySelector('select[name='+c+']'); if(s&&mp[c]) s.value = mp[c]; }); } catch(e){} } }"
+                             x-init="fetch('/soporte/valores-matriz-api').then(function(r){return r.json()}).then(function(d){ valoresMatriz=d.valores||[]; $nextTick(function(){ precargarMatriz() }) })">
+                            <div class="flex items-center justify-between mb-3">
+                                <label class="block text-[10px] font-bold text-red-900 uppercase flex items-center">
+                                    <i data-lucide="clipboard-check" class="w-4 h-4 mr-1.5"></i>Estado Físico al Devolver
+                                </label>
+                                <!-- Botones de seteo rápido -->
+                                <div class="flex gap-1">
+                                    <button type="button" @click="setearTodos('Excelente')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors">
+                                        Todo Excelente
+                                    </button>
+                                    <button type="button" @click="setearTodos('Bueno')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-cyan-100 text-cyan-700 rounded hover:bg-cyan-200 transition-colors">
+                                        Todo Bueno
+                                    </button>
+                                    <button type="button" @click="setearTodos('Regular')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors">
+                                        Todo Regular
+                                    </button>
+                                    <button type="button" @click="setearTodos('Malo')" 
+                                            class="px-2 py-1 text-[10px] font-bold bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors">
+                                        Todo Malo
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+                                {% for campo in ['pantalla', 'teclado', 'bateria', 'carcasa_superior', 'carcasa_inferior', 'touchpad', 'puertos', 'cargador'] %}
+                                <div class="flex flex-col">
+                                    <span class="text-[9px] text-red-500 font-bold uppercase mb-1 ml-1">{{ campo|replace('_', ' ') }}</span>
+                                    <select name="{{ campo }}" class="text-xs px-2 py-1.5 bg-white border border-red-100 rounded-lg outline-none focus:border-red-400" required>
+                                        <option value="">Seleccionar...</option>
+                                        <template x-for="valor in valoresMatriz" :key="valor.nombre">
+                                            <option :value="valor.nombre" x-text="valor.nombre"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- Periféricos devueltos -->
+                        <div class="bg-red-50 rounded-xl px-4 py-3 border border-red-100">
+                            <label class="block text-[10px] font-bold text-red-900 uppercase mb-2">Periféricos devueltos</label>
+                            <div class="flex items-center gap-6">
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" name="devuelve_headset" value="1" class="mr-2 rounded border-red-300 text-red-600 focus:ring-red-500">
+                                    <span class="font-medium text-dark-700">Devuelve Headset</span>
+                                </label>
+                                <label class="flex items-center text-sm">
+                                    <input type="checkbox" name="devuelve_mouse" value="1" class="mr-2 rounded border-red-300 text-red-600 focus:ring-red-500">
+                                    <span class="font-medium text-dark-700">Devuelve Mouse</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div class="flex items-center space-x-2 pt-2">
+                            <button type="button" @click="showDevolucionForm = false"
+                                class="flex-1 px-3 py-2 bg-white border border-red-200 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">
+                                Cancelar
+                            </button>
+                            <button type="submit"
+                                class="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-colors">
+                                Generar Acta de Devolución
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}{# fin ticket_bloqueado baja #}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Sección: Acuerdo Firmado (Para tickets de alta y baja) -->
+    {% if ticket.tipo_ticket == 'alta_baja' %}
+    <div class="mb-6 {% if ticket.tipo_operacion == 'alta' %}bg-emerald-50 border-emerald-200{% else %}bg-red-50 border-red-200{% endif %} border rounded-2xl p-5 shadow-sm">
+        <div class="flex items-center mb-4">
+            <div class="w-10 h-10 {% if ticket.tipo_operacion == 'alta' %}bg-emerald-600{% else %}bg-red-600{% endif %} rounded-xl flex items-center justify-center mr-3">
+                <i data-lucide="file-signature" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <h4 class="text-sm font-bold {% if ticket.tipo_operacion == 'alta' %}text-emerald-900{% else %}text-red-900{% endif %}">
+                    Acuerdo de {% if ticket.tipo_operacion == 'alta' %}Entrega{% else %}Devolución{% endif %} Firmado
+                </h4>
+                <p class="text-xs {% if ticket.tipo_operacion == 'alta' %}text-emerald-600{% else %}text-red-600{% endif %}">
+                    Fotos del acuerdo firmado por el técnico y el colaborador
+                </p>
+            </div>
+            {% set acuerdo_count = ticket.evidencias|selectattr('categoria', 'equalto', 'acuerdo_firmado')|list|length %}
+            {% if acuerdo_count > 0 %}
+            <span class="ml-auto px-2.5 py-1 text-xs font-bold {% if ticket.tipo_operacion == 'alta' %}bg-emerald-200 text-emerald-800{% else %}bg-red-200 text-red-800{% endif %} rounded-full">
+                {{ acuerdo_count }} foto{{ 's' if acuerdo_count > 1 else '' }}
+            </span>
+            {% endif %}
+        </div>
+        
+        {% set evidencias_acuerdo = ticket.evidencias|selectattr('categoria', 'equalto', 'acuerdo_firmado')|list %}
+        {% include "soporte/partials/evidencias_acuerdo.html" %}
+    </div>
+    {% endif %}
+
+    <!-- Descripción -->
+    {% if ticket.descripcion %}
+    <div class="mb-6">
+        <h4 class="text-sm font-semibold text-dark-700 mb-2">Descripción</h4>
+        <div class="bg-dark-50 rounded-xl p-4 text-sm text-dark-600 whitespace-pre-wrap">{{ ticket.descripcion }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Evidencias/Fotos adjuntas por el solicitante -->
+    {% set evidencias_generales = ticket.evidencias|selectattr('categoria', 'equalto', 'general')|list %}
+    {% if evidencias_generales %}
+    <div class="mb-6">
+        <h4 class="text-sm font-semibold text-dark-700 mb-3 flex items-center">
+            <i data-lucide="images" class="w-4 h-4 mr-1.5"></i>
+            Fotos adjuntas
+            <span class="ml-2 px-2 py-0.5 text-xs font-bold bg-primary-100 text-primary-700 rounded-full">
+                {{ evidencias_generales|length }}
+            </span>
+        </h4>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {% for ev in evidencias_generales %}
+            <div class="relative group rounded-xl border-2 border-dark-200 overflow-hidden bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+                 @click="lightboxSrc = '{{ ev.url | storage_url }}'; lightboxAlt = 'Evidencia {{ loop.index }}'; lightboxOpen = true">
+                <img src="{{ ev.url | storage_url }}" 
+                     alt="Evidencia {{ loop.index }}" 
+                     class="w-full h-32 object-cover"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%23999\' stroke-width=\'1.5\'%3E%3Crect width=\'18\' height=\'18\' x=\'3\' y=\'3\' rx=\'2\'/%3E%3Ccircle cx=\'9\' cy=\'9\' r=\'2\'/%3E%3Cpath d=\'m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\'/%3E%3C/svg%3E'">
+                <div class="absolute inset-0 bg-dark-900/0 group-hover:bg-dark-900/10 transition-all flex items-center justify-center pointer-events-none">
+                    <div class="opacity-0 group-hover:opacity-100 transition-opacity bg-white/90 backdrop-blur-sm px-2 py-1 rounded-lg">
+                        <i data-lucide="maximize-2" class="w-4 h-4 text-dark-700"></i>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Imagen adjunta con visor integrado -->
+    {% if ticket.imagen_url %}
+    <div class="mb-6">
+        <h4 class="text-sm font-semibold text-dark-700 mb-2 flex items-center">
+            <i data-lucide="image" class="w-4 h-4 mr-1.5"></i>Imagen adjunta
+        </h4>
+        <!-- Thumbnail preview -->
+        <div @click="lightboxSrc = '{{ ticket.imagen_url }}'; lightboxAlt = 'Imagen adjunta al ticket'; lightboxOpen = true"
+            class="relative group cursor-pointer rounded-xl border-2 border-dashed border-dark-200 hover:border-primary-300 bg-dark-50 p-3 transition-all duration-200">
+            <img src="{{ ticket.imagen_url }}" alt="Adjunto del ticket"
+                class="w-full max-h-52 rounded-lg object-contain transition-transform duration-200 group-hover:scale-[1.02]"
+                onerror="this.closest('div[class*=relative]').innerHTML='<div class=\'flex flex-col items-center justify-center py-6 text-dark-400\'><svg xmlns=\'http://www.w3.org/2000/svg\' width=\'32\' height=\'32\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'currentColor\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'><rect width=\'18\' height=\'18\' x=\'3\' y=\'3\' rx=\'2\' ry=\'2\'/><circle cx=\'9\' cy=\'9\' r=\'2\'/><path d=\'m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21\'/></svg><p class=\'text-sm mt-2\'>No se pudo cargar la imagen</p><a href=\'{{ ticket.imagen_url }}\' target=\'_blank\' class=\'text-xs text-primary-500 hover:underline mt-1\'>Abrir enlace directo →</a></div>'">
+            <!-- Overlay con indicador de ampliar -->
+            <div
+                class="absolute inset-0 bg-dark-900/0 group-hover:bg-dark-900/10 rounded-xl transition-all duration-200 flex items-center justify-center">
+                <div
+                    class="opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1.5">
+                    <i data-lucide="maximize-2" class="w-4 h-4 text-dark-700"></i>
+                    <span class="text-xs font-medium text-dark-700">Click para ampliar</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Lightbox overlay - Implementación estándar de Dicsys -->
+    <div x-show="lightboxOpen" x-cloak
+         class="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+         @keydown.escape.window="lightboxOpen = false">
+        <div class="fixed inset-0 bg-dark-900/80 backdrop-blur-sm" @click="lightboxOpen = false"></div>
+        <div class="relative z-10 max-w-4xl max-h-[90vh] w-full flex flex-col items-center">
+            <button @click="lightboxOpen = false"
+                    class="absolute -top-3 -right-3 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-dark-500 hover:text-dark-900 hover:bg-dark-50 transition-colors z-20"
+                    aria-label="Cerrar vista completa">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+            <img :src="lightboxSrc" :alt="lightboxAlt" class="max-w-full max-h-[85vh] rounded-2xl shadow-2xl object-contain bg-white">
+            <!-- Botón para abrir imagen original -->
+            <a :href="lightboxSrc" target="_blank" @click.stop
+               class="mt-4 flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-dark-50 text-dark-700 rounded-xl shadow-lg transition-colors font-medium text-sm">
+                <i data-lucide="external-link" class="w-4 h-4"></i>
+                <span>Abrir imagen original</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Resolución -->
+    {% if ticket.resolucion %}
+    <div class="mb-6">
+        <h4 class="text-sm font-semibold text-emerald-700 mb-2 flex items-center">
+            <i data-lucide="check-circle" class="w-4 h-4 mr-1"></i>Resolución
+        </h4>
+        <div
+            class="bg-emerald-50 rounded-xl p-4 text-sm text-emerald-800 border border-emerald-100 whitespace-pre-wrap">
+            {{ ticket.resolucion }}</div>
+    </div>
+    {% endif %}
+
+    {# ═══════════════════════════════════════════════════════════════
+       Flujo de Reparación Técnica (unificado)
+       Se muestra si:
+         - El ticket ya es de tipo reparación, o
+         - Es un ticket genérico con es_falla=True
+       En ambos casos el flujo es el mismo: diagnóstico + matriz + pasar a taller.
+       ═══════════════════════════════════════════════════════════════ #}
+    {% set es_reparacion = ticket.tipo_ticket == 'reparacion' %}
+    {% set es_falla_generica = ticket.tipo_ticket == 'generico' and ticket.es_falla %}
+    {% if es_reparacion or es_falla_generica %}
+    {% set tiene_activo = ticket.activo_id and ticket.activo %}
+    {% set peritaje_hecho = es_reparacion and ticket.diagnostico %}
+    <div class="mb-6 bg-purple-50 border border-purple-200 rounded-2xl p-5 shadow-sm" x-data="{ showRepForm: false, showPedidoForm: false }">
+        <div class="flex items-center mb-3">
+            <div class="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center mr-3">
+                <i data-lucide="wrench" class="w-5 h-5 text-white"></i>
+            </div>
+            <div>
+                <h4 class="text-sm font-bold text-purple-900">
+                    {% if es_reparacion %}Ticket de Reparación{% else %}Flujo de Reparación Técnica{% endif %}
+                </h4>
+                <p class="text-xs text-purple-600">
+                    {% if es_reparacion %}
+                        Este ticket está vinculado a un equipo para reparación técnica
+                    {% else %}
+                        Falla detectada en un equipo. Iniciá el peritaje para pasar el equipo a taller.
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+        {% if tiene_activo %}
+        {# Tarjeta del equipo (mismo diseño para ambos escenarios) #}
+        <div class="bg-white rounded-xl p-4 border border-purple-100 mb-3">
+            <p class="text-[10px] font-bold text-purple-600 uppercase mb-2">
+                {% if es_reparacion %}Equipo en Reparación{% else %}Equipo Afectado{% endif %}
+            </p>
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-bold text-purple-900">{{ ticket.activo.nombre }}</p>
+                    <p class="text-xs text-purple-600">{{ ticket.activo.numero_serie or 'S/N' }}</p>
+                </div>
+                <a href="{{ url_for('soporte.stock_detalle', item_id=ticket.activo_id) }}"
+                    class="px-3 py-1.5 text-xs font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700 transition-colors flex items-center">
+                    <i data-lucide="arrow-right" class="w-3 h-3 mr-1"></i>Ver Equipo
+                </a>
+            </div>
+        </div>
+
+        {% if peritaje_hecho %}
+        {# Peritaje ya registrado: mostrar resumen #}
+        <div class="bg-purple-100/50 rounded-xl px-4 py-3 border border-purple-200">
+            <p class="text-xs text-purple-700 flex items-center">
+                <i data-lucide="check-circle" class="w-3.5 h-3.5 inline mr-1"></i>
+                Peritaje de entrada completado. El equipo está en taller.
+            </p>
+            <p class="text-xs text-purple-600 mt-2"><strong>Diagnóstico:</strong> {{ ticket.diagnostico }}</p>
+        </div>
+        {% else %}
+        {# Peritaje pendiente: botón + formulario unificado #}
+        <button type="button" @click="showRepForm = !showRepForm"
+            class="w-full flex items-center justify-center px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-all shadow-sm">
+            <i data-lucide="wrench" class="w-4 h-4 mr-2"></i>
+            Iniciar Peritaje y Reparación Física
+        </button>
+
+        <div x-show="showRepForm" x-transition class="mt-4 border-t border-purple-200 pt-4" x-cloak>
+            <form action="{{ url_for('soporte.iniciar_peritaje_ticket', ticket_id=ticket.id) }}" method="POST"
+                  x-data="{
+                      insumos: [], insumoId: '', insumoNombre: '', stockActual: null, cargandoInsumos: false,
+                      async init() {
+                          this.cargandoInsumos = true;
+                          try {
+                              const r = await fetch('/soporte/insumos-api');
+                              const d = await r.json();
+                              this.insumos = d.items || [];
+                          } catch(e) {}
+                          this.cargandoInsumos = false;
+                      },
+                      seleccionarInsumo(id) {
+                          this.insumoId = id;
+                          const ins = this.insumos.find(i => i.id === id);
+                          this.insumoNombre = ins ? ins.nombre : '';
+                          this.stockActual = ins ? (ins.stock_actual || 0) : null;
+                      },
+                      get sinStock() { return this.insumoId && this.stockActual !== null && this.stockActual <= 0; },
+                      get conStock() { return this.insumoId && this.stockActual !== null && this.stockActual > 0; },
+                      abrirPedido() {
+                          document.getElementById('pedido-insumo-id').value = this.insumoId;
+                          document.getElementById('pedido-insumo-nombre').textContent = this.insumoNombre;
+                          showRepForm = false;
+                          showPedidoForm = true;
+                      }
+                  }">
+                {# activo_id solo hace falta cuando el ticket genérico aún no tiene el activo vinculado.
+                   Si ya está vinculado, el backend lo resuelve solo. Lo mandamos igual por robustez. #}
+                <input type="hidden" name="activo_id" value="{{ ticket.activo_id }}">
+                <div class="space-y-4">
+                    {# Diagnóstico #}
+                    <div>
+                        <label class="block text-[10px] font-bold text-purple-900 uppercase mb-1.5 ml-1">Diagnóstico Técnico Inicial</label>
+                        <textarea name="diagnostico" rows="3" required placeholder="Describe el problema físico detectado y las acciones a realizar..."
+                            class="w-full px-4 py-2.5 bg-white border border-purple-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none transition-all resize-none"></textarea>
+                    </div>
+
+                    {# Selector de insumo (solo aplica si ya es reparacion: consume al registrar) #}
+                    {% if es_reparacion %}
+                    <div>
+                        <label class="block text-[10px] font-bold text-purple-900 uppercase mb-1.5 ml-1">Insumo necesario para la reparación (opcional)</label>
+                        <select @change="seleccionarInsumo($event.target.value)"
+                                class="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none">
+                            <option value="">Sin insumo / No aplica</option>
+                            <template x-for="ins in insumos" :key="ins.id">
+                                <option :value="ins.id" x-text="ins.nombre + ' — Stock: ' + (ins.stock_actual || 0)"></option>
+                            </template>
+                        </select>
+                        <div x-show="conStock" x-cloak class="mt-2 flex items-center gap-2 p-2.5 bg-emerald-50 rounded-lg border border-emerald-200">
+                            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600 shrink-0"></i>
+                            <p class="text-xs text-emerald-700">
+                                Hay <strong x-text="stockActual"></strong> unidad(es) en stock. Se registrará el consumo al confirmar el peritaje.
+                            </p>
+                            <input type="hidden" name="insumo_id" :value="insumoId">
+                            <input type="hidden" name="insumo_cantidad" value="1">
+                        </div>
+                        <div x-show="sinStock" x-cloak class="mt-2 p-2.5 bg-amber-50 rounded-lg border border-amber-200">
+                            <div class="flex items-center gap-2 mb-2">
+                                <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                                <p class="text-xs text-amber-700">Sin stock disponible para <strong x-text="insumoNombre"></strong>.</p>
+                            </div>
+                            <button type="button" @click="abrirPedido()"
+                                    class="w-full px-3 py-2 bg-amber-500 text-white rounded-lg text-xs font-bold hover:bg-amber-600 transition-colors flex items-center justify-center gap-2">
+                                <i data-lucide="shopping-cart" class="w-3.5 h-3.5"></i>
+                                Generar Pedido de Compra para este insumo
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# Matriz de estado con botones de seteo rápido y pre-carga del estado previo del equipo #}
+                    <div class="bg-white/50 rounded-xl p-4 border border-purple-100"
+                         data-matriz-previa='{{ (ticket.activo.matriz_estado | tojson) if ticket.activo and ticket.activo.matriz_estado else "{}" }}'
+                         x-data="{
+                             valoresMatriz: [],
+                             setearTodos(valor) {
+                                 const form = $el.closest('form');
+                                 const campos = ['pantalla', 'teclado', 'bateria', 'carcasa_superior', 'carcasa_inferior', 'touchpad', 'puertos', 'cargador'];
+                                 campos.forEach(campo => {
+                                     const select = form.querySelector(`select[name='${campo}']`);
+                                     if (select) select.value = valor;
+                                 });
+                             },
+                             precargarMatriz() {
+                                 try {
+                                     const mp = JSON.parse($el.getAttribute('data-matriz-previa') || '{}');
+                                     const form = $el.closest('form');
+                                     ['pantalla','teclado','bateria','carcasa_superior','carcasa_inferior','touchpad','puertos','cargador'].forEach(function(c) {
+                                         const s = form.querySelector('select[name=' + c + ']');
+                                         if (s && mp[c]) s.value = mp[c];
+                                     });
+                                 } catch(e) {}
+                             }
+                         }"
+                         x-init="fetch('/soporte/valores-matriz-api').then(r => r.json()).then(d => { valoresMatriz = d.valores || []; $nextTick(() => precargarMatriz()); })">
+                        <div class="flex items-center justify-between mb-3">
+                            <label class="block text-[10px] font-bold text-purple-900 uppercase flex items-center">
+                                <i data-lucide="clipboard-check" class="w-4 h-4 mr-1.5"></i>Peritaje Físico de Entrada (Matriz)
+                            </label>
+                            <div class="flex gap-1">
+                                <button type="button" @click="setearTodos('Excelente')"
+                                        class="px-2 py-1 text-[10px] font-bold bg-emerald-100 text-emerald-700 rounded hover:bg-emerald-200 transition-colors">
+                                    Todo Excelente
+                                </button>
+                                <button type="button" @click="setearTodos('Bueno')"
+                                        class="px-2 py-1 text-[10px] font-bold bg-cyan-100 text-cyan-700 rounded hover:bg-cyan-200 transition-colors">
+                                    Todo Bueno
+                                </button>
+                                <button type="button" @click="setearTodos('Regular')"
+                                        class="px-2 py-1 text-[10px] font-bold bg-amber-100 text-amber-700 rounded hover:bg-amber-200 transition-colors">
+                                    Todo Regular
+                                </button>
+                                <button type="button" @click="setearTodos('Malo')"
+                                        class="px-2 py-1 text-[10px] font-bold bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors">
+                                    Todo Malo
+                                </button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-x-4 gap-y-3">
+                            {% for campo in ['pantalla', 'teclado', 'bateria', 'carcasa_superior', 'carcasa_inferior', 'touchpad', 'puertos', 'cargador'] %}
+                            <div class="flex flex-col">
+                                <span class="text-[9px] text-purple-500 font-bold uppercase mb-1 ml-1">{{ campo|replace('_', ' ') }}</span>
+                                <select name="{{ campo }}" class="text-xs px-2 py-1.5 bg-white border border-purple-100 rounded-lg outline-none focus:border-purple-400" required>
+                                    <option value="">Seleccionar...</option>
+                                    <template x-for="valor in valoresMatriz" :key="valor.nombre">
+                                        <option :value="valor.nombre" x-text="valor.nombre"></option>
+                                    </template>
+                                </select>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="flex items-center space-x-3 pt-2">
+                        <button type="button" @click="showRepForm = false"
+                            class="flex-1 px-4 py-2.5 bg-white border border-purple-200 text-purple-700 rounded-xl text-sm font-medium hover:bg-purple-50 transition-colors">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                            class="flex-1 px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-colors shadow-md">
+                            Confirmar y Pasar a Taller
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+        {% endif %}{# peritaje_hecho #}
+
+        {% else %}
+        {# Sin activo vinculado #}
+        <div class="bg-red-50 rounded-xl px-4 py-3 border border-red-200">
+            <p class="text-xs font-semibold text-red-700">
+                <i data-lucide="alert-triangle" class="w-4 h-4 inline mr-1"></i>
+                {% if es_reparacion %}
+                    Este ticket de reparación no tiene un equipo asociado. Contacta al administrador.
+                {% else %}
+                    Este ticket está marcado como falla pero no tiene un equipo vinculado.
+                    Editá el ticket y seleccioná el dispositivo afectado para iniciar el peritaje.
+                {% endif %}
+            </p>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Acciones de estado -->
+    <div class="border-t border-dark-100 pt-4">
+        <h4 class="text-sm font-semibold text-dark-700 mb-3">Cambiar Estado</h4>
+        
+        {% if ticket.tipo_ticket in ('reparacion', 'mantenimiento') and ticket.estado_rel.clave == 'en_progreso' %}
+        <!-- Acciones específicas para tickets de reparación/mantenimiento en progreso -->
+        <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 mb-4">
+            <p class="text-xs text-purple-700 mb-3 font-medium">
+                <i data-lucide="wrench" class="w-3.5 h-3.5 inline mr-1"></i>
+                Ticket de {{ 'reparación' if ticket.tipo_ticket == 'reparacion' else 'mantenimiento' }} en taller. Podés cambiar el estado según el progreso:
+            </p>
+            <div class="flex flex-wrap gap-2">
+                <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                    <input type="hidden" name="estado" value="en_espera">
+                    <button type="submit"
+                        class="flex items-center px-3 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-sm font-medium hover:bg-purple-100 transition-colors">
+                        <i data-lucide="pause-circle" class="w-4 h-4 mr-1.5"></i>En Espera
+                    </button>
+                </form>
+                <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                    <input type="hidden" name="estado" value="pendiente_proveedor">
+                    <button type="submit"
+                        class="flex items-center px-3 py-2 bg-pink-50 text-pink-700 border border-pink-200 rounded-xl text-sm font-medium hover:bg-pink-100 transition-colors">
+                        <i data-lucide="truck" class="w-4 h-4 mr-1.5"></i>Pendiente Proveedor
+                    </button>
+                </form>
+                <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                    <input type="hidden" name="estado" value="pendiente_usuario">
+                    <button type="submit"
+                        class="flex items-center px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-xl text-sm font-medium hover:bg-indigo-100 transition-colors">
+                        <i data-lucide="user-check" class="w-4 h-4 mr-1.5"></i>Pendiente Usuario
+                    </button>
+                </form>
+            </div>
+            
+            <!-- Botón para generar pedido de compra -->
+            <div class="mt-4 pt-4 border-t border-purple-200" x-data="{ showPedidoForm: false }">
+
+                <!-- Si ya hay un pedido vinculado, mostrar su estado -->
+                {% if ticket.get('pedido_compra') or ticket.get('pedido_id') %}
+                {% set pedido = ticket.get('pedido_compra', {}) %}
+                {% set p_estado = pedido.get('estado_rel', {}) if pedido else {} %}
+                {% set p_clave = p_estado.get('clave', 'borrador') %}
+                {% set p_nombre = p_estado.get('nombre', 'Borrador') %}
+                {% set p_id = pedido.get('id') %}
+                {% set p_styles = {
+                    'borrador': 'bg-gray-100 text-gray-700',
+                    'pendiente_aprobacion': 'bg-amber-100 text-amber-700',
+                    'aprobado': 'bg-emerald-100 text-emerald-700',
+                    'rechazado': 'bg-red-100 text-red-700',
+                    'en_compra': 'bg-blue-100 text-blue-700',
+                    'recibido': 'bg-teal-100 text-teal-700',
+                    'cancelado': 'bg-dark-100 text-dark-500'
+                } %}
+                <div class="mb-3 p-3 bg-purple-50 rounded-xl border border-purple-200">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-xs font-semibold text-purple-700 uppercase mb-1">Pedido de Compra</p>
+                            <p class="text-sm font-mono font-bold text-purple-900">{{ pedido.get('numero', '-') }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-lg {{ p_styles.get(p_clave, 'bg-gray-100 text-gray-700') }}">
+                                {{ p_nombre }}
+                            </span>
+                            <button onclick="openPedidoModal('{{ p_id }}')"
+                                    class="p-1.5 text-purple-500 hover:text-purple-700 hover:bg-purple-100 rounded-lg transition-colors"
+                                    title="Ver detalle del pedido">
+                                <i data-lucide="eye" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    {% if p_clave == 'pendiente_aprobacion' %}
+                    <p class="text-xs text-amber-600 mt-1.5">⏳ Esperando aprobación de administración</p>
+                    {% elif p_clave == 'rechazado' %}
+                    <p class="text-xs text-red-600 mt-1.5">❌ Pedido rechazado. Podés generar uno nuevo.</p>
+                    {% elif p_clave == 'aprobado' %}
+                    <p class="text-xs text-emerald-600 mt-1.5">✅ Aprobado. En proceso de compra.</p>
+                    {% elif p_clave == 'recibido' %}
+                    <p class="text-xs text-teal-600 mt-1.5">📦 Recibido. Podés cerrar el ticket.</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <button type="button" @click="showPedidoForm = !showPedidoForm"
+                    class="w-full flex items-center justify-center px-4 py-2.5 bg-purple-600 text-white rounded-xl text-sm font-semibold hover:bg-purple-700 transition-all shadow-sm">
+                    <i data-lucide="shopping-cart" class="w-4 h-4 mr-2"></i>
+                    Generar Pedido de Compra
+                </button>
+                
+                <!-- Formulario de pedido de compra — solo para insumos sin stock -->
+                <div x-show="showPedidoForm" x-transition class="mt-4 bg-white rounded-xl p-4 border border-purple-200" x-cloak>
+                    <form action="{{ url_for('soporte.generar_pedido_reparacion', ticket_id=ticket.id) }}" method="POST">
+                        <div class="space-y-3">
+                            <input type="hidden" name="tipo_pedido" value="insumo">
+                            <input type="hidden" name="insumo_id" id="pedido-insumo-id" value="">
+                            <input type="hidden" name="cantidad_solicitada" value="1">
+
+                            <!-- Insumo vinculado -->
+                            <div class="flex items-center gap-2 p-2.5 bg-amber-50 rounded-lg border border-amber-200">
+                                <i data-lucide="package" class="w-4 h-4 text-amber-600 shrink-0"></i>
+                                <p class="text-xs text-amber-700">
+                                    Pedido para: <strong id="pedido-insumo-nombre" class="text-amber-900"></strong>
+                                </p>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-purple-900 uppercase mb-1.5">Descripcion del Pedido</label>
+                                <textarea name="descripcion" rows="2" required placeholder="Ej: Pantalla 15.6 pulgadas para Lenovo ThinkPad..."
+                                    class="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none resize-none"></textarea>
+                            </div>
+
+                            <div>
+                                <label class="block text-[10px] font-bold text-purple-900 uppercase mb-1.5">Monto Estimado (opcional)</label>
+                                <input type="number" name="monto_estimado" step="0.01" min="0" placeholder="0.00"
+                                    class="w-full px-3 py-2 bg-white border border-purple-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 outline-none">
+                            </div>
+
+                            <div class="flex items-center space-x-2 pt-2">
+                                <button type="button" @click="showPedidoForm = false"
+                                    class="flex-1 px-3 py-2 bg-white border border-purple-200 text-purple-700 rounded-lg text-sm font-medium hover:bg-purple-50 transition-colors">
+                                    Cancelar
+                                </button>
+                                <button type="submit"
+                                    class="flex-1 px-3 py-2 bg-purple-600 text-white rounded-lg text-sm font-bold hover:bg-purple-700 transition-colors">
+                                    Crear Pedido
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Acciones estándar para todos los tickets -->
+        <div class="flex flex-wrap gap-2">
+            {% if ticket.estado_rel.clave == 'abierto' %}
+            <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                <input type="hidden" name="estado" value="en_progreso">
+                <button type="submit"
+                    class="flex items-center px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors">
+                    <i data-lucide="play" class="w-4 h-4 mr-1.5"></i>Iniciar Progreso
+                </button>
+            </form>
+            {% endif %}
+
+            {% if ticket.estado_rel.clave in ('abierto', 'en_progreso', 'en_espera', 'pendiente_usuario', 'pendiente_proveedor') %}
+            <div x-data="{ showRes: false }">
+                <button type="button" @click="showRes = !showRes"
+                    class="flex items-center px-4 py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-xl text-sm font-medium hover:bg-emerald-100 transition-colors">
+                    <i data-lucide="check-circle" class="w-4 h-4 mr-1.5"></i>Resolver
+                </button>
+                <div x-show="showRes" x-transition class="mt-3">
+                    <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST">
+                        <input type="hidden" name="estado" value="resuelto">
+                        <textarea name="resolucion" rows="2" placeholder="Describe la resolución..."
+                            class="w-full px-3 py-2 border border-dark-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 resize-none mb-2"></textarea>
+                        <button type="submit"
+                            class="px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors">
+                            Confirmar Resolución
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if ticket.estado_rel.clave in ('en_espera', 'pendiente_usuario', 'pendiente_proveedor') %}
+            <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                <input type="hidden" name="estado" value="en_progreso">
+                <button type="submit"
+                    class="flex items-center px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl text-sm font-medium hover:bg-amber-100 transition-colors">
+                    <i data-lucide="play" class="w-4 h-4 mr-1.5"></i>Reanudar Progreso
+                </button>
+            </form>
+            {% endif %}
+
+            {% if ticket.estado_rel.clave != 'cancelado' %}
+            <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                <input type="hidden" name="estado" value="cancelado">
+                <button type="submit"
+                    class="flex items-center px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors">
+                    <i data-lucide="x-circle" class="w-4 h-4 mr-1.5"></i>Cancelar
+                </button>
+            </form>
+            {% endif %}
+
+            {% if ticket.estado_rel.clave != 'abierto' and ticket.estado_rel.clave != 'cancelado' %}
+            <form action="/soporte/tickets/{{ ticket.id }}/estado" method="POST" class="inline">
+                <input type="hidden" name="estado" value="abierto">
+                <button type="submit"
+                    class="flex items-center px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl text-sm font-medium hover:bg-blue-100 transition-colors">
+                    <i data-lucide="rotate-ccw" class="w-4 h-4 mr-1.5"></i>Reabrir
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Eliminar -->
+    <div class="border-t border-dark-100 pt-4 mt-4">
+        <template x-if="!confirmDelete">
+            <button @click="confirmDelete = true" type="button"
+                class="flex items-center text-sm text-red-500 hover:text-red-700 transition-colors">
+                <i data-lucide="trash-2" class="w-4 h-4 mr-1.5"></i>Eliminar ticket
+            </button>
+        </template>
+        <template x-if="confirmDelete">
+            <div class="flex items-center space-x-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3" x-transition>
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-500 flex-shrink-0"></i>
+                <span class="text-sm text-red-700 flex-1">¿Eliminar este ticket permanentemente?</span>
+                <button @click="confirmDelete = false" type="button"
+                    class="px-3 py-1.5 text-xs font-medium text-dark-600 bg-white border border-dark-200 rounded-lg hover:bg-dark-50 transition-colors">
+                    No
+                </button>
+                <form action="/soporte/tickets/{{ ticket.id }}/eliminar" method="POST" class="inline">
+                    <button type="submit"
+                        class="px-3 py-1.5 text-xs font-medium text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors">
+                        Sí, eliminar
+                    </button>
+                </form>
+            </div>
+        </template>
+    </div>
+
+</div>

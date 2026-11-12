@@ -1,0 +1,186 @@
+﻿name: Run Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+      - '**'
+  # main también corre: su estado es el criterio de salida de F05
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Dependencias con uv desde backend/uv.lock y frontend/uv.lock (F03-P05). El Python sale del .python-version de
+# cada proyecto, el mismo que fijan las imágenes (F03-P06). Ruff y pip-audit van fijos acá (F05-P02).
+env:
+  UV_VERSION: "0.13.5"
+  RUFF_VERSION: "0.16.6"
+  PIP_AUDIT_VERSION: "2.10.1"
+
+jobs:
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      # La configuración está en el pyproject.toml de la raíz
+      - name: ruff check
+        run: uvx ruff@${{ env.RUFF_VERSION }} check --output-format github
+
+      - name: ruff format
+        run: uvx ruff@${{ env.RUFF_VERSION }} format --check --diff
+
+  audit:
+    name: Vulnerabilidades conocidas
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      # Las dependencias de producción tal como están en el lock, con hashes: pip-audit no instala nada
+      - name: pip-audit del backend
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --project backend -o /tmp/backend.txt
+          uvx pip-audit@${{ env.PIP_AUDIT_VERSION }} --disable-pip --require-hashes -r /tmp/backend.txt
+
+      - name: pip-audit del frontend
+        run: |
+          uv export --frozen --no-dev --no-emit-project --format requirements-txt --project frontend -o /tmp/frontend.txt
+          uvx pip-audit@${{ env.PIP_AUDIT_VERSION }} --disable-pip --require-hashes -r /tmp/frontend.txt
+
+  lock:
+    name: uv.lock al día
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Falla si el lock no corresponde al pyproject
+        run: |
+          uv lock --check --project backend
+          uv lock --check --project frontend
+
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: dicsys_core_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d dicsys_core_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: backend/.python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --group test --project backend
+
+      - name: Run backend tests
+        env:
+          APP_NAME: "Dicsys Core"
+          APP_VERSION: "test"
+          DEBUG: "false"
+          HOST: "0.0.0.0"
+          PORT: "6001"
+          RELOAD: "false"
+          SECRET_KEY: "test-secret"
+          JWT_SECRET_KEY: "test-jwt-secret-de-32-bytes-o-mas-para-hs256"
+          JWT_ALGORITHM: "HS256"
+          JWT_EXPIRE_MINUTES: "30"
+          DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/dicsys_core_test"
+          CORS_ORIGINS: '["http://testserver"]'
+          ENVIRONMENT: "testing"
+          STORAGE_LOCAL_PATH: "/tmp/dicsys-core-test/files"
+          LLM_STORAGE_PATH: "/tmp/dicsys-core-test/llm"
+        run: |
+          uv run --frozen --project backend pytest backend/tests -v -o cache_dir=/tmp/pytest_cache \
+            --cov=backend --cov-report=xml:cobertura-backend/coverage.xml --cov-report=html:cobertura-backend/html
+
+      - name: Cobertura como artefacto
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-backend
+          path: cobertura-backend/
+          if-no-files-found: ignore
+
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version-file: frontend/.python-version
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: frontend/uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen --group test --project frontend
+
+      - name: Run frontend tests
+        env:
+          TESTING: "true"
+          SECRET_KEY: "frontend-test-secret"
+          API_URL: "http://backend.test"
+        run: |
+          uv run --frozen --project frontend pytest frontend/tests -v -o cache_dir=/tmp/pytest_cache \
+            --cov=frontend --cov-report=xml:cobertura-frontend/coverage.xml --cov-report=html:cobertura-frontend/html
+
+      - name: Cobertura como artefacto
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: cobertura-frontend
+          path: cobertura-frontend/
+          if-no-files-found: ignore

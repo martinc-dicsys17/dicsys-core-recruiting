@@ -1,0 +1,50 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" onclick="document.getElementById('modal-editar').innerHTML = ''"></div>
+    <div class="bg-white rounded-2xl shadow-soft z-10 max-w-lg w-full border border-dark-100 overflow-hidden max-h-[90vh] overflow-y-auto">
+        <div class="px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-dark-900">Editar Parámetro</h3>
+            <button type="button" onclick="document.getElementById('modal-editar').innerHTML = ''" class="p-2 text-dark-400 hover:text-dark-600 hover:bg-dark-100 rounded-lg transition-colors"><i data-lucide="x" class="w-5 h-5"></i></button>
+        </div>
+        <form hx-post="{{ url_for('parametros.editar', id=p.id) }}" hx-target="#parametros-table" hx-swap="innerHTML" hx-include="#parametros-filtros" class="p-6 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Categoría *</label>
+                    <input type="text" name="categoria" required value="{{ p.categoria }}" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Subcategoría</label>
+                    <input type="text" name="subcategoria" value="{{ p.subcategoria or '' }}" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                <input type="text" name="nombre" required value="{{ p.nombre }}" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Key *</label>
+                <input type="text" name="key" required pattern="[a-z0-9][a-z0-9_.\-]*" value="{{ p.key }}" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                <p class="text-xs text-dark-400 mt-1">⚠️ Si el código ya consulta esta key, cambiarla rompe esa integración.</p>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Descripción</label>
+                <textarea name="descripcion" rows="2" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all resize-none">{{ p.descripcion or '' }}</textarea>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Valor por defecto</label>
+                    <input type="text" name="valor_default" value="{{ p.valor_default or '' }}" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Valor</label>
+                    <input type="text" name="valor" value="{{ p.valor or '' }}" class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+            </div>
+            <div class="flex space-x-3 pt-4">
+                <button type="button" onclick="document.getElementById('modal-editar').innerHTML = ''" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+                <button type="submit" class="flex-1 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                    <i data-lucide="check" class="w-4 h-4 inline mr-2"></i>Guardar Cambios
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

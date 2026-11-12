@@ -1,0 +1,309 @@
+{% extends "core/base.html" %}
+
+{% block title %}Tareas programadas - {{ config.APP_NAME }}{% endblock %}
+
+{% macro th(texto, extra='') -%}
+<th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase whitespace-nowrap {{ extra }}">{{ texto }}</th>
+{%- endmacro %}
+
+{% block content %}
+{# Estado del motor de tareas (F19). El horario se edita en Parámetros, no acá. #}
+{% set url_parametros = url_for('parametros.listar', categoria='Tareas programadas') %}
+<div class="animate-fade-in"
+     x-data="tareasProgramadas({api: '{{ url_for('tareas.listar') }}/api', tab: '{{ tab }}'})">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-dark-900 mb-1">Tareas programadas</h1>
+            <p class="text-dark-500">Qué corre solo y cuándo (hora Argentina), cómo le fue y qué quedó en la cola de envíos</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button type="button" @click="cargar()" :disabled="cargando" title="Recargar" aria-label="Recargar"
+                    class="p-2.5 rounded-xl bg-white border border-dark-200 text-dark-600 hover:border-primary-400 hover:text-primary-600 disabled:opacity-50">
+                <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+            <a href="{{ url_parametros }}"
+               class="flex items-center px-4 py-2.5 bg-white border border-dark-200 text-dark-700 rounded-xl hover:border-primary-400 hover:text-primary-600 font-medium text-sm">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4 mr-2"></i>Configurar en Parámetros
+            </a>
+        </div>
+    </div>
+
+    <div x-show="datos && !datos.alertas_configuradas" x-cloak
+         class="mb-6 rounded-2xl bg-amber-50 border border-amber-200 p-4 flex items-start gap-3 text-sm text-amber-900">
+        <i data-lucide="bell-off" class="w-5 h-5 flex-shrink-0 text-amber-600"></i>
+        <p>Falta el room de alertas: si una tarea falla, nadie se entera. Cargá el ID del room de Webex en
+            <a href="{{ url_parametros }}" class="font-semibold underline">Parámetros → Tareas programadas → Alertas</a>
+            (<code x-text="datos?.parametro_alertas"></code>). El bot tiene que estar en el room.</p>
+    </div>
+
+    <div x-show="error" x-cloak class="mb-6 p-4 rounded-xl bg-red-50 text-red-800 border border-red-200" x-text="error"></div>
+
+    <!-- Pestañas, con el estilo de /perfil -->
+    <div class="bg-white rounded-2xl border border-dark-100 mb-6 overflow-hidden">
+        <div class="flex border-b border-dark-100 overflow-x-auto" role="tablist">
+            {% for clave, etiqueta, icono in [('tareas', 'Tareas', 'alarm-clock'), ('historial', 'Historial', 'history'), ('envios', 'Envíos', 'send')] %}
+            <button type="button" role="tab" @click="cambiarPestana('{{ clave }}')" :aria-selected="tab === '{{ clave }}'"
+                    class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                    :class="tab === '{{ clave }}' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                <i data-lucide="{{ icono }}" class="w-4 h-4 mr-2"></i>{{ etiqueta }}
+                <span x-show="tab === '{{ clave }}'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+            </button>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ═══ Tareas ═══ -->
+    <section x-show="tab === 'tareas'" class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead><tr class="bg-dark-50 border-b border-dark-100">
+                {{ th('Tarea') }}{{ th('Horario') }}{{ th('Última corrida') }}{{ th('Próxima') }}<th class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+            </tr></thead>
+            <tbody class="divide-y divide-dark-100">
+                <template x-for="t in (datos?.tareas || [])" :key="t.codigo">
+                    <tr class="align-top hover:bg-dark-50/50">
+                        <td class="px-4 py-3 min-w-[12rem]">
+                            <p class="font-semibold text-dark-900" x-text="t.nombre"></p>
+                            <p class="text-xs text-dark-400" x-text="t.modulo"></p>
+                            <p x-show="t.descripcion" class="text-xs text-dark-500 mt-1" x-text="t.descripcion"></p>
+                        </td>
+                        <td class="px-4 py-3 min-w-[9rem]">
+                            <template x-if="t.continua">
+                                <span class="text-dark-600">Continua: la decide su módulo</span>
+                            </template>
+                            <template x-if="!t.continua">
+                                <div>
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-lg"
+                                          :class="t.activa ? 'bg-emerald-100 text-emerald-700' : 'bg-dark-100 text-dark-500'"
+                                          x-text="t.activa ? 'Activa' : 'Apagada'"></span>
+                                    <p x-show="t.horario_texto" class="text-dark-700 mt-1" x-text="t.horario_texto"></p>
+                                    <p x-show="t.horario_error" class="text-red-600 text-xs mt-1" x-text="t.horario_error"></p>
+                                </div>
+                            </template>
+                        </td>
+                        <td class="px-4 py-3 min-w-[12rem]">
+                            <template x-if="!t.ultima"><span class="text-dark-400">Nunca corrió</span></template>
+                            <template x-if="t.ultima">
+                                <div>
+                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-lg" :class="claseEstado(t.ultima.estado)"
+                                          x-text="textoEstado(t.ultima.estado)"></span>
+                                    <span class="text-xs text-dark-500 ml-1" x-text="fecha(t.ultima.inicio || t.ultima.creada_at)"></span>
+                                    <p class="text-xs mt-1 break-words" :class="t.ultima.error ? 'text-red-600' : 'text-dark-500'"
+                                       x-text="recortar(t.ultima.error || t.ultima.resultado, 140)"></p>
+                                </div>
+                            </template>
+                        </td>
+                        <td class="px-4 py-3 whitespace-nowrap text-dark-600" x-text="t.continua ? 'Cada minuto' : (t.proxima ? fecha(t.proxima) : '—')"></td>
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <button type="button" @click="ejecutar(t)" :disabled="t.en_curso || pidiendo === t.codigo"
+                                    class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg border border-dark-200 text-dark-700 hover:border-primary-400 hover:text-primary-600 disabled:opacity-50"
+                                    x-text="t.en_curso ? 'Corriendo…' : 'Ejecutar ahora'"></button>
+                        </td>
+                    </tr>
+                </template>
+            </tbody>
+        </table>
+        <p x-show="datos && !datos.tareas.length" class="px-6 py-10 text-center text-dark-500">No hay tareas registradas.</p>
+    </section>
+
+    <!-- ═══ Historial ═══ -->
+    <section x-show="tab === 'historial'" x-cloak class="space-y-4">
+        <div class="flex flex-wrap gap-3">
+            <select x-model="filtros.tarea" @change="cargarHistorial()" aria-label="Tarea" class="px-3 py-2 bg-white border border-dark-200 rounded-xl text-sm">
+                <option value="">Todas las tareas</option>
+                <template x-for="t in (datos?.tareas || [])" :key="t.codigo"><option :value="t.codigo" x-text="t.nombre"></option></template>
+            </select>
+            <select x-model="filtros.estado" @change="cargarHistorial()" aria-label="Estado" class="px-3 py-2 bg-white border border-dark-200 rounded-xl text-sm">
+                <option value="">Todos los estados</option>
+                <option value="ok">OK</option><option value="error">Con error</option>
+                <option value="en_curso">Corriendo</option><option value="pendiente">Pedida</option>
+            </select>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-dark-50 border-b border-dark-100">
+                    {{ th('Fecha') }}{{ th('Tarea') }}{{ th('Disparo') }}{{ th('Estado') }}{{ th('Duración') }}{{ th('Resultado') }}
+                </tr></thead>
+                <tbody class="divide-y divide-dark-100">
+                    <template x-for="c in corridas" :key="c.id">
+                        <tr class="align-top">
+                            <td class="px-4 py-3 whitespace-nowrap text-dark-600" x-text="fecha(c.inicio || c.creada_at)"></td>
+                            <td class="px-4 py-3 font-medium text-dark-900" x-text="c.nombre"></td>
+                            <td class="px-4 py-3 text-dark-600">
+                                <span x-text="c.disparo === 'manual' ? 'A mano' : 'Programada'"></span>
+                                <span x-show="c.disparo === 'manual' && c.solicitada_por" class="block text-xs text-dark-400" x-text="c.solicitada_por"></span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-lg" :class="claseEstado(c.estado)" x-text="textoEstado(c.estado)"></span>
+                                <span x-show="c.alerta_enviada" class="block text-xs text-dark-400 mt-1">Alerta enviada</span>
+                            </td>
+                            <td class="px-4 py-3 whitespace-nowrap text-dark-600" x-text="duracion(c)"></td>
+                            <td class="px-4 py-3 min-w-[18rem]">
+                                <p class="text-xs whitespace-pre-line break-words" :class="c.error ? 'text-red-600' : 'text-dark-600'"
+                                   x-text="c.error || c.resultado || '—'"></p>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <p x-show="!corridas.length" class="px-6 py-10 text-center text-dark-500">Sin corridas para estos filtros.</p>
+        </div>
+    </section>
+
+    <!-- ═══ Envíos ═══ -->
+    <section x-show="tab === 'envios'" x-cloak class="space-y-4">
+        <div class="flex flex-wrap gap-3">
+            <select x-model="filtros.envio" @change="cargarEnvios()" aria-label="Estado del envío" class="px-3 py-2 bg-white border border-dark-200 rounded-xl text-sm">
+                <option value="">Todos</option>
+                <option value="pendiente">En cola</option><option value="enviado">Enviados</option><option value="error">Con error</option>
+            </select>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead><tr class="bg-dark-50 border-b border-dark-100">
+                    {{ th('Fecha') }}{{ th('Origen') }}{{ th('Destino') }}{{ th('Asunto') }}{{ th('Estado') }}<th class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+                </tr></thead>
+                <tbody class="divide-y divide-dark-100">
+                    <template x-for="e in envios" :key="e.id">
+                        <tr class="align-top">
+                            <td class="px-4 py-3 whitespace-nowrap text-dark-600" x-text="fecha(e.enviado_at || e.creada_at)"></td>
+                            <td class="px-4 py-3 text-dark-600" x-text="e.origen"></td>
+                            <td class="px-4 py-3">
+                                <p class="text-dark-800" x-text="CANALES[e.canal] || e.canal"></p>
+                                <p class="text-xs text-dark-400 break-all" x-text="e.destino"></p>
+                            </td>
+                            <td class="px-4 py-3 text-dark-700" x-text="e.asunto || '—'"></td>
+                            <td class="px-4 py-3 min-w-[12rem]">
+                                <span class="px-2 py-0.5 text-xs font-semibold rounded-lg" :class="claseEnvio(e.estado)" x-text="textoEnvio(e)"></span>
+                                <p x-show="e.error" class="text-xs text-red-600 mt-1 break-words" x-text="e.error"></p>
+                                <p x-show="e.proximo_intento_at" class="text-xs text-dark-400 mt-1" x-text="'Próximo intento: ' + fecha(e.proximo_intento_at)"></p>
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <button type="button" x-show="e.estado === 'error'" @click="reintentar(e)"
+                                        class="px-3 py-1.5 text-sm font-medium rounded-lg border border-dark-200 text-dark-700 hover:border-primary-400 hover:text-primary-600">Reintentar</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            <p x-show="!envios.length" class="px-6 py-10 text-center text-dark-500">No hay envíos para este filtro.</p>
+        </div>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function tareasProgramadas({api, tab = 'tareas'}) {
+    return {
+        CANALES: {email: 'Email', webex_personal: 'Webex personal', webex_room: 'Webex en room'},
+        tab,
+        datos: null,
+        corridas: [],
+        envios: [],
+        filtros: {tarea: '', estado: '', envio: ''},
+        cargando: false,
+        pidiendo: null,
+        error: null,
+        _reloj: null,
+
+        async init() {
+            await this.cargar();
+        },
+        async pedir(ruta, opciones = {}) {
+            const r = await fetch(`${api}${ruta}`, {headers: {'Accept': 'application/json'}, ...opciones});
+            const cuerpo = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(cuerpo.detail || 'Error en tareas programadas');
+            return cuerpo;
+        },
+        async cargar() {
+            this.cargando = true;
+            this.error = null;
+            try {
+                this.datos = await this.pedir('');
+                if (this.tab === 'historial') await this.cargarHistorial();
+                if (this.tab === 'envios') await this.cargarEnvios();
+            } catch (e) {
+                this.error = e.message;
+            }
+            this.cargando = false;
+            this.$nextTick(() => lucide.createIcons());
+            this.seguirSiHaceFalta();
+        },
+        // Mientras algo corre, la pantalla se refresca sola
+        seguirSiHaceFalta() {
+            clearTimeout(this._reloj);
+            if ((this.datos?.tareas || []).some(t => t.en_curso)) this._reloj = setTimeout(() => this.cargar(), 5000);
+        },
+        async cambiarPestana(nombre) {
+            this.tab = nombre;
+            if (nombre === 'historial') await this.cargarHistorial();
+            if (nombre === 'envios') await this.cargarEnvios();
+        },
+        consulta(pares) {
+            const params = new URLSearchParams(Object.entries(pares).filter(([, v]) => v));
+            return params.toString() ? `?${params}` : '';
+        },
+        async cargarHistorial() {
+            try {
+                this.corridas = await this.pedir(`/corridas${this.consulta({tarea: this.filtros.tarea, estado: this.filtros.estado})}`);
+            } catch (e) { this.error = e.message; }
+        },
+        async cargarEnvios() {
+            try {
+                this.envios = await this.pedir(`/envios${this.consulta({estado: this.filtros.envio})}`);
+            } catch (e) { this.error = e.message; }
+        },
+        async ejecutar(tarea) {
+            if (!globalThis.confirm(`¿Ejecutar «${tarea.nombre}» ahora? Corre en unos segundos, en segundo plano.`)) return;
+            this.pidiendo = tarea.codigo;
+            try {
+                await this.pedir(`/${tarea.codigo}/ejecutar`, {method: 'POST'});
+                Alpine.store('toasts').success(`«${tarea.nombre}» pedida: corre en unos segundos`);
+                await this.cargar();
+            } catch (e) {
+                this.error = e.message;
+            }
+            this.pidiendo = null;
+        },
+        async reintentar(envio) {
+            try {
+                await this.pedir(`/envios/${envio.id}/reintentar`, {method: 'POST'});
+                Alpine.store('toasts').success('Vuelve a la cola');
+                await this.cargarEnvios();
+            } catch (e) { this.error = e.message; }
+        },
+
+        fecha(valor) {
+            if (!valor) return '—';
+            const d = new Date(valor);
+            return isNaN(d) ? valor : d.toLocaleString('es-AR', {timeZone: 'America/Argentina/Buenos_Aires',
+                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'});
+        },
+        duracion(corrida) {
+            if (!corrida.inicio || !corrida.fin) return corrida.estado === 'en_curso' ? 'Corriendo…' : '—';
+            const segundos = Math.max(0, Math.round((new Date(corrida.fin) - new Date(corrida.inicio)) / 1000));
+            return segundos < 60 ? `${segundos} s` : `${Math.floor(segundos / 60)} min ${segundos % 60} s`;
+        },
+        recortar(texto, largo) {
+            if (!texto) return '';
+            return texto.length > largo ? `${texto.slice(0, largo)}…` : texto;
+        },
+        textoEstado(estado) {
+            return {ok: 'OK', error: 'Con error', en_curso: 'Corriendo', pendiente: 'Pedida'}[estado] || estado;
+        },
+        claseEstado(estado) {
+            return {ok: 'bg-emerald-100 text-emerald-700', error: 'bg-red-100 text-red-700',
+                    en_curso: 'bg-primary-100 text-primary-700', pendiente: 'bg-amber-100 text-amber-700'}[estado] || 'bg-dark-100 text-dark-600';
+        },
+        textoEnvio(envio) {
+            const base = {pendiente: 'En cola', enviado: 'Enviado', error: 'Con error'}[envio.estado] || envio.estado;
+            return envio.intentos > 1 || (envio.estado !== 'enviado' && envio.intentos) ? `${base} · ${envio.intentos} intento(s)` : base;
+        },
+        claseEnvio(estado) {
+            return {pendiente: 'bg-amber-100 text-amber-700', enviado: 'bg-emerald-100 text-emerald-700',
+                    error: 'bg-red-100 text-red-700'}[estado] || 'bg-dark-100 text-dark-600';
+        },
+    };
+}
+</script>
+{% endblock %}

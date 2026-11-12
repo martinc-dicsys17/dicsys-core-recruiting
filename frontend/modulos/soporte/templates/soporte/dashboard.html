@@ -1,0 +1,109 @@
+{% extends "core/base.html" %}
+
+{% block title %}Centro de Mando IT - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in bg-[#f8f9fa] min-h-screen p-6 rounded-2xl border border-dark-100" x-data="dashboardManager()">
+
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-dark-900 mb-1 tracking-tight">Centro de Mando IT</h1>
+        <p class="text-dark-500 font-medium">Gestión Proactiva de Activos y Tickets 🛠️</p>
+    </div>
+
+    <!-- Contenedor HTMX -->
+    <div id="dashboard-metrics-container" 
+         hx-get="{{ url_for('soporte.dashboard_metrics_partial') }}" 
+         hx-trigger="load" 
+         hx-swap="innerHTML"
+         hx-on::after-swap="if (typeof lucide !== 'undefined') { lucide.createIcons(); }">
+        <!-- Loader Skeleton -->
+        <div class="animate-pulse flex flex-col space-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div class="bg-white h-[140px] rounded-2xl border border-dark-100 shadow-sm"></div>
+                <div class="bg-white h-[140px] rounded-2xl border border-dark-100 shadow-sm"></div>
+                <div class="bg-white h-[140px] rounded-2xl border border-dark-100 shadow-sm"></div>
+                <div class="bg-white h-[140px] rounded-2xl border border-dark-100 shadow-sm"></div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="bg-white h-64 rounded-2xl border border-dark-100 shadow-sm"></div>
+                    <div class="bg-white h-64 rounded-2xl border border-dark-100 shadow-sm"></div>
+                </div>
+                <div>
+                    <div class="bg-white h-96 rounded-2xl border border-dark-100 shadow-sm"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    if (typeof lucide !== 'undefined') { lucide.createIcons(); }
+
+    window.dashboardManager = function () {
+        return {
+            showHistorialModal: false,
+            activoId: null,
+            activoNombre: '',
+            usuarios_lista: [],
+            form_aud: { tipo_evento: 'Mantenimiento Preventivo', colaborador_id: '' },
+            async init() {
+                try {
+                    const response = await fetch('/soporte/usuarios-lista');
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.usuarios_lista = data.usuarios || [];
+                    }
+                } catch (error) { }
+            },
+            showNotification(message, type = 'success') {
+                Alpine.store('toasts').add(message, type);
+            },
+            openHistorialModal(id, name) {
+                this.activoId = id; this.activoNombre = name;
+                this.form_aud.tipo_evento = 'Mantenimiento Preventivo';
+                this.showHistorialModal = true;
+                this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+            },
+            openReparacionModal(id, name) {
+                this.activoId = id; this.activoNombre = name;
+                this.form_aud.tipo_evento = 'Reparacion';
+                this.showHistorialModal = true;
+                this.$nextTick(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); });
+            },
+            async notificarMantenimiento(id, name) {
+                try {
+                    const response = await fetch(`/api/v1/soporte/mantenimiento/${id}/cambiar-estado`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            estado_nuevo: 'primer_aviso',
+                            notas: 'Notificación enviada al colaborador'
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        this.showNotification(`Notificación enviada a ${name}. Estado: Esperando Confirmación`, 'success');
+                        // Recargar solo la tabla de mantenimientos sin recargar toda la página
+                        const metricsContainer = document.querySelector('[hx-get*="dashboard_metrics"]');
+                        if (metricsContainer) {
+                            htmx.ajax('GET', metricsContainer.getAttribute('hx-get'), {target: metricsContainer, swap: 'innerHTML'});
+                        }
+                    } else {
+                        const errorData = await response.json();
+                        this.showNotification(`Error: ${errorData.detail || 'No se pudo enviar la notificación'}`, 'error');
+                    }
+                } catch (error) {
+                    this.showNotification('Error al enviar notificación', 'error');
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}

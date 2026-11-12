@@ -1,0 +1,15 @@
+{% extends "core/base.html" %}
+
+{% block title %}No se puede entrar - {{ config.APP_NAME }}{% endblock %}
+
+{% block public_content %}
+<div class="min-h-screen flex items-center justify-center bg-dark-50 px-4">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-soft p-8 border border-dark-100 text-center">
+        <img src="{{ url_for('static', filename='logo-dicsys-ai-blanco.svg') }}" alt="Dicsys" class="h-12 mx-auto mb-6 rounded-lg bg-primary-600 p-2">
+        <h1 class="text-xl font-bold text-dark-900 mb-2">No se puede entrar con Dicsys Core</h1>
+        <p class="text-dark-600 mb-4">{{ descripcion or 'El pedido de ingreso no es válido.' }}</p>
+        {% if error %}<p class="text-xs text-dark-400">Código: {{ error }}</p>{% endif %}
+        <a href="{{ url_for('core.login') }}" class="mt-6 inline-block text-primary-600 hover:text-primary-700 font-medium">Ir a Dicsys Core</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "core/base.html" %}
+
+{% block title %}Webex - Cuenta lectora - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg mx-auto mt-16">
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+        {% if ok %}
+        <div class="mx-auto w-14 h-14 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+            </svg>
+        </div>
+        <h1 class="mt-4 text-xl font-bold text-gray-900">Cuenta lectora conectada</h1>
+        <p class="mt-2 text-gray-500">
+            {% if email %}Webex quedó autorizado con la cuenta <span class="font-medium text-gray-700">{{ email }}</span>.{% else %}La integración de Webex quedó autorizada.{% endif %}
+            Ya se puede leer el canal de presentaciones para generar los saludos.
+        </p>
+        {% else %}
+        <div class="mx-auto w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </div>
+        <h1 class="mt-4 text-xl font-bold text-gray-900">No se pudo conectar la cuenta</h1>
+        <p class="mt-2 text-gray-500">{{ detalle }}</p>
+        {% endif %}
+
+        <a href="{{ url_for('notificaciones.cumpleanos') }}"
+           class="mt-6 inline-flex items-center px-4 py-2 text-sm font-medium rounded-lg text-white bg-indigo-600 hover:bg-indigo-700 transition-colors">
+            Volver a Notificaciones
+        </a>
+    </div>
+</div>
+{% endblock %}

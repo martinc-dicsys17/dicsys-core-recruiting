@@ -1,0 +1,541 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ item.empleado }} - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto animate-fade-in"
+     x-data="{
+        mainTab: 'datos', subTab: 'personal', showFoto: false,
+        showMore: false,
+        windowWidth: window.innerWidth,
+        get visibleCount() {
+            if (this.windowWidth >= 1536) return 6;
+            if (this.windowWidth >= 1280) return 4;
+            if (this.windowWidth >= 1024) return 3;
+            if (this.windowWidth >= 768) return 2;
+            return 1;
+        },
+        isHidden(idx) { return idx >= this.visibleCount; },
+        isActive(m, s) { return this.mainTab === m && this.subTab === s; },
+        activeHidden() {
+            const tabs = [
+                ['datos','personal'],['datos','laboral'],['datos','direccion'],
+                ['contactos','emergencia'],['contactos','ocasiones'],['documentos','recibos']
+            ];
+            const idx = tabs.findIndex(t => t[0] === this.mainTab && t[1] === this.subTab);
+            return idx >= this.visibleCount;
+        }
+     }"
+     x-init="window.addEventListener('resize', () => { windowWidth = window.innerWidth })"
+     @open-foto-modal.window="showFoto = true"
+     @click.outside="showMore = false">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div class="flex items-center">
+            <a href="{{ url_for('nomina.empleados_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div class="w-28 h-28 rounded-full overflow-hidden border-2 border-dark-200 mr-4 flex-shrink-0 cursor-pointer" 
+                 @click="$dispatch('open-foto-modal')">
+                <img src="{{ (item.foto_thumbnail or item.foto)|storage_url or '/static/profesional.svg' }}" alt="Foto" class="w-full h-full object-cover">
+            </div>
+            <div>
+                <h1 class="text-2xl font-bold text-dark-900">{{ item.empleado }}</h1>
+                <div class="flex items-center gap-3 mt-1">
+                    <span class="text-dark-500 text-sm">{{ item.codigo }}</span>
+                    <span class="text-dark-300">·</span>
+                    <span class="text-dark-500 text-sm font-mono">{{ item.cuil }}</span>
+                    <span class="text-dark-300">·</span>
+                    {% if item.activo %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg">Activo</span>
+                    {% else %}
+                    <span class="px-2.5 py-0.5 text-xs font-semibold bg-red-100 text-red-700 rounded-lg">Inactivo</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <a href="{{ url_for('nomina.empleados_edit', id=item.id) }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="edit-2" class="w-4 h-4 mr-2"></i>Editar
+        </a>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="bg-white rounded-2xl border border-dark-100 mb-6 overflow-visible shadow-sm relative">
+        <div class="flex gap-1 p-2 bg-gradient-to-b from-dark-50 to-white">
+            <!-- Datos Personales (idx 0) -->
+            <button type="button" @click="mainTab = 'datos'; subTab = 'personal'"
+                    x-show="!isHidden(0)"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap flex-1"
+                    :class="isActive('datos','personal') ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                <i data-lucide="user" class="w-4 h-4"></i>
+                <span>Datos Personales</span>
+            </button>
+
+            <!-- Datos Laborales (idx 1) -->
+            <button type="button" @click="mainTab = 'datos'; subTab = 'laboral'"
+                    x-show="!isHidden(1)"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap flex-1"
+                    :class="isActive('datos','laboral') ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                <i data-lucide="briefcase" class="w-4 h-4"></i>
+                <span>Datos Laborales</span>
+            </button>
+
+            <!-- Dirección Laboral (idx 2) -->
+            <button type="button" @click="mainTab = 'datos'; subTab = 'direccion'"
+                    x-show="!isHidden(2)"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap flex-1"
+                    :class="isActive('datos','direccion') ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                <i data-lucide="map-pin" class="w-4 h-4"></i>
+                <span>Dirección Laboral</span>
+            </button>
+
+            <!-- Contacto de Emergencia (idx 3) -->
+            <button type="button" @click="mainTab = 'contactos'; subTab = 'emergencia'"
+                    x-show="!isHidden(3)"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap flex-1"
+                    :class="isActive('contactos','emergencia') ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                <span>Contacto de Emergencia</span>
+            </button>
+
+            <!-- Ocasiones Especiales (idx 4) -->
+            <button type="button" @click="mainTab = 'contactos'; subTab = 'ocasiones'"
+                    x-show="!isHidden(4)"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap flex-1"
+                    :class="isActive('contactos','ocasiones') ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                <i data-lucide="gift" class="w-4 h-4"></i>
+                <span>Ocasiones Especiales</span>
+            </button>
+
+            <!-- Recibos (idx 5) -->
+            <button type="button" @click="mainTab = 'documentos'; subTab = 'recibos'"
+                    x-show="!isHidden(5)"
+                    class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap flex-1"
+                    :class="isActive('documentos','recibos') ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+                <span>Recibos</span>
+            </button>
+
+            <!-- Dropdown "Más" (visible cuando hay tabs ocultos) -->
+            <div x-show="visibleCount < 6" class="relative flex-shrink-0">
+                <button type="button" @click.stop="showMore = !showMore"
+                        class="flex items-center justify-center gap-1.5 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 whitespace-nowrap"
+                        :class="activeHidden() ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white shadow-md' : 'text-dark-600 hover:bg-white hover:shadow-sm'">
+                    <i data-lucide="more-horizontal" class="w-4 h-4"></i>
+                    <span>Más</span>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5"></i>
+                </button>
+                <div x-show="showMore" x-cloak x-transition
+                     @click.stop
+                     class="absolute right-0 top-full mt-1 w-60 bg-white border border-dark-100 rounded-xl shadow-lg z-20 py-1.5">
+                    <button type="button" x-show="isHidden(0)"
+                            @click="mainTab='datos'; subTab='personal'; showMore=false"
+                            :class="isActive('datos','personal') ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg mx-1">
+                        <i data-lucide="user" class="w-4 h-4"></i><span>Datos Personales</span>
+                    </button>
+                    <button type="button" x-show="isHidden(1)"
+                            @click="mainTab='datos'; subTab='laboral'; showMore=false"
+                            :class="isActive('datos','laboral') ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg mx-1">
+                        <i data-lucide="briefcase" class="w-4 h-4"></i><span>Datos Laborales</span>
+                    </button>
+                    <button type="button" x-show="isHidden(2)"
+                            @click="mainTab='datos'; subTab='direccion'; showMore=false"
+                            :class="isActive('datos','direccion') ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg mx-1">
+                        <i data-lucide="map-pin" class="w-4 h-4"></i><span>Dirección Laboral</span>
+                    </button>
+                    <button type="button" x-show="isHidden(3)"
+                            @click="mainTab='contactos'; subTab='emergencia'; showMore=false"
+                            :class="isActive('contactos','emergencia') ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg mx-1">
+                        <i data-lucide="alert-circle" class="w-4 h-4"></i><span>Contacto de Emergencia</span>
+                    </button>
+                    <button type="button" x-show="isHidden(4)"
+                            @click="mainTab='contactos'; subTab='ocasiones'; showMore=false"
+                            :class="isActive('contactos','ocasiones') ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg mx-1">
+                        <i data-lucide="gift" class="w-4 h-4"></i><span>Ocasiones Especiales</span>
+                    </button>
+                    <button type="button" x-show="isHidden(5)"
+                            @click="mainTab='documentos'; subTab='recibos'; showMore=false"
+                            :class="isActive('documentos','recibos') ? 'bg-primary-50 text-primary-700' : 'text-dark-700 hover:bg-dark-50'"
+                            class="w-full flex items-center gap-2.5 px-3 py-2 text-sm rounded-lg mx-1">
+                        <i data-lucide="file-text" class="w-4 h-4"></i><span>Recibos</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 1: DATOS PERSONALES ==================== -->
+    <div x-show="mainTab === 'datos' && subTab === 'personal'" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+        <!-- Datos Básicos -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="user" class="w-5 h-5 mr-2 text-primary-500"></i>
+                    Datos Básicos
+                </h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Código</p>
+                    <p class="text-dark-900 font-medium">{{ item.codigo }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">CUIL</p>
+                    <p class="text-dark-900 font-medium font-mono">{{ item.cuil }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">DNI</p>
+                    <p class="text-dark-900 font-medium">{{ item.dni or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Apellido</p>
+                    <p class="text-dark-900 font-medium">{{ item.apellido }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Nombre</p>
+                    <p class="text-dark-900 font-medium">{{ item.nombre }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Fecha Nacimiento</p>
+                    <p class="text-dark-900 font-medium">{{ item.fecha_nacimiento or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Edad</p>
+                    <p class="text-dark-900 font-medium">{{ item.edad }} años</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Género</p>
+                    <p class="text-dark-900 font-medium">{{ item.genero or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Nacionalidad</p>
+                    <p class="text-dark-900 font-medium">{{ item.nacionalidad or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Estado Civil</p>
+                    <p class="text-dark-900 font-medium">{{ item.estado_civil or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Nivel de Estudio</p>
+                    <p class="text-dark-900 font-medium">{{ item.nivel_estudio or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Carrera</p>
+                    <p class="text-dark-900 font-medium">{{ item.carrera_nombre or '-' }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Contacto Personal -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="phone" class="w-5 h-5 mr-2 text-primary-500"></i>
+                    Contacto Personal
+                </h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Teléfono Personal</p>
+                    <p class="text-dark-900 font-medium">{{ item.telefono_personal or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Email Personal</p>
+                    <p class="text-dark-900 font-medium">{{ item.email_personal or '-' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 2: DATOS LABORALES ==================== -->
+    <div x-show="mainTab === 'datos' && subTab === 'laboral'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="briefcase" class="w-5 h-5 mr-2 text-primary-500"></i>
+                    Datos Laborales
+                </h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Fecha Alta</p>
+                    <p class="text-dark-900 font-medium">{{ item.fecha_alta or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Antigüedad</p>
+                    <p class="text-dark-900 font-medium">{{ item.antiguedad }} años</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Email Corporativo</p>
+                    <p class="text-dark-900 font-medium">{{ item.email_corporativo or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Email Secundario (de la cuenta)</p>
+                    <p class="text-dark-900 font-medium">{{ item.email_secundario or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Departamento</p>
+                    <p class="text-dark-900 font-medium">{{ item.departamento_nombre or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Perfil</p>
+                    <p class="text-dark-900 font-medium">{{ item.perfil_nombre or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Puesto</p>
+                    <p class="text-dark-900 font-medium">{{ item.puesto or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Seniority</p>
+                    {% if item.seniority %}
+                    <span class="px-2.5 py-1 text-xs font-medium bg-primary-50 text-primary-700 rounded-lg">{{ item.seniority }}</span>
+                    {% else %}
+                    <p class="text-dark-900 font-medium">-</p>
+                    {% endif %}
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">HRBP</p>
+                    <p class="text-dark-900 font-medium">{{ item.hrbp_nombre or '-' }}</p>
+                </div>
+                {% if item.fecha_baja %}
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Fecha Baja</p>
+                    <p class="text-red-600 font-medium">{{ item.fecha_baja }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Motivo Baja</p>
+                    <p class="text-red-600 font-medium">{{ item.motivo_baja or '-' }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 3: DIRECCIÓN LABORAL ==================== -->
+    <div x-show="mainTab === 'datos' && subTab === 'direccion'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="map-pin" class="w-5 h-5 mr-2 text-primary-500"></i>
+                    Dirección Laboral
+                </h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">País</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_pais or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Provincia</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_provincia or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Localidad</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_localidad or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Código Postal</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_codigo_postal or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Barrio</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_barrio or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Calle</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_calle or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Número</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_numero or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Piso</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_piso or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Departamento</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_laboral_departamento or '-' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 4: CONTACTO DE EMERGENCIA ==================== -->
+    <div x-show="mainTab === 'contactos' && subTab === 'emergencia'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="alert-circle" class="w-5 h-5 mr-2 text-red-500"></i>
+                    Contacto de Emergencia
+                </h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Nombre Contacto</p>
+                    <p class="text-dark-900 font-medium">{{ item.contacto_emergencia or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Teléfono Emergencia</p>
+                    <p class="text-dark-900 font-medium">{{ item.numero_emergencia or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Parentesco</p>
+                    <p class="text-dark-900 font-medium">{{ item.parentesco or '-' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 5: OCASIONES ESPECIALES ==================== -->
+    <div x-show="mainTab === 'contactos' && subTab === 'ocasiones'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+        <!-- Dirección de Obsequios -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="gift" class="w-5 h-5 mr-2 text-pink-500"></i>
+                    Dirección de Obsequios
+                    {% if item.usar_direccion_laboral %}
+                    <span class="ml-3 px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg">Usa dirección laboral</span>
+                    {% endif %}
+                </h2>
+            </div>
+            {% if item.usar_direccion_laboral %}
+            <div class="p-6">
+                <p class="text-dark-500 text-sm flex items-center gap-2">
+                    <i data-lucide="info" class="w-4 h-4"></i>
+                    Los obsequios se envían a la dirección laboral
+                </p>
+            </div>
+            {% else %}
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">País</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_pais or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Provincia</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_provincia or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Localidad</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_localidad or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Código Postal</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_codigo_postal or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Barrio</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_barrio or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Calle</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_calle or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Número</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_numero or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Piso</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_piso or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Departamento</p>
+                    <p class="text-dark-900 font-medium">{{ item.dir_obsequios_departamento or '-' }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Ocasiones Especiales -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="cake" class="w-5 h-5 mr-2 text-pink-500"></i>
+                    Ocasiones Especiales
+                </h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Preferencia Alimentaria</p>
+                    <p class="text-dark-900 font-medium">{{ item.preferencia_alimentaria or '-' }}</p>
+                </div>
+                <div>
+                    <p class="text-xs font-semibold text-dark-400 uppercase mb-1">Instrucciones de Entrega</p>
+                    <p class="text-dark-900 font-medium">{{ item.instrucciones_entrega or '-' }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== TAB 6: RECIBOS DE SUELDO ==================== -->
+    <div x-show="mainTab === 'documentos' && subTab === 'recibos'" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-1" x-transition:enter-end="opacity-100 translate-y-0">
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="file-text" class="w-5 h-5 mr-2 text-primary-500"></i>
+                    Recibos de Sueldo
+                </h2>
+            </div>
+            <div id="recibos-empleado-content"
+                 hx-get="{{ url_for('recibos_nomina.empleado_recibos_partial', empleado_id=item.id) }}"
+                 hx-trigger="intersect once, firmaRevertida from:body"
+                 hx-indicator="#recibos-loading">
+                <div id="recibos-loading" class="htmx-indicator p-12 text-center">
+                    <svg class="animate-spin h-8 w-8 text-primary-500 mx-auto mb-3" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <p class="text-dark-500 text-sm">Cargando recibos...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Foto Full-Size -->
+    <div x-show="showFoto" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" @keydown.escape.window="showFoto = false">        <div class="fixed inset-0 bg-dark-900/70 backdrop-blur-sm" @click="showFoto = false"></div>
+        <div class="relative z-10 max-w-2xl max-h-[80vh]">
+            <button @click="showFoto = false" class="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center text-dark-500 hover:text-dark-700 transition-colors">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            {% if item.foto %}
+            <img src="{{ item.foto|storage_url }}" alt="Foto de {{ item.empleado }}" class="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain">
+            {% else %}
+            <div class="bg-white rounded-2xl shadow-2xl p-8">
+                <img src="/static/profesional.svg" alt="Sin foto" class="w-64 h-64 object-contain">
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Modal Auditoría de Recibo (scope propio) -->
+    <div x-data="{ open: false }"
+         @open-log-modal.window="open = true"
+         x-show="open" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         @keydown.escape.window="open = false">
+        <div class="fixed inset-0 bg-dark-900/70 backdrop-blur-sm" @click="open = false"></div>
+        <div class="relative z-10 bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-dark-900 flex items-center">
+                    <i data-lucide="history" class="w-5 h-5 mr-2 text-primary-500"></i>
+                    Actividad del recibo
+                </h3>
+                <button @click="open = false" class="p-1.5 text-dark-400 hover:text-dark-700 hover:bg-dark-50 rounded-lg transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="log-modal-content" class="flex-1 overflow-y-auto">
+                <div class="p-12 text-center text-sm text-dark-400">Cargando…</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

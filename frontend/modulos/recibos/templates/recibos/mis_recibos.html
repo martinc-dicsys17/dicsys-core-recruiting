@@ -1,0 +1,500 @@
+{% extends "core/base.html" %}
+
+{% block title %}Mis Recibos de Sueldo - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ firmarId: null, firmarOpen: false, firmarTieneDuplicado: false }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">📄 Mis Recibos de Sueldo</h1>
+            <p class="text-dark-500">Consultá y descargá tus recibos de sueldo</p>
+        </div>
+        <a href="{{ url_for('starmiles.home') }}" class="mt-4 md:mt-0 text-primary-600 hover:text-primary-700 font-medium flex items-center">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>Volver al portal
+        </a>
+    </div>
+
+    {% if not tiene_empleado %}
+    <!-- Sin empleado vinculado -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-16 text-center">
+        <div class="w-20 h-20 bg-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="user-x" class="w-10 h-10 text-amber-500"></i>
+        </div>
+        <p class="text-dark-900 font-semibold mb-1">No se encontró un empleado asociado a tu cuenta</p>
+        <p class="text-dark-500 text-sm">Contactá a RRHH para vincular tu usuario con tu legajo.</p>
+    </div>
+    {% elif recibos|length == 0 %}
+    <!-- Sin recibos -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-16 text-center">
+        <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="file-text" class="w-10 h-10 text-dark-300"></i>
+        </div>
+        <p class="text-dark-900 font-semibold mb-1">No tenés recibos de sueldo disponibles</p>
+        <p class="text-dark-500 text-sm">Cuando RRHH cargue tus recibos, van a aparecer acá.</p>
+    </div>
+    {% else %}
+    <!-- Tabla de recibos -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="bg-dark-50 border-b border-dark-100">
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Período</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Tipo Liquidación</th>
+                        <th class="px-6 py-3 text-left text-xs font-semibold text-dark-500 uppercase">Estado</th>
+                        <th class="px-6 py-3 text-center text-xs font-semibold text-dark-500 uppercase">Descargas</th>
+                        <th class="px-6 py-3 text-center text-xs font-semibold text-dark-500 uppercase">Firma</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100">
+                    {% for recibo in recibos %}
+                    <tr class="hover:bg-dark-50/50 transition-colors">
+                        <td class="px-6 py-4">
+                            <p class="font-semibold text-dark-900">{{ recibo.periodo or '-' }}</p>
+                        </td>
+                        <td class="px-6 py-4 text-dark-600 text-sm">{{ recibo.tipo_liquidacion or '-' }}</td>
+                        <td class="px-6 py-4">
+                            {% if recibo.estado == 'firmado' %}
+                            <span class="px-3 py-1 text-xs font-semibold bg-primary-100 text-primary-700 rounded-lg">Firmado</span>
+                            {% elif recibo.estado == 'asignado' %}
+                            <span class="px-3 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg">Asignado</span>
+                            {% else %}
+                            <span class="px-3 py-1 text-xs font-semibold bg-amber-100 text-amber-700 rounded-lg">{{ recibo.estado or 'Pendiente' }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center justify-center space-x-1">
+                                <a href="{{ url_for('recibos_portal.mis_recibos_descargar', recibo_id=recibo.id, tipo='original') }}"
+                                   class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                   aria-label="Descargar original" title="Original">
+                                    <i data-lucide="file-down" class="w-4 h-4"></i>
+                                </a>
+                                {# El duplicado es opcional: el recibo puede venir en una sola hoja. #}
+                                {% if recibo.archivo_duplicado %}
+                                <a href="{{ url_for('recibos_portal.mis_recibos_descargar', recibo_id=recibo.id, tipo='duplicado') }}"
+                                   class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                   aria-label="Descargar duplicado" title="Duplicado">
+                                    <i data-lucide="copy" class="w-4 h-4"></i>
+                                </a>
+                                {% endif %}
+                                {% if recibo.estado == 'firmado' and recibo.archivo_firmado %}
+                                <a href="{{ url_for('recibos_portal.mis_recibos_descargar', recibo_id=recibo.id, tipo='firmado') }}"
+                                   class="p-2 text-dark-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                                   aria-label="Descargar firmado" title="Firmado">
+                                    <i data-lucide="file-check" class="w-4 h-4"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            {% if recibo.estado == 'firmado' %}
+                            <span class="text-xs text-primary-600 font-medium">
+                                <i data-lucide="check-circle" class="w-4 h-4 inline mr-1"></i>Firmado
+                            </span>
+                            {% else %}
+                            <button @click="firmarId = '{{ recibo.id }}'; firmarTieneDuplicado = {{ 'true' if recibo.archivo_duplicado else 'false' }}; firmarOpen = true"
+                                    class="px-3 py-1.5 text-xs font-semibold bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-lg transition-colors"
+                                    aria-label="Firmar recibo {{ recibo.periodo }}">
+                                <i data-lucide="pen-line" class="w-3.5 h-3.5 inline mr-1"></i>Firmar
+                            </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if total_paginas > 1 %}
+        <div class="px-6 py-4 border-t border-dark-100 flex items-center justify-between">
+            <p class="text-sm text-dark-500">{{ total }} recibos en total</p>
+            <div class="flex gap-2">
+                {% if pagina > 1 %}
+                <a href="{{ url_for('recibos_portal.mis_recibos', pagina=pagina-1) }}"
+                   class="px-3 py-1.5 border border-dark-200 rounded-lg text-sm hover:bg-dark-50">Anterior</a>
+                {% endif %}
+                <span class="px-3 py-1.5 text-sm text-dark-500">{{ pagina }} / {{ total_paginas }}</span>
+                {% if pagina < total_paginas %}
+                <a href="{{ url_for('recibos_portal.mis_recibos', pagina=pagina+1) }}"
+                   class="px-3 py-1.5 border border-dark-200 rounded-lg text-sm hover:bg-dark-50">Siguiente</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Modal Firmar Duplicado -->
+    <div x-show="firmarOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4"
+         x-data="firmaModal()">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="cerrar()"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 w-full" :class="modo === 'canvas' ? 'max-w-2xl' : 'max-w-md'">
+            <div class="text-center mb-4">
+                <div class="w-14 h-14 bg-primary-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="pen-line" class="w-7 h-7 text-primary-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-1">Firmar Duplicado</h3>
+            </div>
+
+            <!-- Tabs: Subir PDF / Firmar en pantalla -->
+            <div class="flex bg-dark-100 rounded-xl p-1 mb-4">
+                <button @click="modo = 'upload'" type="button"
+                        class="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                        :class="modo === 'upload' ? 'bg-white shadow-sm text-dark-900' : 'text-dark-500 hover:text-dark-700'">
+                    <i data-lucide="upload" class="w-4 h-4 inline mr-1"></i>Subir PDF
+                </button>
+                <button @click="modo = 'canvas'" type="button"
+                        class="flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all"
+                        :class="modo === 'canvas' ? 'bg-white shadow-sm text-dark-900' : 'text-dark-500 hover:text-dark-700'">
+                    <i data-lucide="pen-tool" class="w-4 h-4 inline mr-1"></i>Firmar en pantalla
+                </button>
+            </div>
+
+            <div id="firma-error"></div>
+
+            <!-- Modo: Subir PDF firmado -->
+            <div x-show="modo === 'upload'">
+                <p class="text-dark-500 text-sm mb-3">Subí el recibo firmado en formato PDF (máx. 10MB)</p>
+                <form @submit.prevent="subirPdf($el);" enctype="multipart/form-data">
+                    <div class="mb-4">
+                        <input type="file" name="archivo" accept=".pdf,application/pdf" required
+                               class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 transition-all text-sm">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button type="button" @click="cerrar()" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 font-medium">Cancelar</button>
+                        <button type="submit" class="flex-1 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center justify-center" :disabled="enviando">
+                            <svg x-show="enviando" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                            Subir Firmado
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Modo: Firmar en canvas -->
+            <div x-show="modo === 'canvas'" x-cloak>
+                <p class="text-dark-500 text-sm mb-3">Dibujá tu firma con el mouse o el dedo. También podés subir una imagen de firma.</p>
+
+                <!-- Canvas de firma -->
+                <div class="border-2 border-dashed border-dark-300 rounded-xl bg-dark-50 mb-3 relative" style="touch-action: none;">
+                    <canvas x-ref="signCanvas" width="560" height="200" class="w-full rounded-xl cursor-crosshair"
+                            @mousedown="startDraw($event)" @mousemove="draw($event)" @mouseup="stopDraw()" @mouseleave="stopDraw()"
+                            @touchstart.prevent="startDrawTouch($event)" @touchmove.prevent="drawTouch($event)" @touchend="stopDraw()">
+                    </canvas>
+                    <p x-show="!hasFirma" class="absolute inset-0 flex items-center justify-center text-dark-400 text-sm pointer-events-none">
+                        Dibujá tu firma aquí
+                    </p>
+                </div>
+
+                <div class="flex items-center gap-2 mb-4">
+                    <button @click="limpiarCanvas()" type="button" class="px-3 py-1.5 text-xs font-medium text-dark-600 bg-dark-100 rounded-lg hover:bg-dark-200 transition-colors">
+                        <i data-lucide="eraser" class="w-3.5 h-3.5 inline mr-1"></i>Limpiar
+                    </button>
+                    <span class="text-dark-300">|</span>
+                    <label class="px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                        <i data-lucide="image" class="w-3.5 h-3.5 inline mr-1"></i>Subir imagen de firma
+                        <input type="file" accept="image/png,image/jpeg" class="hidden" @change="cargarImagenFirma($event)">
+                    </label>
+                </div>
+
+                <!-- Nota legal -->
+                <div class="bg-dark-50 rounded-xl p-3 mb-4">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" x-model="aceptaLegal" class="mt-0.5 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                        <span class="text-xs text-dark-600 leading-relaxed">
+                            Declaro que la presente firma electrónica constituye mi conformidad con el contenido del recibo de sueldo. 
+                            Esta acción queda registrada con fecha, hora e IP de origen como constancia de la operación.
+                        </span>
+                    </label>
+                </div>
+
+                <div class="flex space-x-3">
+                    <button type="button" @click="cerrar()" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 font-medium">Cancelar</button>
+                    <button type="button" @click="firmarConCanvas()" :disabled="!hasFirma || !aceptaLegal || enviando"
+                            class="flex-1 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center justify-center disabled:opacity-50">
+                        <svg x-show="enviando" class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg>
+                        <i data-lucide="check" class="w-4 h-4 mr-2"></i>Firmar Recibo
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block head %}
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function firmaModal() {
+    return {
+        modo: 'canvas',
+        enviando: false,
+        drawing: false,
+        hasFirma: false,
+        aceptaLegal: false,
+        ctx: null,
+
+        init() {
+            this.$watch('firmarOpen', (val) => {
+                if (val) {
+                    this.$nextTick(() => this.initCanvas());
+                }
+            });
+        },
+
+        initCanvas() {
+            const canvas = this.$refs.signCanvas;
+            if (!canvas) return;
+            this.ctx = canvas.getContext('2d');
+            this.limpiarCanvas();
+        },
+
+        // El canvas se dibuja en su buffer (560x200) pero se muestra estirado a lo
+        // que dé el modal (~620px de ancho, y el alto sigue por aspect ratio porque
+        // solo se le fija width). Sin convertir de píxeles de pantalla a píxeles de
+        // buffer, el trazo aparece corrido respecto del cursor, y el desfase crece
+        // con la distancia al origen.
+        puntoCanvas(clientX, clientY) {
+            const canvas = this.$refs.signCanvas;
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: (clientX - rect.left) * (canvas.width / rect.width),
+                y: (clientY - rect.top) * (canvas.height / rect.height),
+            };
+        },
+
+        trazarHasta(p) {
+            this.ctx.lineWidth = 2.5;
+            this.ctx.lineCap = 'round';
+            this.ctx.strokeStyle = '#1a1a1a';
+            this.ctx.lineTo(p.x, p.y);
+            this.ctx.stroke();
+            this.hasFirma = true;
+        },
+
+        startDraw(e) {
+            this.drawing = true;
+            const p = this.puntoCanvas(e.clientX, e.clientY);
+            this.ctx.beginPath();
+            this.ctx.moveTo(p.x, p.y);
+        },
+
+        draw(e) {
+            if (!this.drawing) return;
+            this.trazarHasta(this.puntoCanvas(e.clientX, e.clientY));
+        },
+
+        startDrawTouch(e) {
+            const touch = e.touches[0];
+            this.drawing = true;
+            const p = this.puntoCanvas(touch.clientX, touch.clientY);
+            this.ctx.beginPath();
+            this.ctx.moveTo(p.x, p.y);
+        },
+
+        drawTouch(e) {
+            if (!this.drawing) return;
+            const touch = e.touches[0];
+            this.trazarHasta(this.puntoCanvas(touch.clientX, touch.clientY));
+        },
+
+        stopDraw() { this.drawing = false; },
+
+        limpiarCanvas() {
+            if (!this.ctx) return;
+            const canvas = this.$refs.signCanvas;
+            this.ctx.clearRect(0, 0, canvas.width, canvas.height);
+            this.hasFirma = false;
+        },
+
+        cargarImagenFirma(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const img = new Image();
+            img.onload = () => {
+                this.limpiarCanvas();
+                const canvas = this.$refs.signCanvas;
+                const scale = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.8;
+                const w = img.width * scale;
+                const h = img.height * scale;
+                this.ctx.drawImage(img, (canvas.width - w) / 2, (canvas.height - h) / 2, w, h);
+                this.hasFirma = true;
+            };
+            img.src = URL.createObjectURL(file);
+        },
+
+        async firmarConCanvas() {
+            if (!this.hasFirma || this.enviando) return;
+            this.enviando = true;
+            document.getElementById('firma-error').innerHTML = '';
+
+            try {
+                // 1. Obtener imagen de firma del canvas como PNG
+                const canvas = this.$refs.signCanvas;
+                const firmaDataUrl = canvas.toDataURL('image/png');
+                const firmaBytes = await fetch(firmaDataUrl).then(r => r.arrayBuffer());
+
+                // 2. Descargar el PDF a firmar. El duplicado es opcional: cuando el
+                //    recibo viene en una sola hoja, se firma el original.
+                const tipoAFirmar = this.firmarTieneDuplicado ? 'duplicado' : 'original';
+                const pdfUrl = '/recibos/mis-recibos/descargar/' + this.firmarId + '/' + tipoAFirmar;
+                const pdfResp = await fetch(pdfUrl);
+                if (!pdfResp.ok) throw new Error('No se pudo descargar el ' + tipoAFirmar);
+                const pdfBytes = await pdfResp.arrayBuffer();
+
+                // 2b. Preguntarle al backend dónde va la firma. El bloque de firmas
+                //     de los recibos sin duplicado se corre según la cantidad de
+                //     conceptos del recibo, así que no se puede hardcodear.
+                let posicion = null, empleadoNombre = '';
+                try {
+                    const posResp = await fetch('/recibos/mis-recibos/' + this.firmarId + '/firma-posicion');
+                    if (posResp.ok) {
+                        const data = await posResp.json();
+                        posicion = data.posicion;
+                        empleadoNombre = data.empleado_nombre || '';
+                    } else {
+                        console.warn('firma-posicion respondió', posResp.status);
+                    }
+                } catch (e) {
+                    console.warn('firma-posicion falló:', e);
+                }
+                if (!posicion) {
+                    // No bloquea la firma, pero deja rastro: sin posición se estampa
+                    // en la ubicación por defecto, que solo es correcta para los
+                    // recibos con duplicado.
+                    console.warn('Sin posición calculada: se usa la ubicación por defecto.');
+                }
+
+                // 3. Superponer firma en el PDF con pdf-lib
+                const { PDFDocument } = PDFLib;
+                const pdfDoc = await PDFDocument.load(pdfBytes);
+                const firmaImage = await pdfDoc.embedPng(firmaBytes);
+
+                const page = pdfDoc.getPages()[0];
+                const { width: pageW, height: pageH } = page.getSize();
+
+                // Dónde va la firma: la calcula el backend leyendo el PDF (endpoint
+                // firma-posicion). Si no la devolvió —recibo con duplicado, cuyo pie
+                // está a una altura fija— se usa la de siempre: inferior derecha.
+                const firma = posicion
+                    ? { w: posicion.ancho, h: posicion.alto, x: posicion.x, y: posicion.y,
+                        textoX: posicion.texto_x, textoY: posicion.texto_y,
+                        centroX: posicion.centro_x, pieY: posicion.pie_y }
+                    : { w: 150, h: 50, x: pageW - 150 - 80, y: 55,
+                        textoX: pageW - 150 - 65, textoY: 42,
+                        centroX: null, pieY: null };
+
+                const firmaW = firma.w;
+                const firmaH = firma.h;
+                const firmaX = firma.x;
+                const firmaY = firma.y;
+
+                page.drawImage(firmaImage, {
+                    x: firmaX, y: firmaY,
+                    width: firmaW, height: firmaH,
+                    opacity: 0.9,
+                });
+
+                // Agregar fecha/hora local debajo de la firma
+                const ahora = new Date();
+                // 24h: con am/pm la línea se pasa del margen derecho del recibo.
+                const fechaTexto = ahora.toLocaleString('es-AR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false
+                });
+                const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+                
+                // Entre la firma y la línea: la fecha y quién firmó, en ese orden.
+                // Debajo de la línea está la etiqueta del formulario, así que no hay
+                // lugar ahí. La leyenda legal va al pie de la página.
+                const TAM_TEXTO = 6.5;
+                const enLinea = (texto, y) => {
+                    // Centrado sobre la línea cuando el backend la ubicó; alineado a
+                    // la izquierda en el layout con duplicado, que no tiene línea.
+                    const x = firma.centroX !== null
+                        ? firma.centroX - font.widthOfTextAtSize(texto, TAM_TEXTO) / 2
+                        : firma.textoX;
+                    page.drawText(texto, {
+                        x: x, y: y,
+                        size: TAM_TEXTO, font: font,
+                        color: PDFLib.rgb(0.3, 0.3, 0.3),
+                    });
+                };
+
+                enLinea('Firmado digitalmente: ' + fechaTexto, firma.textoY);
+                if (empleadoNombre) {
+                    enLinea(empleadoNombre, firma.textoY - 9);
+                }
+
+                const leyenda = 'Firma electrónica con valor de conformidad';
+                if (firma.pieY !== null) {
+                    // Centrada al pie de la página.
+                    const anchoLeyenda = font.widthOfTextAtSize(leyenda, 6);
+                    page.drawText(leyenda, {
+                        x: (pageW - anchoLeyenda) / 2, y: firma.pieY,
+                        size: 6, font: font,
+                        color: PDFLib.rgb(0.5, 0.5, 0.5),
+                    });
+                } else {
+                    // Recibo con duplicado: el pie de la hoja está ocupado, así que
+                    // la leyenda va bajo los renglones de la firma.
+                    page.drawText(leyenda, {
+                        x: firma.textoX, y: firma.textoY - 18,
+                        size: 5.5, font: font,
+                        color: PDFLib.rgb(0.5, 0.5, 0.5),
+                    });
+                }
+
+                const firmadoPdfBytes = await pdfDoc.save();
+
+                // 4. Enviar al backend como archivo
+                const blob = new Blob([firmadoPdfBytes], { type: 'application/pdf' });
+                const formData = new FormData();
+                formData.append('archivo', blob, 'recibo_firmado.pdf');
+
+                const url = '/recibos/mis-recibos/' + this.firmarId + '/firmar';
+                const resp = await fetch(url, { method: 'POST', body: formData });
+
+                if (resp.ok || resp.redirected) {
+                    this.cerrar();
+                    window.location.reload();
+                } else {
+                    const text = await resp.text();
+                    document.getElementById('firma-error').innerHTML = text;
+                }
+            } catch (err) {
+                document.getElementById('firma-error').innerHTML = '<div class="p-3 rounded-xl bg-red-50 text-red-800 border border-red-200 text-sm">Error al firmar: ' + err.message + '</div>';
+            }
+            this.enviando = false;
+        },
+
+        async subirPdf(form) {
+            this.enviando = true;
+            document.getElementById('firma-error').innerHTML = '';
+            const formData = new FormData(form);
+            const url = '/recibos/mis-recibos/' + this.firmarId + '/firmar';
+            try {
+                const r = await fetch(url, { method: 'POST', body: formData });
+                if (r.ok || r.redirected) { this.cerrar(); window.location.reload(); }
+                else { const t = await r.text(); document.getElementById('firma-error').innerHTML = t; }
+            } catch {
+                document.getElementById('firma-error').innerHTML = '<div class="p-3 rounded-xl bg-red-50 text-red-800 border border-red-200 text-sm">Error al subir el archivo</div>';
+            }
+            this.enviando = false;
+        },
+
+        cerrar() {
+            this.firmarOpen = false;
+            this.limpiarCanvas();
+            this.modo = 'canvas';
+            this.aceptaLegal = false;
+            document.getElementById('firma-error').innerHTML = '';
+        }
+    };
+}
+</script>
+{% endblock %}

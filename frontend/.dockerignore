@@ -1,0 +1,12 @@
+# Contexto de build del frontend: este archivo (no el .dockerignore de la raíz) decide qué entra en la imagen.
+**/__pycache__
+**/*.pyc
+**/*.pyo
+# venv local de uv sync --project frontend
+.venv
+.pytest_cache
+.env
+.git
+.gitignore
+*.md
+.vscode

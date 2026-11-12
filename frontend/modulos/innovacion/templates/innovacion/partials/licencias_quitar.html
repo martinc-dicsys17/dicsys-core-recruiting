@@ -1,0 +1,44 @@
+{# Mismo modal de confirmacion que Eventos: compartido por las tres bajas de licencias. #}
+<div x-show="bajaPendiente" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center p-4">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="cancelarBaja()"></div>
+    <div x-ref="bajaDialogo" tabindex="-1"
+         class="relative bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full"
+         role="dialog" aria-modal="true" aria-labelledby="licencias-baja-titulo"
+         aria-describedby="licencias-baja-detalle" :aria-busy="confirmandoBaja"
+         @keydown.escape.stop.prevent="cancelarBaja()"
+         @keydown.tab.prevent="if (!confirmandoBaja) ($event.target === $refs.cancelarBaja ? $refs.confirmarBaja : $refs.cancelarBaja).focus()">
+        <div class="text-center">
+            <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+            </div>
+            <h3 id="licencias-baja-titulo" class="text-xl font-bold text-dark-900 mb-2"
+                x-text="bajaPendiente?.tipo === 'lote' ? '¿Revocar licencias?' : bajaPendiente?.tipo === 'licencia' ? '¿Quitar licencia?' : '¿Eliminar ' + (bajaPendiente?.tipo || '') + '?'"></h3>
+            <p id="licencias-baja-detalle" class="text-dark-500 mb-6">
+                <span x-text="bajaPendiente?.tipo === 'lote' ? 'Vas a quitar las asignaciones de ' : bajaPendiente?.tipo === 'licencia' ? 'Vas a quitar la licencia de ' : 'Vas a eliminar '"></span>
+                <strong class="text-dark-700 break-words" x-text="bajaPendiente?.nombre"></strong>
+                <span x-show="bajaPendiente?.tipo === 'licencia'">
+                    de <strong class="text-dark-700 break-words" x-text="bajaPendiente?.empleado"></strong>.
+                </span>
+                <span x-show="['herramienta', 'proveedor'].includes(bajaPendiente?.tipo)">del catálogo.</span>
+                <span x-show="bajaPendiente?.tipo === 'lote'" class="block mt-3 text-red-600" x-text="(bajaPendiente?.licencia_ids?.length || 0) + ' licencias de ' + (bajaPendiente?.empleados || 0) + ' empleados. La herramienta permanece en el catálogo.'"></span>
+                <span x-show="bajaPendiente?.tipo === 'herramienta'" class="block mt-3 text-red-600">
+                    Se quitarán en cascada todas sus licencias, activas e inactivas, de todos los empleados de la empresa activa.
+                </span>
+                <span x-show="bajaPendiente?.tipo === 'proveedor'" class="block mt-3 text-red-600">
+                    Se eliminarán en cascada todas sus herramientas y sus licencias, activas e inactivas, de todos los empleados de la empresa activa.
+                </span>
+            </p>
+        </div>
+        <p x-show="errorBaja" x-cloak x-text="errorBaja" role="alert"
+           class="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5"></p>
+        <div class="flex space-x-3">
+            <button type="button" x-ref="cancelarBaja" @click="cancelarBaja()" :disabled="confirmandoBaja"
+                    class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 disabled:opacity-50">
+                Cancelar
+            </button>
+            <button type="button" x-ref="confirmarBaja" @click="confirmarBaja()" :disabled="confirmandoBaja"
+                    class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 disabled:opacity-50"
+                    x-text="confirmandoBaja ? 'Procesando...' : (bajaPendiente?.tipo === 'lote' ? 'Revocar licencias' : bajaPendiente?.tipo === 'licencia' ? 'Quitar licencia' : 'Eliminar')"></button>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,113 @@
+{% extends "core/base.html" %}
+
+{% block title %}Equipos - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="equiposFiltros()" x-init="init()">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Equipos</h1>
+            <p class="text-dark-500">Gestión de equipos de trabajo</p>
+        </div>
+        <a href="{{ url_for('operaciones.equipos_create') }}" class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium mt-4 md:mt-0">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Equipo
+        </a>
+    </div>
+    
+    <!-- Barra de Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-4">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <!-- Búsqueda -->
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar por nombre..." 
+                       x-model="buscar"
+                       @input.debounce.300ms="aplicarFiltros()"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            
+            <!-- Filtro Estado -->
+            <select x-model="filtros.activo" @change="aplicarFiltros()"
+                    class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-sm">
+                <option value="">Todos los estados</option>
+                <option value="activo">Activos</option>
+                <option value="inactivo">Inactivos</option>
+            </select>
+            
+            <!-- Total -->
+            <div class="flex items-center text-sm text-dark-500 ml-auto">
+                <i data-lucide="users" class="w-4 h-4 mr-2"></i>
+                <span>{{ total }} equipos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="equipos-table" hx-get="{{ url_for('operaciones.equipos_list') }}" hx-trigger="equipoEstadoCambiado from:body">
+            {% include "operaciones/partials/equipos_table.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Cambiar Estado -->
+    <div x-show="showEstadoModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showEstadoModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                     :class="estadoNuevo ? 'bg-emerald-100' : 'bg-red-100'">
+                    <i :data-lucide="estadoNuevo ? 'power' : 'power-off'" class="w-8 h-8"
+                       :class="estadoNuevo ? 'text-emerald-600' : 'text-red-600'"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2" x-text="estadoNuevo ? '¿Activar equipo?' : '¿Desactivar equipo?'"></h3>
+                <p class="text-dark-500 mb-2">Equipo: <span class="font-semibold" x-text="estadoNombre"></span></p>
+                <p class="text-dark-400 text-sm mb-6" x-text="estadoNuevo ? 'El equipo volverá a estar disponible.' : 'El equipo quedará inactivo pero no se eliminará.'"></p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showEstadoModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button @click="htmx.ajax('PUT', '/operaciones/equipos/' + estadoId + '/estado/' + estadoNuevo, {target: '#equipos-table'}); showEstadoModal = false" 
+                        class="flex-1 px-5 py-2.5 text-white rounded-xl"
+                        :class="estadoNuevo ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'">
+                    <span x-text="estadoNuevo ? 'Activar' : 'Desactivar'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function equiposFiltros() {
+    return {
+        buscar: '{{ buscar }}',
+        filtros: {
+            activo: '{{ filtro_activo or "" }}'
+        },
+        showEstadoModal: false,
+        estadoId: null,
+        estadoNombre: '',
+        estadoNuevo: true,
+        
+        init() {
+            document.body.addEventListener('abrirCambioEstadoEquipo', (e) => {
+                this.estadoId = e.detail.id;
+                this.estadoNombre = e.detail.nombre;
+                this.estadoNuevo = e.detail.nuevoEstado;
+                this.showEstadoModal = true;
+                this.$nextTick(() => lucide.createIcons());
+            });
+            document.body.addEventListener('equipoEstadoCambiado', () => this.aplicarFiltros());
+        },
+        
+        aplicarFiltros() {
+            let url = '{{ url_for("operaciones.equipos_list") }}?';
+            const params = [];
+            if (this.buscar) params.push('buscar=' + encodeURIComponent(this.buscar));
+            if (this.filtros.activo) params.push('activo=' + this.filtros.activo);
+            url += params.join('&');
+            htmx.ajax('GET', url, {target: '#equipos-table'});
+        }
+    }
+}
+</script>
+{% endblock %}

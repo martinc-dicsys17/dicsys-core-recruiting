@@ -1,0 +1,268 @@
+// Dicsys Core: Proveedores (Administración) y su evaluación por campañas (F18).
+// Capturado: 2026-10-02T18:12:08.647080+00:00 desde una base local con create_all.
+// Actualizado a mano el 2026-10-07 (F18-P19..P22): acuerdo Sí/No, filas rechazadas de la importación,
+// sin checklist en la evaluación y auto-generación anual (migraciones en proveedores_migraciones.py).
+// Solo las tablas del módulo; nomina_empleados, core_usuarios y core_empresas se referencian sin detallar.
+// Índices parciales, funcionales y checks: SQL exacto en la Note de cada tabla.
+Project proveedores {
+  database_type: 'PostgreSQL'
+  Note: 'Registro de proveedores y herramientas + evaluaciones por campaña (ISO 27001 A.5.19-A.5.22). Decisiones D-61 a D-86 en director.'
+}
+
+Table "proveedores_proveedores" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "nombre" "varchar(200)" [not null]
+  "razon_social" "varchar(200)"
+  "cuit" "varchar(13)"
+  "responsabilidad_afip" "varchar(50)"
+  "nro_ingresos_brutos" "varchar(50)"
+  "tipo" "varchar(20)" [not null]
+  "referente_empleado_id" "uuid"
+  "servicio_provisto" "text"
+  "tipo_informacion" "text"
+  "email" "varchar(255)"
+  "telefono_whatsapp" "varchar(20)"
+  "pagina_web" "varchar(500)"
+  "acuerdo_servicio" "varchar(5)"
+  "politica_nda" "text"
+  "politica_nda_archivo" "varchar(500)"
+  "politica_nda_archivo_nombre" "varchar(255)"
+  "observaciones" "text"
+  "activo" "boolean" [not null]
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "deleted_at" "timestamp without time zone"
+  Note: 'REGISTRO (ISO A.5.19-A.5.22): un proveedor o herramienta por fila. referente_empleado_id = «Usuario referente», apunta a nomina_empleados (no a core_usuarios); obligatorio al guardar desde el form y al importar (NULL solo en registros anteriores). servicio_provisto, tipo_informacion y acuerdo_servicio también son obligatorios; con acuerdo Si, el adjunto (politica_nda_archivo); con No, politica_nda. activo=false lo saca de las próximas evaluaciones sin borrar historial.  Índices: INDEX ix_proveedores_referente ON proveedores_proveedores USING btree (referente_empleado_id) | UNIQUE INDEX uq_proveedores_empresa_nombre ON proveedores_proveedores USING btree (empresa_id, lower(btrim((nombre)::text))) WHERE (deleted_at IS NULL). Checks: CHECK (((acuerdo_servicio)::text = ANY ((ARRAY['Si'::character varying, 'No'::character varying])::text[]))) | CHECK (((tipo)::text = ANY ((ARRAY['proveedor'::character varying, 'herramienta'::character varying, 'sin_clasificar'::character varying])::text[]))).'
+}
+
+Table "proveedores_documentos" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "proveedor_id" "uuid" [not null]
+  "nombre" "varchar(255)" [not null]
+  "clave" "varchar(500)" [not null]
+  "tipo_mime" "varchar(100)" [not null]
+  "tamano" "integer" [not null]
+  "miniatura_clave" "varchar(500)"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "deleted_at" "timestamp without time zone"
+  Note: 'Documentos del proveedor (pestaña Documentos). clave = {empresa_id}/proveedores/{proveedor_id}/{uuid}{ext} en el bucket; nombre = el original, para mostrar y descargar. miniatura_clave = PNG al lado ({uuid}-miniatura.png); NULL = sin miniatura (se muestra el tipo).  Índices: INDEX ix_proveedores_documentos_proveedor ON proveedores_documentos USING btree (proveedor_id).'
+}
+
+Table "proveedores_oficinas" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "proveedor_id" "uuid" [not null]
+  "nombre_oficina" "varchar(100)"
+  "calle" "varchar(200)" [not null]
+  "numero" "varchar(20)"
+  "piso" "varchar(20)"
+  "departamento" "varchar(20)"
+  "localidad" "varchar(100)" [not null]
+  "provincia" "varchar(100)"
+  "pais" "varchar(100)" [not null]
+  "codigo_postal" "varchar(10)"
+  "es_legal" "boolean" [not null]
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "deleted_at" "timestamp without time zone"
+  Note: 'Un domicilio por oficina (campos alineados con customer_cliente_domicilios). Un solo es_legal vigente por proveedor.  Índices: INDEX ix_proveedores_oficinas_proveedor ON proveedores_oficinas USING btree (proveedor_id) | UNIQUE INDEX uq_proveedores_oficina_legal ON proveedores_oficinas USING btree (proveedor_id) WHERE (es_legal AND (deleted_at IS NULL)).'
+}
+
+Table "proveedores_contactos" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "proveedor_id" "uuid" [not null]
+  "oficina_id" "uuid"
+  "nombre" "varchar(150)" [not null]
+  "apellido" "varchar(100)"
+  "cargo" "varchar(150)"
+  "telefono" "varchar(30)"
+  "email" "varchar(255)"
+  "es_principal" "boolean" [not null]
+  "notas" "varchar(500)"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "deleted_at" "timestamp without time zone"
+  Note: 'Contactos del proveedor; oficina_id opcional. Un solo es_principal vigente por proveedor. Sin fecha de nacimiento (minimización A.5.34).  Índices: INDEX ix_proveedores_contactos_proveedor ON proveedores_contactos USING btree (proveedor_id) | UNIQUE INDEX uq_proveedores_contacto_principal ON proveedores_contactos USING btree (proveedor_id) WHERE (es_principal AND (deleted_at IS NULL)).'
+}
+
+Table "proveedores_configuracion" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "sheet_url" "varchar(500)"
+  "sheet_hoja" "varchar(100)" [not null]
+  "recordar_cada_dias" "smallint"
+  "aviso_apertura" "boolean" [not null]
+  "aviso_previo_cierre" "boolean" [not null]
+  "hora_envio" "time" [not null, default: `'09:00:00'::time without time zone`]
+  "canal_email" "boolean" [not null]
+  "email_cc" "text"
+  "canal_webex_personal" "boolean" [not null]
+  "canal_webex_canal" "boolean" [not null]
+  "webex_room_id" "varchar(255)"
+  "auto_generar" "boolean" [not null, default: false]
+  "auto_inicio_dia" "smallint"
+  "auto_inicio_mes" "smallint"
+  "auto_fin_dia" "smallint"
+  "auto_fin_mes" "smallint"
+  "auto_ultimo_periodo" "varchar(20)"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  Note: 'Configuración global del submódulo de evaluaciones, una fila por empresa: Sheet a importar, avisos y auto-generación anual (todo apagado por defecto). auto_*: período = año en curso, inicio y fin como día y mes; auto_ultimo_periodo = el año que la tarea ya resolvió (una vez por año).  Índices: UNIQUE INDEX proveedores_configuracion_empresa_id_key ON proveedores_configuracion USING btree (empresa_id). Checks: CHECK ((recordar_cada_dias = ANY (ARRAY[1, 2]))) | CHECK (((NOT canal_webex_canal) OR (webex_room_id IS NOT NULL))) | CHECK ((auto_inicio_dia BETWEEN 1 AND 31) AND (auto_fin_dia BETWEEN 1 AND 31) AND (auto_inicio_mes BETWEEN 1 AND 12) AND (auto_fin_mes BETWEEN 1 AND 12)) | CHECK ((NOT auto_generar) OR (auto_inicio_dia IS NOT NULL AND auto_inicio_mes IS NOT NULL AND auto_fin_dia IS NOT NULL AND auto_fin_mes IS NOT NULL)).'
+}
+
+Table "proveedores_evaluaciones" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "periodo" "varchar(20)" [not null]
+  "fecha_apertura" "date" [not null]
+  "fecha_cierre" "date" [not null]
+  "reemplazada_at" "timestamp without time zone"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "deleted_at" "timestamp without time zone"
+  Note: 'CAMPAÑAS. «Activa» no se guarda: la vigente (reemplazada_at NULL) mientras hoy <= fecha_cierre; se evalúa entre apertura y cierre (hora Argentina). Una sola vigente por empresa.  Índices: UNIQUE INDEX uq_proveedores_evaluacion_periodo ON proveedores_evaluaciones USING btree (empresa_id, periodo) WHERE (deleted_at IS NULL) | UNIQUE INDEX uq_proveedores_evaluacion_vigente ON proveedores_evaluaciones USING btree (empresa_id) WHERE ((reemplazada_at IS NULL) AND (deleted_at IS NULL)). Checks: CHECK ((fecha_cierre >= fecha_apertura)).'
+}
+
+Table "proveedores_evaluacion_items" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "evaluacion_id" "uuid" [not null]
+  "proveedor_id" "uuid" [not null]
+  "evaluador_empleado_id" "uuid"
+  "incidentes" "varchar(5)"
+  "mal_manejo" "varchar(5)"
+  "evidencia_incidentes" "text"
+  "evidencia_mal_manejo" "text"
+  "con_hallazgo" "boolean" [note: 'columna generada (STORED): incidentes = Si o mal_manejo = Si']
+  "evaluado_at" "timestamp without time zone"
+  "evaluado_por" "uuid"
+  "created_at" "timestamp without time zone" [not null]
+  "created_by" "varchar(255)"
+  "updated_at" "timestamp without time zone" [not null]
+  "updated_by" "varchar(255)"
+  "deleted_at" "timestamp without time zone"
+  Note: 'Un proveedor dentro de una campaña. evaluador_empleado_id queda fijo por ítem: solo esa persona evalúa. con_hallazgo es columna generada. evaluado_at NULL = pendiente. La evidencia de cada pregunta es obligatoria con Si y vacía si no. El checklist de seguridad salió (migración proveedores_sin_checklist_v1).  Índices: INDEX ix_proveedores_item_evaluador ON proveedores_evaluacion_items USING btree (evaluacion_id, evaluador_empleado_id) | UNIQUE INDEX uq_proveedores_item_evaluacion_proveedor ON proveedores_evaluacion_items USING btree (evaluacion_id, proveedor_id) WHERE (deleted_at IS NULL). Checks: CHECK (((incidentes)::text = ANY ((ARRAY['Si'::character varying, 'No'::character varying, 'N/A'::character varying])::text[]))) | CHECK (((mal_manejo)::text = ANY ((ARRAY['Si'::character varying, 'No'::character varying])::text[]))).'
+}
+
+Table "proveedores_importaciones" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "evaluacion_id" "uuid" [not null]
+  "creada_at" "timestamp without time zone" [not null]
+  "creada_por" "uuid"
+  Note: 'UNLOGGED. Vista previa temporal de la importación del Sheet: se borra al confirmar o cancelar. '
+}
+
+Table "proveedores_importacion_filas" {
+  "id" "uuid" [pk, not null]
+  "importacion_id" "uuid" [not null]
+  "fila_sheet" "integer" [not null]
+  "nombre" "varchar(200)" [not null]
+  "referente_sheet" "varchar(200)"
+  "accion" "varchar(20)" [not null]
+  "proveedor_id" "uuid"
+  "referente_anterior_id" "uuid"
+  "referente_nuevo_id" "uuid"
+  "servicio_provisto" "text"
+  "tipo_informacion" "text"
+  "acuerdo_servicio" "varchar(5)"
+  "politica_nda" "text"
+  "confirmar" "boolean" [not null]
+  "motivo" "text"
+  Note: 'UNLOGGED. Filas de la vista previa (alta, sin_cambios, cambio_referente con check de confirmación, rechazada: alta sin los datos obligatorios, con el motivo).  Índices: INDEX ix_proveedores_importacion_filas ON proveedores_importacion_filas USING btree (importacion_id). Checks: CHECK (((accion)::text = ANY ((ARRAY['alta'::character varying, 'sin_cambios'::character varying, 'cambio_referente'::character varying, 'rechazada'::character varying])::text[]))).'
+}
+
+Table "proveedores_auditoria" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "fecha_hora" "timestamp without time zone" [not null]
+  "usuario_id" "uuid"
+  "usuario_email" "varchar(255)"
+  "ip" "varchar(45)"
+  "user_agent" "varchar(500)"
+  "entidad" "varchar(20)" [not null]
+  "entidad_id" "uuid" [not null]
+  "evaluacion_id" "uuid"
+  "accion" "varchar(30)" [not null]
+  "antes" "jsonb"
+  "despues" "jsonb"
+  Note: 'Append-only: quién (usuario, IP, navegador), cuándo, qué entidad y valores antes/después. La app solo inserta.  Índices: INDEX ix_proveedores_auditoria_entidad ON proveedores_auditoria USING btree (entidad, entidad_id, fecha_hora) | INDEX ix_proveedores_auditoria_evaluacion ON proveedores_auditoria USING btree (evaluacion_id, fecha_hora). Checks: CHECK (((entidad)::text = ANY ((ARRAY['proveedor'::character varying, 'contacto'::character varying, 'oficina'::character varying, 'configuracion'::character varying, 'evaluacion'::character varying, 'item'::character varying, 'aviso'::character varying])::text[]))).'
+}
+
+Table "proveedores_avisos" {
+  "id" "uuid" [pk, not null]
+  "empresa_id" "uuid" [not null]
+  "evaluacion_id" "uuid" [not null]
+  "fecha_hora" "timestamp without time zone" [not null]
+  "fecha_local" "date" [not null]
+  "motivo" "varchar(15)" [not null]
+  "canal" "varchar(15)" [not null]
+  "empleado_id" "uuid"
+  "destino" "varchar(255)" [not null]
+  "cc" "text"
+  "pendientes" "integer" [not null]
+  "enviado" "boolean" [not null]
+  "error" "text"
+  "enviado_por" "uuid"
+  Note: 'Log de avisos por canal. Índice único parcial: el job no repite el mismo aviso en el día.  Índices: UNIQUE INDEX uq_proveedores_aviso_diario ON proveedores_avisos USING btree (evaluacion_id, motivo, canal, COALESCE(empleado_id, '00000000-0000-0000-0000-000000000000'::uuid), fecha_local) WHERE (enviado AND ((motivo)::text <> 'manual'::text)). Checks: CHECK (((canal)::text = ANY ((ARRAY['email'::character varying, 'webex_personal'::character varying, 'webex_canal'::character varying])::text[]))) | CHECK (((motivo)::text = ANY ((ARRAY['apertura'::character varying, 'recordatorio'::character varying, 'previo_cierre'::character varying, 'manual'::character varying])::text[]))).'
+}
+
+// Periferia: solo la clave, para que las referencias resuelvan.
+Table "core_empresas" {
+  "id" "uuid" [pk, not null]
+  Note: 'Periferia (core). Multiempresa: todas las tablas del módulo filtran por empresa_id.'
+}
+
+Table "core_usuarios" {
+  "id" "uuid" [pk, not null]
+  Note: 'Periferia (core). Quién evaluó, importó o envió avisos. Se vincula con la nómina por DNI.'
+}
+
+Table "nomina_empleados" {
+  "id" "uuid" [pk, not null]
+  Note: 'Periferia (nómina). El usuario referente y el evaluador son empleados; el email de los avisos es su email_corporativo.'
+}
+
+Ref: "proveedores_proveedores"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_proveedores"."referente_empleado_id" > "nomina_empleados"."id"
+Ref: "proveedores_oficinas"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_oficinas"."proveedor_id" > "proveedores_proveedores"."id"
+Ref: "proveedores_contactos"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_documentos"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_documentos"."proveedor_id" > "proveedores_proveedores"."id"
+Ref: "proveedores_contactos"."oficina_id" > "proveedores_oficinas"."id"
+Ref: "proveedores_contactos"."proveedor_id" > "proveedores_proveedores"."id"
+Ref: "proveedores_configuracion"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_evaluaciones"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_evaluacion_items"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_evaluacion_items"."evaluacion_id" > "proveedores_evaluaciones"."id"
+Ref: "proveedores_evaluacion_items"."evaluado_por" > "core_usuarios"."id"
+Ref: "proveedores_evaluacion_items"."evaluador_empleado_id" > "nomina_empleados"."id"
+Ref: "proveedores_evaluacion_items"."proveedor_id" > "proveedores_proveedores"."id"
+Ref: "proveedores_importaciones"."creada_por" > "core_usuarios"."id"
+Ref: "proveedores_importaciones"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_importaciones"."evaluacion_id" > "proveedores_evaluaciones"."id"
+Ref: "proveedores_importacion_filas"."importacion_id" > "proveedores_importaciones"."id"
+Ref: "proveedores_auditoria"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_auditoria"."evaluacion_id" > "proveedores_evaluaciones"."id"
+Ref: "proveedores_auditoria"."usuario_id" > "core_usuarios"."id"
+Ref: "proveedores_avisos"."empleado_id" > "nomina_empleados"."id"
+Ref: "proveedores_avisos"."empresa_id" > "core_empresas"."id"
+Ref: "proveedores_avisos"."enviado_por" > "core_usuarios"."id"
+Ref: "proveedores_avisos"."evaluacion_id" > "proveedores_evaluaciones"."id"

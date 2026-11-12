@@ -1,0 +1,188 @@
+{% extends "core/base.html" %}
+
+{% block title %}Aprobar Canjes - Star Miles{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">📦 Aprobar Canjes</h1>
+            <p class="text-dark-500">Gestionar solicitudes de canje</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex space-x-2">
+            <a href="{{ url_for('starmiles.aprobador_canjes', estado='pendiente') }}" 
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'pendiente' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Pendientes
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_canjes', estado='aprobado') }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'aprobado' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Aprobados
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_canjes', estado='rechazado') }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'rechazado' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Rechazados
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_canjes', estado='entregado') }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'entregado' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Entregados
+            </a>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="canjes-table">
+            {% include "starmiles/partials/canjes_table.html" %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Acción -->
+<div id="modal-canje-accion" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" onclick="cerrarModalCanjeAccion()"></div>
+    <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full relative">
+        <div class="text-center mb-6">
+            <div id="modal-canje-icon-container" class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i id="modal-canje-icon" class="w-8 h-8"></i>
+            </div>
+            <h3 id="modal-canje-titulo" class="text-xl font-bold text-dark-900 mb-2"></h3>
+            <p id="modal-canje-nombre" class="text-dark-500"></p>
+        </div>
+        <form id="form-canje-accion" onsubmit="enviarCanjeAccion(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">
+                    Comentario <span id="modal-canje-required" class="text-red-500 hidden">*</span>
+                </label>
+                <textarea id="modal-canje-comentario" name="comentario" rows="3"
+                          class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500"></textarea>
+            </div>
+            <div id="modal-canje-result" class="mb-4"></div>
+            <div class="flex space-x-3">
+                <button type="button" onclick="cerrarModalCanjeAccion()" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button type="submit" id="modal-canje-submit" class="flex-1 px-5 py-2.5 text-white rounded-xl"></button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let canjeAccionUrl = '';
+let canjeAccionTipo = '';
+
+function abrirModalCanjeAccion(canjeId, canjeNombre, accion) {
+    canjeAccionUrl = '/starmiles/aprobador/canjes/' + canjeId + '/' + accion;
+    canjeAccionTipo = accion;
+    
+    document.getElementById('modal-canje-nombre').textContent = canjeNombre;
+    document.getElementById('modal-canje-comentario').value = '';
+    document.getElementById('modal-canje-result').innerHTML = '';
+    
+    const iconContainer = document.getElementById('modal-canje-icon-container');
+    const icon = document.getElementById('modal-canje-icon');
+    const titulo = document.getElementById('modal-canje-titulo');
+    const submitBtn = document.getElementById('modal-canje-submit');
+    const requiredSpan = document.getElementById('modal-canje-required');
+    const comentarioInput = document.getElementById('modal-canje-comentario');
+    
+    if (accion === 'aprobar') {
+        iconContainer.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-emerald-100';
+        icon.className = 'w-8 h-8 text-emerald-600';
+        icon.setAttribute('data-lucide', 'check');
+        titulo.textContent = 'Aprobar canje';
+        submitBtn.textContent = 'Aprobar';
+        submitBtn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-emerald-500 hover:bg-emerald-600';
+        requiredSpan.classList.add('hidden');
+        comentarioInput.removeAttribute('required');
+    } else if (accion === 'rechazar') {
+        iconContainer.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-red-100';
+        icon.className = 'w-8 h-8 text-red-600';
+        icon.setAttribute('data-lucide', 'x');
+        titulo.textContent = 'Rechazar canje';
+        submitBtn.textContent = 'Rechazar';
+        submitBtn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-red-500 hover:bg-red-600';
+        requiredSpan.classList.remove('hidden');
+        comentarioInput.setAttribute('required', 'required');
+    } else if (accion === 'entregar') {
+        iconContainer.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-blue-100';
+        icon.className = 'w-8 h-8 text-blue-600';
+        icon.setAttribute('data-lucide', 'package');
+        titulo.textContent = 'Marcar como entregado';
+        submitBtn.textContent = 'Entregar';
+        submitBtn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-blue-500 hover:bg-blue-600';
+        requiredSpan.classList.add('hidden');
+        comentarioInput.removeAttribute('required');
+    } else if (accion === 'rechazar-y-reintegrar') {
+        iconContainer.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-red-100';
+        icon.className = 'w-8 h-8 text-red-600';
+        icon.setAttribute('data-lucide', 'undo-2');
+        titulo.textContent = 'Rechazar y reintegrar millas';
+        submitBtn.textContent = 'Reintegrar millas';
+        submitBtn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-red-500 hover:bg-red-600';
+        requiredSpan.classList.remove('hidden');
+        comentarioInput.setAttribute('required', 'required');
+    }
+    
+    lucide.createIcons();
+    
+    document.getElementById('modal-canje-accion').classList.remove('hidden');
+    document.getElementById('modal-canje-accion').classList.add('flex');
+}
+
+function cerrarModalCanjeAccion() {
+    document.getElementById('modal-canje-accion').classList.add('hidden');
+    document.getElementById('modal-canje-accion').classList.remove('flex');
+}
+
+function enviarCanjeAccion(event) {
+    event.preventDefault();
+    
+    const comentario = document.getElementById('modal-canje-comentario').value;
+    
+    if (['rechazar', 'rechazar-y-reintegrar'].includes(canjeAccionTipo) && !comentario.trim()) {
+        document.getElementById('modal-canje-result').innerHTML = '<div class="p-4 bg-red-50 text-red-700 rounded-xl">El comentario es obligatorio para rechazar</div>';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('comentario', comentario);
+    
+    const btn = document.getElementById('modal-canje-submit');
+    btn.disabled = true;
+    btn.textContent = 'Procesando...';
+    
+    fetch(canjeAccionUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => {
+        if (response.ok) {
+            cerrarModalCanjeAccion();
+            window.location.reload();
+        } else {
+            return response.text().then(html => {
+                document.getElementById('modal-canje-result').innerHTML = html;
+                btn.disabled = false;
+                btn.textContent = textoAccionCanje(canjeAccionTipo);
+            });
+        }
+    })
+    .catch(err => {
+        document.getElementById('modal-canje-result').innerHTML = '<div class="p-4 bg-red-50 text-red-700 rounded-xl">Error de conexión</div>';
+        btn.disabled = false;
+        btn.textContent = textoAccionCanje(canjeAccionTipo);
+    });
+}
+
+function textoAccionCanje(accion) {
+    if (accion === 'aprobar') return 'Aprobar';
+    if (accion === 'rechazar') return 'Rechazar';
+    if (accion === 'rechazar-y-reintegrar') return 'Reintegrar millas';
+    return 'Entregar';
+}
+</script>
+{% endblock %}

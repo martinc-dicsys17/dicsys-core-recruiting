@@ -1,0 +1,49 @@
+<div class="overflow-x-auto">
+    <table class="w-full">
+        <thead>
+            <tr class="bg-dark-50 border-b border-dark-100">
+                <th class="px-6 py-4 text-left text-xs font-semibold text-dark-500 uppercase tracking-wider">Nombre</th>
+                <th class="px-6 py-4 text-left text-xs font-semibold text-dark-500 uppercase tracking-wider">Descripción</th>
+                <th class="px-6 py-4 text-right text-xs font-semibold text-dark-500 uppercase tracking-wider">Acciones</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-dark-100">
+            {% for item in items %}
+            <tr class="hover:bg-dark-50/50 transition-colors group">
+                <td class="px-6 py-4">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center mr-3">
+                            <i data-lucide="graduation-cap" class="w-5 h-5 text-violet-600"></i>
+                        </div>
+                        <p class="font-semibold text-dark-900">{{ item.nombre }}</p>
+                    </div>
+                </td>
+                <td class="px-6 py-4 text-dark-600">{{ item.descripcion or '-' }}</td>
+                <td class="px-6 py-4">
+                    <div class="flex items-center justify-end space-x-1">
+                        <a href="{{ url_for('nomina.carreras_edit', id=item.id) }}" class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors" title="Editar">
+                            <i data-lucide="edit-2" class="w-4 h-4"></i>
+                        </a>
+                        <button @click="deleteId = '{{ item.id }}'; deleteNombre = '{{ item.nombre }}'; showDeleteModal = true" class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="3" class="px-6 py-16 text-center">
+                    <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="graduation-cap" class="w-10 h-10 text-dark-300"></i>
+                    </div>
+                    <p class="text-dark-900 font-semibold mb-1">No hay carreras</p>
+                    <p class="text-dark-500 mb-4">Creá la primera carrera para empezar</p>
+                    <a href="{{ url_for('nomina.carreras_create') }}" class="text-primary-600 hover:text-primary-700 font-medium">
+                        Crear carrera →
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

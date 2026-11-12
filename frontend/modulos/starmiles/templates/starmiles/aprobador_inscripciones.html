@@ -1,0 +1,223 @@
+﻿{% extends "core/base.html" %}
+
+{% block title %}Aprobar Inscripciones - Star Miles{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">✅ Aprobar Inscripciones</h1>
+            <p class="text-dark-500">Gestionar solicitudes de desafíos</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="flex flex-wrap gap-2 mb-4">
+            <a href="{{ url_for('starmiles.aprobador_inscripciones', estado='pendiente', buscar=filtros.buscar, desafio_id=filtros.desafio_id, fecha_desde=filtros.fecha_desde, fecha_hasta=filtros.fecha_hasta) }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'pendiente' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Pendientes
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_inscripciones', estado='aprobada', buscar=filtros.buscar, desafio_id=filtros.desafio_id, fecha_desde=filtros.fecha_desde, fecha_hasta=filtros.fecha_hasta) }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'aprobada' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Aprobadas
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_inscripciones', estado='completada', buscar=filtros.buscar, desafio_id=filtros.desafio_id, fecha_desde=filtros.fecha_desde, fecha_hasta=filtros.fecha_hasta) }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'completada' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Completadas
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_inscripciones', estado='incompleta', buscar=filtros.buscar, desafio_id=filtros.desafio_id, fecha_desde=filtros.fecha_desde, fecha_hasta=filtros.fecha_hasta) }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'incompleta' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Incompletas
+            </a>
+            <a href="{{ url_for('starmiles.aprobador_inscripciones', estado='rechazada', buscar=filtros.buscar, desafio_id=filtros.desafio_id, fecha_desde=filtros.fecha_desde, fecha_hasta=filtros.fecha_hasta) }}"
+               class="px-4 py-2 rounded-xl font-medium {{ 'bg-primary-500 text-white' if estado_filtro == 'rechazada' else 'bg-dark-100 text-dark-600 hover:bg-dark-200' }}">
+                Rechazadas
+            </a>
+        </div>
+
+        <form hx-get="{{ url_for('starmiles.aprobador_inscripciones') }}"
+              hx-target="#inscripciones-table"
+              hx-push-url="true"
+              hx-trigger="change from:select, change from:input[type=date], keyup changed delay:350ms from:input[type=search]">
+            <input type="hidden" name="estado" value="{{ estado_filtro }}">
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+                <div class="relative xl:col-span-2">
+                    <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                    <input type="search" name="buscar" value="{{ filtros.buscar }}"
+                           placeholder="Buscar empleado, DNI, CUIL o email"
+                           class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white">
+                </div>
+                <select name="desafio_id"
+                        class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    <option value="">Todos los desafíos</option>
+                    {% for desafio in desafios %}
+                    <option value="{{ desafio.id }}" {{ 'selected' if filtros.desafio_id == desafio.id else '' }}>{{ desafio.nombre }}</option>
+                    {% endfor %}
+                </select>
+                <input type="date" name="fecha_desde" value="{{ filtros.fecha_desde }}"
+                       class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                <input type="date" name="fecha_hasta" value="{{ filtros.fecha_hasta }}"
+                       class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+            </div>
+        </form>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="inscripciones-table">
+            {% include "starmiles/partials/inscripciones_table.html" %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal Accion -->
+<div id="modal-accion" class="fixed inset-0 z-50 hidden items-center justify-center p-4">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" onclick="cerrarModalAccion()"></div>
+    <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full relative">
+        <div class="text-center mb-6">
+            <div id="modal-icon" class="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-emerald-100">
+                <i data-lucide="check" class="w-8 h-8 text-emerald-600"></i>
+            </div>
+            <h3 id="modal-titulo" class="text-xl font-bold text-dark-900 mb-2">Aprobar inscripción</h3>
+            <p id="modal-nombre" class="text-dark-500"></p>
+        </div>
+        <form id="form-accion" onsubmit="enviarAccion(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-semibold text-dark-700 mb-2">Comentario <span id="comentario-required" class="text-red-500 hidden">*</span></label>
+                <textarea name="comentario" id="comentario-accion" rows="3"
+                          class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500"></textarea>
+            </div>
+            <div id="modal-result" class="mb-4"></div>
+            <div class="flex space-x-3">
+                <button type="button" onclick="cerrarModalAccion()" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button type="submit" id="btn-accion" class="flex-1 px-5 py-2.5 text-white rounded-xl bg-emerald-500 hover:bg-emerald-600">Aprobar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let accionUrl = '';
+let accionTipo = '';
+
+function abrirModalAccion(inscId, nombre, accion) {
+    accionUrl = '/starmiles/aprobador/inscripciones/' + inscId + '/' + accion;
+    accionTipo = accion;
+    
+    document.getElementById('modal-nombre').textContent = nombre;
+    document.getElementById('comentario-accion').value = '';
+    document.getElementById('modal-result').innerHTML = '';
+    
+    const iconDiv = document.getElementById('modal-icon');
+    const titulo = document.getElementById('modal-titulo');
+    const btn = document.getElementById('btn-accion');
+    const reqSpan = document.getElementById('comentario-required');
+    
+    if (accion === 'rechazar') {
+        iconDiv.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-red-100';
+        iconDiv.innerHTML = '<i data-lucide="x" class="w-8 h-8 text-red-600"></i>';
+        titulo.textContent = 'Rechazar inscripción';
+        btn.textContent = 'Rechazar';
+        btn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-red-500 hover:bg-red-600';
+        reqSpan.classList.remove('hidden');
+    } else if (accion === 'finalizar') {
+        iconDiv.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-emerald-100';
+        iconDiv.innerHTML = '<i data-lucide="award" class="w-8 h-8 text-emerald-600"></i>';
+        titulo.textContent = 'Finalizar y acreditar millas';
+        btn.textContent = 'Finalizar';
+        btn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-emerald-500 hover:bg-emerald-600';
+        reqSpan.classList.add('hidden');
+    } else if (accion === 'incompleta') {
+        iconDiv.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-orange-100';
+        iconDiv.innerHTML = '<i data-lucide="alert-triangle" class="w-8 h-8 text-orange-600"></i>';
+        titulo.textContent = 'Marcar como incompleto';
+        btn.textContent = 'Marcar Incompleto';
+        btn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-orange-500 hover:bg-orange-600';
+        reqSpan.classList.remove('hidden');
+    } else if (accion === 'cancelar') {
+        iconDiv.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-red-100';
+        iconDiv.innerHTML = '<i data-lucide="ban" class="w-8 h-8 text-red-600"></i>';
+        titulo.textContent = 'Cancelar inscripcion';
+        btn.textContent = 'Cancelar inscripcion';
+        btn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-red-500 hover:bg-red-600';
+        reqSpan.classList.remove('hidden');
+    } else if (accion === 'revocar') {
+        iconDiv.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-red-100';
+        iconDiv.innerHTML = '<i data-lucide="rotate-ccw" class="w-8 h-8 text-red-600"></i>';
+        titulo.textContent = 'Revocar y quitar millas';
+        btn.textContent = 'Revocar';
+        btn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-red-500 hover:bg-red-600';
+        reqSpan.classList.remove('hidden');
+    } else {
+        iconDiv.className = 'w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-emerald-100';
+        iconDiv.innerHTML = '<i data-lucide="check" class="w-8 h-8 text-emerald-600"></i>';
+        titulo.textContent = 'Aprobar inscripción';
+        btn.textContent = 'Aprobar';
+        btn.className = 'flex-1 px-5 py-2.5 text-white rounded-xl bg-emerald-500 hover:bg-emerald-600';
+        reqSpan.classList.add('hidden');
+    }
+    
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+    
+    document.getElementById('modal-accion').classList.remove('hidden');
+    document.getElementById('modal-accion').classList.add('flex');
+}
+
+function cerrarModalAccion() {
+    document.getElementById('modal-accion').classList.add('hidden');
+    document.getElementById('modal-accion').classList.remove('flex');
+}
+
+function enviarAccion(event) {
+    event.preventDefault();
+    const comentario = document.getElementById('comentario-accion').value.trim();
+    
+    if (['rechazar', 'incompleta', 'cancelar', 'revocar'].includes(accionTipo) && !comentario) {
+        document.getElementById('modal-result').innerHTML = '<div class="p-4 bg-red-50 text-red-700 rounded-xl">El comentario es obligatorio</div>';
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('comentario', comentario);
+    
+    const btn = document.getElementById('btn-accion');
+    btn.disabled = true;
+    btn.textContent = 'Procesando...';
+    
+    fetch(accionUrl, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.text().then(html => ({ html, ok: response.ok })))
+    .then(({ html, ok }) => {
+        btn.disabled = false;
+        if (ok) {
+            document.getElementById('modal-result').innerHTML = '<div class="p-4 bg-emerald-50 text-emerald-700 rounded-xl">¡Acción completada!</div>';
+            setTimeout(() => {
+                cerrarModalAccion();
+                window.location.reload();
+            }, 1000);
+        } else {
+            document.getElementById('modal-result').innerHTML = '<div class="p-4 bg-red-50 text-red-700 rounded-xl">' + (html || 'Error') + '</div>';
+            btn.textContent = textoAccionInscripcion(accionTipo);
+        }
+    })
+    .catch(err => {
+        btn.disabled = false;
+        btn.textContent = textoAccionInscripcion(accionTipo);
+        document.getElementById('modal-result').innerHTML = '<div class="p-4 bg-red-50 text-red-700 rounded-xl">Error de conexión</div>';
+    });
+}
+
+function textoAccionInscripcion(accion) {
+    if (accion === 'rechazar') return 'Rechazar';
+    if (accion === 'finalizar') return 'Finalizar';
+    if (accion === 'incompleta') return 'Marcar Incompleto';
+    if (accion === 'cancelar') return 'Cancelar inscripcion';
+    if (accion === 'revocar') return 'Revocar';
+    return 'Aprobar';
+}
+</script>
+{% endblock %}

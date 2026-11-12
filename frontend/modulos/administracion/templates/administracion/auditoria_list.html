@@ -1,0 +1,85 @@
+{% extends "core/base.html" %}
+{% block title %}Auditoría - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Auditoría</h1>
+            <p class="text-dark-500">Registro de navegación de usuarios</p>
+        </div>
+        <a href="{{ url_for('administracion_recibos.recibos_list') }}"
+           class="flex items-center px-4 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-all font-medium mt-4 md:mt-0">
+            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>Volver a Recibos
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+            <div class="relative lg:col-span-1">
+                <i data-lucide="mail" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" name="buscar_email" placeholder="Email"
+                       value="{{ buscar_email }}"
+                       hx-get="{{ url_for('administracion.auditoria_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#auditoria-table"
+                       hx-include="[name='buscar_modulo'], [name='buscar_ruta'], [name='desde'], [name='hasta']"
+                       class="w-full pl-9 pr-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm">
+            </div>
+            <div class="relative lg:col-span-1">
+                <i data-lucide="layout-grid" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" name="buscar_modulo" placeholder="Módulo"
+                       value="{{ buscar_modulo }}"
+                       hx-get="{{ url_for('administracion.auditoria_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#auditoria-table"
+                       hx-include="[name='buscar_email'], [name='buscar_ruta'], [name='desde'], [name='hasta']"
+                       class="w-full pl-9 pr-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm">
+            </div>
+            <div class="relative lg:col-span-1">
+                <i data-lucide="link" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                <input type="text" name="buscar_ruta" placeholder="Ruta"
+                       value="{{ buscar_ruta }}"
+                       hx-get="{{ url_for('administracion.auditoria_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#auditoria-table"
+                       hx-include="[name='buscar_email'], [name='buscar_modulo'], [name='desde'], [name='hasta']"
+                       class="w-full pl-9 pr-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm">
+            </div>
+            <div class="lg:col-span-1">
+                <input type="date" name="desde" title="Desde"
+                       value="{{ desde }}"
+                       hx-get="{{ url_for('administracion.auditoria_list') }}"
+                       hx-trigger="change"
+                       hx-target="#auditoria-table"
+                       hx-include="[name='buscar_email'], [name='buscar_modulo'], [name='buscar_ruta'], [name='hasta']"
+                       class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm text-dark-700">
+            </div>
+            <div class="lg:col-span-1">
+                <input type="date" name="hasta" title="Hasta"
+                       value="{{ hasta }}"
+                       hx-get="{{ url_for('administracion.auditoria_list') }}"
+                       hx-trigger="change"
+                       hx-target="#auditoria-table"
+                       hx-include="[name='buscar_email'], [name='buscar_modulo'], [name='buscar_ruta'], [name='desde']"
+                       class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all text-sm text-dark-700">
+            </div>
+        </div>
+        <div class="flex items-center text-sm text-dark-500 mt-3">
+            <i data-lucide="history" class="w-4 h-4 mr-2"></i>
+            <span>{{ total }} registro{{ '' if total == 1 else 's' }}</span>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="auditoria-table">
+            {% include "administracion/partials/auditoria_table.html" %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acuerdo de Custodia de Equipos</title>
+
+    <style>
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 15mm 15mm 15mm 15mm;
+            }
+
+            html, body {
+                width: 210mm;
+                margin: 0;
+                padding: 0;
+                background-color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                color: black;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .document-container {
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+                max-width: none !important;
+                width: 100% !important;
+            }
+
+            .page-break {
+                page-break-before: always;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.4;
+            color: #000;
+            background-color: #e5e5e5;
+            padding: 0;
+            margin: 0;
+        }
+
+        .document-container {
+            background-color: white;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10px auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        /* Header exacto del formato */
+        .header-box {
+            display: table;
+            width: 100%;
+            border: 2px solid #000;
+            margin-bottom: 1.2rem;
+        }
+
+        .header-cell {
+            display: table-cell;
+            vertical-align: middle;
+            border-right: 2px solid #000;
+            padding: 8px 12px;
+        }
+
+        .header-cell:last-child {
+            border-right: none;
+        }
+
+        .header-info {
+            width: 15%;
+            font-size: 10px;
+            line-height: 1.3;
+            text-align: left;
+        }
+
+        .header-title {
+            width: 60%;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .header-logo {
+            width: 25%;
+            text-align: center;
+        }
+
+        .header-logo img {
+            max-width: 140px;
+            height: auto;
+        }
+
+        .fecha-lugar {
+            text-align: right;
+            font-size: 12px;
+            margin-bottom: 1.2rem;
+        }
+
+        .highlight {
+            background-color: #ffff00;
+        }
+
+        p {
+            margin: 0 0 0.8rem 0;
+            text-align: justify;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .equipo-box {
+            background-color: #f0f0f0;
+            border: 1px solid #000;
+            padding: 10px;
+            margin: 0.8rem 0;
+            font-size: 11px;
+        }
+
+        .equipo-box div {
+            margin-bottom: 2px;
+        }
+
+        .equipo-box strong {
+            display: inline-block;
+            min-width: 120px;
+            text-decoration: underline;
+        }
+
+        .compromiso-list {
+            margin: 0.5rem 0 0.8rem 1.5rem;
+            padding: 0;
+            font-size: 11px;
+            line-height: 1.6;
+        }
+
+        .compromiso-list li {
+            margin-bottom: 0.4rem;
+            text-align: justify;
+        }
+
+        .estado-title {
+            font-weight: bold;
+            font-size: 11px;
+            margin: 1rem 0 0.5rem 0;
+            text-decoration: underline;
+        }
+
+        /* Tabla de estado nueva/usada */
+        .estado-equipo-table {
+            width: 250px;
+            border-collapse: collapse;
+            margin: 0.5rem 0 1rem 0;
+            font-size: 11px;
+        }
+
+        .estado-equipo-table td {
+            border: 1px solid #000;
+            padding: 5px 10px;
+        }
+
+        .estado-equipo-table td:first-child {
+            font-weight: bold;
+            background-color: #4a7ba7;
+            color: white;
+            width: 150px;
+        }
+
+        .estado-equipo-table td:last-child {
+            width: 30px;
+            text-align: center;
+        }
+
+        /* Tabla de características y matriz */
+        .estado-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.8rem 0;
+            font-size: 10px;
+        }
+
+        .estado-table th {
+            background-color: #4a7ba7;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            padding: 5px;
+            border: 1px solid #000;
+        }
+
+        .estado-table td {
+            border: 1px solid #000;
+            padding: 5px;
+        }
+
+        .estado-table td:first-child {
+            font-weight: bold;
+            background-color: #4a7ba7;
+            color: white;
+            width: 30%;
+        }
+
+        .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid #000;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* Periféricos */
+        .perifericos-section {
+            margin: 1rem 0;
+            font-size: 11px;
+        }
+
+        .perifericos-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .perifericos-row strong {
+            min-width: 150px;
+        }
+
+        .perifericos-row .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            margin-right: 2rem;
+        }
+
+        /* Firmas */
+        .firma-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2.5rem;
+            padding: 0 2rem;
+        }
+
+        .firma-box {
+            width: 200px;
+            text-align: center;
+        }
+
+        .firma-line {
+            border-top: 1.5px solid #000;
+            margin-bottom: 0.5rem;
+        }
+
+        .firma-label {
+            font-size: 10px;
+            font-weight: normal;
+        }
+
+        .page-number {
+            text-align: center;
+            font-size: 10px;
+            margin-top: 1.5rem;
+        }
+
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .print-button:hover {
+            background: #b91c1c;
+        }
+</style>
+</head>
+
+<body>
+    <button class="print-button no-print" onclick="window.print()">🖨️ Imprimir</button>
+
+    <!-- ==================== PÁGINA 1 ==================== -->
+    <div class="document-container">
+        <div class="header-box">
+            <div class="header-cell header-info">
+                RC 05-04 (1)<br>
+                Rev 06<br>
+                Fecha 09/06/2025
+            </div>
+            <div class="header-cell header-title">
+                ACUERDO DE CUSTODIA DE EQUIPOS
+            </div>
+            <div class="header-cell header-logo">
+                <img src="{{ url_for('static', filename='logo-dicsys-ai-azul.svg') }}" alt="Dicsys">
+            </div>
+        </div>
+
+        <div class="fecha-lugar">
+            <u>Córdoba, {{ fecha_actual }}</u>
+        </div>
+
+        <p>Mediante la presente, entre Dicsys SA y <strong class="highlight">{{ colaborador_nombre }}</strong>, DNI: <strong class="highlight">{{ colaborador_dni }}</strong> se deja constancia de entrega del siguiente equipo que abajo se detalla:</p>
+
+        <div class="equipo-box">
+            <div><strong>Equipo:</strong> {{ item.nombre }} {{ item.marca_nombre or '' }} {{ item.modelo or '' }}</div>
+            <div><strong>Nº de serie:</strong> {{ item.numero_serie or '[Nº de serie]' }}</div>
+            <div><strong>Nº de inventario:</strong> {{ item.numero_inventario or '[Nº de inventario]' }}</div>
+        </div>
+
+        <p><strong>{{ colaborador_nombre }}</strong>, se compromete a dar buen uso del dispositivo, siendo consciente de que dicho recurso pertenece a Dicsys SA, provisto para el desarrollo de sus tareas habituales y laborales. Además, bajo el presente documento está notificado y se compromete a cumplir lo siguiente:</p>
+
+        <ul class="compromiso-list">
+            <li>Notificar al personal técnico de Dicsys por cambios en software y hardware del equipo. Las tareas de formateo y restauración del sistema son responsabilidad exclusiva del personal de Soporte técnico de Dicsys.</li>
+            <li>Ante la extinción del vínculo laboral con la empresa, se cuenta con un plazo de 3 días hábiles luego del último día de prestación de servicio, para hacer efectiva la devolución de las herramientas de trabajo en perfecto estado y funcionamiento, ya que esto implica la interrupción de trámites administrativos del proceso de baja. Pasado este plazo, en caso de no realizar la devolución, se descontará en la correspondiente liquidación final el monto de la máquina a un valor de mercado como nueva, tal como se establece en el contrato de teletrabajo.</li>
+            <li>Ante el robo del equipo, el colaborador de manera inmediata, deberá realizar la correspondiente denuncia policial, a los fines de que la empresa proceda realizar los trámites respectivos al Seguro, a los fines de su restitución. En caso de Hurto del dispositivo, el colaborador será único y exclusivo responsable, teniendo que restituir el monto de dicho dispositivo, el cual podrá ser descontado de las remuneraciones correspondientes.</li>
+        </ul>
+
+        <div class="page-number">Página 1 de 2</div>
+    </div>
+
+    <!-- ==================== PÁGINA 2 ==================== -->
+    <div class="document-container page-break">
+        <div class="header-box">
+            <div class="header-cell header-info">
+                RC 05-04 (1)<br>
+                Rev 06<br>
+                Fecha 09/06/2025
+            </div>
+            <div class="header-cell header-title">
+                ACUERDO DE CUSTODIA DE EQUIPOS
+            </div>
+            <div class="header-cell header-logo">
+                <img src="{{ url_for('static', filename='logo-dicsys-ai-azul.svg') }}" alt="Dicsys">
+            </div>
+        </div>
+
+        <table class="estado-table">
+            <thead>
+                <tr>
+                    <th colspan="2">Características del equipo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>Procesador</td><td>{{ item.procesador or '' }}</td></tr>
+                <tr><td>Memoria</td><td>{{ item.memoria or '' }}</td></tr>
+                <tr><td>Disco principal</td><td>{{ item.disco_principal or '' }}</td></tr>
+                <tr><td>Disco secundario</td><td>{{ item.disco_secundario or '' }}</td></tr>
+            </tbody>
+        </table>
+
+        <!-- Matriz de estado físico completa -->
+        <table class="estado-table" style="margin-top: 1.5rem;">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Excelente</th>
+                    <th>Bueno</th>
+                    <th>Regular</th>
+                    <th>Malo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Carcasa Superior</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Carcasa Inferior</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Pantalla</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Teclado</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Batería</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Touchpad</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Puertos</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td>Cargador</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Malo' else '' }}</div></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Periféricos -->
+        <div class="perifericos-section">
+            <div class="perifericos-row">
+                <strong>Se entrega headset:</strong>
+                <div class="checkbox-item">
+                    Sí <div class="checkbox">{{ 'X' if entrega_kit else '' }}</div>
+                </div>
+                <div class="checkbox-item">
+                    No <div class="checkbox">{{ '' if entrega_kit else 'X' }}</div>
+                </div>
+            </div>
+            <div class="perifericos-row">
+                <strong>Se entrega mouse:</strong>
+                <div class="checkbox-item">
+                    Sí <div class="checkbox">{{ 'X' if entrega_kit else '' }}</div>
+                </div>
+                <div class="checkbox-item">
+                    No <div class="checkbox">{{ '' if entrega_kit else 'X' }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="firma-section">
+            <div class="firma-box">
+                <div class="firma-line"></div>
+                <div class="firma-label">Firma Dicsys</div>
+            </div>
+            <div class="firma-box">
+                <div class="firma-line"></div>
+                <div class="firma-label">Firma del Colaborador</div>
+            </div>
+        </div>
+
+        <div class="page-number">Página 2 de 2</div>
+    </div>
+</body>
+</html>

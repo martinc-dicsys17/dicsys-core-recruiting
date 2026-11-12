@@ -1,0 +1,122 @@
+<div class="overflow-x-auto">
+    <table class="w-full table-fixed">
+        <thead>
+            <tr class="bg-dark-50 border-b border-dark-100">
+                <th class="w-[35%] px-5 py-4 text-left text-xs font-semibold text-dark-500 uppercase">Desafío</th>
+                <th class="w-[10%] px-3 py-4 text-left text-xs font-semibold text-dark-500 uppercase">Categoría</th>
+                <th class="w-[8%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Millas</th>
+                <th class="w-[14%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Actividad</th>
+                <th class="w-[9%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Vence</th>
+                <th class="w-[9%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Estado</th>
+                <th class="w-[15%] px-3 py-4 text-center text-xs font-semibold text-dark-500 uppercase">Acción</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-dark-100">
+            {% for desafio in desafios %}
+            <tr class="hover:bg-dark-50/50 transition-colors group">
+                <td class="px-5 py-4">
+                    <div x-data="{ expanded: false }" class="mb-1">
+                        <p :class="expanded ? '' : 'line-clamp-2'" 
+                           class="font-semibold text-dark-900 cursor-pointer"
+                           @click="expanded = !expanded"
+                           title="Click para expandir/colapsar">
+                            {{ desafio.nombre }}
+                        </p>
+                        {% if desafio.nombre|length > 40 %}
+                        <button type="button" @click="expanded = !expanded" 
+                                class="text-xs text-primary-600 hover:text-primary-700 font-semibold focus:outline-none mt-0.5">
+                            <span x-text="expanded ? 'Ver menos' : 'Ver más'"></span>
+                        </button>
+                        {% endif %}
+                    </div>
+                    
+                    {% if desafio.descripcion %}
+                    <div x-data="{ expanded: false }" class="mb-1">
+                        <p :class="expanded ? '' : 'line-clamp-2'" 
+                           class="text-dark-500 text-sm cursor-pointer hover:text-dark-700 transition-colors"
+                           @click="expanded = !expanded"
+                           title="Click para expandir/colapsar">
+                            {{ desafio.descripcion }}
+                        </p>
+                        {% if desafio.descripcion|length > 60 %}
+                        <button type="button" @click="expanded = !expanded" 
+                                class="text-xs text-primary-600 hover:text-primary-700 font-semibold focus:outline-none mt-0.5">
+                            <span x-text="expanded ? 'Ver menos' : 'Ver más'"></span>
+                        </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    {% if desafio.alcance %}
+                    <p class="text-dark-400 text-xs mt-0.5">
+                        <i data-lucide="users" class="w-3 h-3 inline mr-1"></i>{{ desafio.alcance }}
+                    </p>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-4">
+                    {% if desafio.categoria_nombre %}
+                    <span class="inline-block px-2 py-1 text-xs font-semibold bg-primary-100 text-primary-700 rounded-lg">
+                        {{ desafio.categoria_nombre }}
+                    </span>
+                    {% else %}
+                    <span class="text-dark-400">-</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-4 text-center">
+                    <div class="flex items-center justify-center text-amber-500">
+                        <i data-lucide="star" class="w-4 h-4 mr-1 fill-current"></i>
+                        <span class="font-bold">{{ desafio.star_miles }}</span>
+                    </div>
+                </td>
+                <td class="px-3 py-4">
+                    <div class="flex flex-col items-center gap-0.5 text-xs text-dark-500">
+                        <span><span class="font-semibold text-dark-700">{{ desafio.total_inscriptos }}</span> inscr.</span>
+                        <span><span class="font-semibold text-dark-700">{{ desafio.total_completados }}</span> compl.</span>
+                        {% if desafio.millas_distribuidas > 0 %}
+                        <span class="text-amber-500 font-semibold flex items-center">
+                            <i data-lucide="star" class="w-3 h-3 mr-0.5 fill-current"></i>{{ desafio.millas_distribuidas }}
+                        </span>
+                        {% else %}
+                        <span class="text-dark-400">-</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="px-3 py-4 text-center text-dark-500 text-xs">
+                    {{ desafio.fecha_vencimiento or '-' }}
+                </td>
+                <td class="px-3 py-4 text-center">
+                    {% if desafio.id in desafios_inscriptos %}
+                    <span class="px-2 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700 rounded-lg">Inscripto</span>
+                    {% elif desafio.vigente %}
+                    <span class="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-700 rounded-lg">Disponible</span>
+                    {% else %}
+                    <span class="px-2 py-1 text-xs font-semibold bg-dark-100 text-dark-500 rounded-lg">No vigente</span>
+                    {% endif %}
+                </td>
+                <td class="px-3 py-4 text-center">
+                    {% if desafio.id in desafios_inscriptos %}
+                    <span class="text-xs text-dark-400">Ya inscripto</span>
+                    {% elif desafio.vigente %}
+                    <button onclick="abrirModalInscribir('{{ desafio.id }}', this.dataset.nombre)"
+                            data-nombre="{{ desafio.nombre }}"
+                            class="px-4 py-1.5 text-sm font-semibold bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors">
+                        Participar
+                    </button>
+                    {% else %}
+                    <span class="text-xs text-dark-400">-</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="7" class="px-6 py-16 text-center">
+                    <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="target" class="w-10 h-10 text-dark-300"></i>
+                    </div>
+                    <p class="text-dark-900 font-semibold mb-1">No hay desafíos disponibles</p>
+                    <p class="text-dark-500 text-sm">Volvé pronto para ver nuevos desafíos</p>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

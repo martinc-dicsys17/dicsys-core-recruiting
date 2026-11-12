@@ -1,0 +1,412 @@
+{% extends "core/base.html" %}
+
+{% block title %}Evaluación de Proveedores - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+{# Tablero de la evaluación (D-76): el admin ve todo; el resto, lo asignado a su empleado. #}
+<div class="animate-fade-in"
+     x-data="evaluacionProveedores('{{ url_for('administracion.evaluaciones_proveedores') }}')"
+     x-init="cargar()">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-dark-900 mb-1">Evaluación de Proveedores</h1>
+            <p class="text-dark-500" x-show="datos && datos.evaluacion" x-cloak>
+                Período <span class="font-semibold text-dark-700" x-text="datos?.evaluacion?.periodo"></span>
+                · del <span x-text="fecha(datos?.evaluacion?.fecha_apertura)"></span>
+                al <span x-text="fecha(datos?.evaluacion?.fecha_cierre)"></span>
+                <span class="ml-2 px-2 py-0.5 text-xs font-semibold rounded-full" :class="claseEstado(datos?.evaluacion?.estado)"
+                      x-text="textoEstado(datos?.evaluacion?.estado)"></span>
+            </p>
+        </div>
+        <div class="flex items-center gap-3">
+            <template x-if="datos && datos.es_admin && datos.evaluaciones.length > 1">
+                <label class="flex items-center gap-2 text-sm text-dark-600">
+                    <span>Evaluación</span>
+                    <select x-model="evaluacionId" @change="cargar()"
+                            class="px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                        <option value="">Vigente</option>
+                        <template x-for="e in datos.evaluaciones" :key="e.id">
+                            <option :value="e.id" x-text="e.nombre"></option>
+                        </template>
+                    </select>
+                </label>
+            </template>
+            {# Con la evaluación activa: el admin agrega cualquiera; el evaluador, los que tiene asignados #}
+            <button type="button" x-show="puedeAgregar()" x-cloak @click="abrirAgregar()"
+                    class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Agregar proveedor
+            </button>
+        </div>
+    </div>
+
+    <!-- Avisos de estado -->
+    <div x-show="error" x-cloak class="p-4 mb-4 rounded-xl bg-red-50 text-red-800 border border-red-200" x-text="error"></div>
+    <template x-if="datos && !datos.evaluacion">
+        <div class="bg-white rounded-2xl border border-dark-100 p-10 text-center text-dark-500">
+            <i data-lucide="clipboard-x" class="w-12 h-12 mx-auto mb-3 text-dark-300"></i>
+            <p class="font-medium text-dark-700">No hay una evaluación activa</p>
+            <p class="text-sm">Cuando se abra la próxima, vas a ver acá los proveedores y herramientas que te toca evaluar.</p>
+        </div>
+    </template>
+    <template x-if="datos && datos.evaluacion">
+        <div>
+            <div x-show="!datos.es_admin && !datos.empleado_vinculado"
+                 class="p-4 mb-4 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
+                Tu usuario no está vinculado a un empleado de la nómina (se cruzan por DNI), así que no tenés proveedores asignados. Pedí que lo revisen.
+            </div>
+            <div x-show="datos.evaluacion.estado === 'programada'" class="p-4 mb-4 rounded-xl bg-blue-50 text-blue-800 border border-blue-200">
+                La evaluación abre el <span x-text="fecha(datos.evaluacion.fecha_apertura)"></span>. Hasta entonces podés ver tus proveedores, pero no evaluarlos.
+            </div>
+            <div x-show="datos.evaluacion.estado === 'cerrada'" class="p-4 mb-4 rounded-xl bg-amber-50 text-amber-800 border border-amber-200">
+                La evaluación cerró el <span x-text="fecha(datos.evaluacion.fecha_cierre)"></span>. Para evaluar hay que ampliar la fecha de cierre.
+            </div>
+
+            <!-- Métricas -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <template x-for="m in metricas()" :key="m.clave">
+                    <button type="button" @click="filtros.estado = m.filtro"
+                            class="text-left bg-white rounded-2xl border p-5 transition-all hover:border-primary-300"
+                            :class="filtros.estado === m.filtro ? 'border-primary-400 ring-2 ring-primary-100' : 'border-dark-100'">
+                        <p class="text-sm text-dark-500" x-text="m.etiqueta"></p>
+                        <p class="text-3xl font-semibold mt-1" :class="m.color" x-text="m.valor"></p>
+                    </button>
+                </template>
+            </div>
+
+            <!-- Filtros -->
+            <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-4 flex flex-col md:flex-row gap-3">
+                <div class="relative flex-1">
+                    <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-3 pointer-events-none"></i>
+                    <input type="search" x-model="filtros.texto" placeholder="Buscar proveedor o herramienta..."
+                           class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white">
+                </div>
+                <select x-model="filtros.estado" aria-label="Estado"
+                        class="px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    <option value="todos">Todos</option>
+                    <option value="pendientes">Pendientes</option>
+                    <option value="evaluados">Evaluados</option>
+                    <option value="hallazgos">Con hallazgos</option>
+                </select>
+                <select x-show="datos.es_admin" x-model="filtros.evaluador" aria-label="Evaluador"
+                        class="px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                    <option value="">Todos los evaluadores</option>
+                    <option value="sin">Sin evaluador</option>
+                    <template x-for="e in datos.evaluadores" :key="e.id">
+                        <option :value="e.id" x-text="e.nombre"></option>
+                    </template>
+                </select>
+            </div>
+
+            <!-- Tabla -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead class="bg-dark-50 text-left text-xs font-semibold text-dark-500 uppercase tracking-wide">
+                            <tr>
+                                <th class="px-4 py-3">Proveedor / Herramienta</th>
+                                <th class="px-4 py-3" x-show="datos.es_admin">Evaluador</th>
+                                <th class="px-4 py-3">Incidentes</th>
+                                <th class="px-4 py-3">Mal manejo de información</th>
+                                <th class="px-4 py-3">Fecha de evaluación</th>
+                                <th class="px-4 py-3"></th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-dark-100">
+                            <template x-for="item in itemsVista()" :key="item.id">
+                                <tr class="hover:bg-dark-50/60">
+                                    <td class="px-4 py-3">
+                                        <a :href="`${base}/${item.id}`" class="font-semibold text-primary-600 hover:text-primary-700 hover:underline" x-text="item.proveedor.nombre"></a>
+                                        <p class="text-xs text-dark-400" x-text="TIPOS[item.tipo]"></p>
+                                    </td>
+                                    <td class="px-4 py-3 text-dark-600" x-show="datos.es_admin">
+                                        <span x-show="item.evaluador" x-text="item.evaluador?.nombre"></span>
+                                        <span x-show="!item.evaluador" class="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700">Sin definir</span>
+                                    </td>
+                                    <template x-for="campo in ['incidentes', 'mal_manejo']" :key="campo">
+                                        <td class="px-4 py-3">
+                                            <span x-show="!item[campo]" class="text-dark-300">—</span>
+                                            <span x-show="item[campo]"
+                                                  class="px-2 py-0.5 text-xs font-semibold rounded-full" :class="claseValor(item[campo])"
+                                                  x-text="item[campo]"></span>
+                                        </td>
+                                    </template>
+                                    <td class="px-4 py-3 text-dark-500 whitespace-nowrap">
+                                        <span x-text="item.evaluado_at ? fecha(item.evaluado_at) : '—'"></span>
+                                        <span x-show="item.con_evidencia" class="ml-1 text-xs text-primary-600" title="Tiene evidencia">· evidencia</span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        {# Solo el usuario referente y el admin, con la evaluación abierta (D-87) #}
+                                        <a x-show="item.puede_editar" :href="`${base}/${item.id}/editar`"
+                                           class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-lg border border-dark-200 text-dark-700 hover:border-primary-400 hover:text-primary-600"
+                                           x-text="item.evaluado ? 'Editar' : 'Evaluar'"></a>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+                <div x-show="itemsVista().length === 0" class="px-4 py-10 text-center text-dark-500">
+                    <p x-text="textoSinItems()"></p>
+                    <a x-show="datos.es_admin && !datos.items.length" href="{{ url_for('administracion.config_evaluaciones_proveedores', tab='fuente') }}"
+                       class="inline-block mt-2 text-sm text-primary-600 hover:underline">Importar desde el Google Sheet</a>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <!-- Diálogo: elegir uno o varios proveedores y sumarlos juntos a la evaluación activa -->
+    <div x-show="agregar.abierto" x-cloak class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-16 overflow-y-auto"
+         @keydown.escape.window="agregar.abierto = false">
+        <div class="fixed inset-0 bg-dark-900/50 backdrop-blur-sm" @click="agregar.abierto = false"></div>
+        <div role="dialog" aria-modal="true" aria-labelledby="agregar-titulo" class="relative w-full max-w-xl bg-white rounded-2xl shadow-xl">
+            <div class="px-6 py-4 border-b border-dark-100">
+                <h2 id="agregar-titulo" class="text-lg font-semibold text-dark-900">Agregar proveedores a la evaluación <span x-text="datos?.evaluacion?.periodo"></span></h2>
+                <p class="text-sm text-dark-500 mt-1"
+                   x-text="datos?.es_admin ? 'Elegí uno o varios proveedores o herramientas del registro.' : 'Elegí entre los proveedores que tenés asignados como usuario referente.'"></p>
+            </div>
+            <div class="p-6 space-y-3">
+                <p x-show="agregar.error" class="text-sm text-red-600" x-text="agregar.error"></p>
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="search" x-model="agregar.buscar" x-ref="buscarProveedor" @input.debounce.300ms="buscarCandidatos()"
+                           placeholder="Buscar por nombre, razón social o CUIT..." aria-label="Buscar en el registro de proveedores"
+                           class="w-full pl-9 pr-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white">
+                </div>
+                <div x-show="seleccionados().length" class="flex flex-wrap gap-2" aria-label="Proveedores elegidos">
+                    <template x-for="c in seleccionados()" :key="c.id">
+                        <span class="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-medium rounded-lg bg-primary-50 text-primary-700 border border-primary-200">
+                            <span x-text="c.nombre"></span>
+                            <button type="button" @click="alternar(c)" :aria-label="`Quitar ${c.nombre}`"
+                                    class="w-5 h-5 inline-flex items-center justify-center rounded hover:bg-primary-100">&times;</button>
+                        </span>
+                    </template>
+                </div>
+                <div class="max-h-80 overflow-y-auto divide-y divide-dark-100 border border-dark-100 rounded-xl" :aria-busy="agregar.buscando">
+                    <template x-for="c in agregar.candidatos" :key="c.id">
+                        <div class="flex items-center justify-between gap-3 px-4 py-3" :class="c.en_evaluacion ? 'bg-dark-50/60' : ''">
+                            <div class="min-w-0">
+                                <p class="font-medium text-dark-900">
+                                    <span x-text="c.nombre"></span>
+                                    <span x-show="!c.activo" class="ml-2 px-2 py-0.5 text-xs font-semibold rounded-lg bg-red-100 text-red-700">Inactivo</span>
+                                </p>
+                                <p class="text-xs text-dark-400" x-text="detalleCandidato(c)"></p>
+                            </div>
+                            <span x-show="c.en_evaluacion" class="shrink-0 inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded-lg bg-emerald-50 text-emerald-700">
+                                <i data-lucide="check" class="w-3.5 h-3.5 mr-1"></i>Ya está en la evaluación
+                            </span>
+                            <span x-show="!c.en_evaluacion && !c.activo" class="shrink-0 text-xs text-dark-500 text-right">Activalo en Proveedores<br>para evaluarlo</span>
+                            <button type="button" x-show="!c.en_evaluacion && c.activo" @click="alternar(c)" :disabled="agregar.guardando"
+                                    :aria-pressed="estaElegido(c)" :aria-label="(estaElegido(c) ? 'Quitar de la selección: ' : 'Elegir: ') + c.nombre"
+                                    class="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium rounded-lg border transition-colors disabled:opacity-50"
+                                    :class="estaElegido(c) ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700' : 'border-dark-200 text-dark-700 hover:border-primary-400 hover:text-primary-600'">
+                                <span x-show="!estaElegido(c)" aria-hidden="true">+</span>
+                                <span x-show="estaElegido(c)" aria-hidden="true">&#10003;</span>
+                                <span x-text="estaElegido(c) ? 'Agregado' : 'Agregar'"></span>
+                            </button>
+                        </div>
+                    </template>
+                    <p x-show="!agregar.buscando && !agregar.candidatos.length" class="px-4 py-6 text-center text-sm text-dark-500">
+                        <span x-text="textoSinResultados()"></span>
+                        <a x-show="datos?.es_admin" href="{{ url_for('administracion.proveedores_list') }}" class="block mt-1 text-primary-600 hover:underline">Ir al registro de proveedores</a>
+                    </p>
+                    <p x-show="agregar.buscando && !agregar.candidatos.length" class="px-4 py-6 text-center text-sm text-dark-400">Buscando…</p>
+                </div>
+                <p x-show="agregar.total > agregar.candidatos.length" class="text-xs text-dark-400" x-text="textoMostrando()"></p>
+            </div>
+            <div class="px-6 py-4 border-t border-dark-100 flex flex-wrap items-center justify-between gap-3">
+                <p class="text-sm text-dark-500">
+                    <span x-text="textoElegidos()"></span>
+                    <button type="button" x-show="seleccionados().length" @click="agregar.seleccion = {}"
+                            class="ml-2 text-primary-600 hover:underline">Limpiar</button>
+                </p>
+                <div class="flex gap-2">
+                    <button type="button" @click="agregar.abierto = false" class="px-4 py-2 rounded-xl border border-dark-200 text-dark-700">Cerrar</button>
+                    <button type="button" @click="agregarElegidos()" :disabled="!seleccionados().length || agregar.guardando"
+                            class="px-5 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl font-medium shadow-soft disabled:opacity-50"
+                            x-text="textoBotonAgregar()"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function evaluacionProveedores(base) {
+    const AGREGAR = () => ({abierto: false, buscar: '', candidatos: [], total: 0, buscando: false, error: null, guardando: false,
+                            seleccion: {}});  // id → proveedor elegido (sobrevive a la búsqueda)
+    let consulta = 0;  // vale la última búsqueda: las respuestas pueden llegar desordenadas
+    return {
+        base,
+        agregar: AGREGAR(),
+        TIPOS: {proveedor: 'Proveedor', herramienta: 'Herramienta', sin_clasificar: 'Sin clasificar'},
+        datos: null,
+        cargando: false,
+        error: null,
+        evaluacionId: '',
+        filtros: {texto: '', estado: 'todos', evaluador: ''},
+
+        async cargar() {
+            this.cargando = true;
+            this.error = null;
+            try {
+                const consulta = this.evaluacionId ? `?evaluacion_id=${encodeURIComponent(this.evaluacionId)}` : '';
+                const r = await fetch(`${base}/api/tablero${consulta}`, {headers: {'Accept': 'application/json'}});
+                const cuerpo = await r.json();
+                if (!r.ok) throw new Error(cuerpo.detail || 'No se pudo cargar la evaluación');
+                this.datos = cuerpo;
+            } catch (e) {
+                this.error = e.message;
+            } finally {
+                this.cargando = false;
+                this.$nextTick(() => lucide.createIcons());
+            }
+        },
+
+        // ─── Agregar proveedores a la evaluación (admin: cualquiera; evaluador: los suyos) ───
+        puedeAgregar() {
+            return Boolean(this.datos?.evaluacion?.activa && (this.datos.es_admin || this.datos.empleado_vinculado));
+        },
+        async pedir(ruta, opciones = {}) {
+            const r = await fetch(`${base}/api/${ruta}`, {headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, ...opciones});
+            const cuerpo = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(cuerpo.detail || 'Error en la operación');
+            return cuerpo;
+        },
+        abrirAgregar() {
+            this.agregar = {...AGREGAR(), abierto: true};
+            this.buscarCandidatos();
+            this.$nextTick(() => this.$refs.buscarProveedor?.focus());
+        },
+        async buscarCandidatos() {
+            const esta = ++consulta;
+            this.agregar.buscando = true;
+            this.agregar.error = null;
+            try {
+                const r = await this.pedir(`candidatos?buscar=${encodeURIComponent(this.agregar.buscar.trim())}`);
+                if (esta !== consulta) return;
+                this.agregar.candidatos = r.items;
+                this.agregar.total = r.total;
+            } catch (e) {
+                if (esta === consulta) this.agregar.error = e.message;
+            } finally {
+                if (esta === consulta) this.agregar.buscando = false;
+                this.$nextTick(() => lucide.createIcons());
+            }
+        },
+        detalleCandidato(c) {
+            return [this.TIPOS[c.tipo], c.cuit, c.referente || 'Referente sin definir'].filter(Boolean).join(' · ');
+        },
+        textoSinResultados() {
+            const texto = this.agregar.buscar.trim();
+            if (!this.datos?.es_admin) {
+                return texto ? `No tenés proveedores asignados que coincidan con «${texto}».`
+                    : 'No tenés proveedores asignados como usuario referente.';
+            }
+            return texto ? `No hay proveedores en el registro que coincidan con «${texto}».` : 'El registro de proveedores está vacío.';
+        },
+        // La evaluación solo tiene lo que entró por el Sheet o con «Agregar proveedor»
+        textoSinItems() {
+            if (this.datos.items.length) return 'No hay resultados con esos filtros.';
+            if (this.datos.es_admin) {
+                return 'Todavía no hay proveedores en esta evaluación: importalos desde el Google Sheet o sumalos con «Agregar proveedor».';
+            }
+            return this.puedeAgregar()
+                ? 'No tenés proveedores en esta evaluación. Podés sumar los que tenés asignados con «Agregar proveedor».'
+                : 'No tenés proveedores ni herramientas asignados en esta evaluación.';
+        },
+        textoMostrando() {
+            return `Se muestran ${this.agregar.candidatos.length} de ${this.agregar.total}: escribí para afinar la búsqueda.`;
+        },
+        // Elegir no agrega: el botón de cada fila marca «Agregado» y el del pie suma todos juntos
+        estaElegido(c) {
+            return Boolean(this.agregar.seleccion[c.id]);
+        },
+        alternar(c) {
+            if (this.agregar.seleccion[c.id]) delete this.agregar.seleccion[c.id];
+            else this.agregar.seleccion[c.id] = c;
+        },
+        seleccionados() {
+            return Object.values(this.agregar.seleccion);
+        },
+        textoElegidos() {
+            const n = this.seleccionados().length;
+            return n ? `${n} elegido${n === 1 ? '' : 's'}` : 'Elegí los que quieras agregar';
+        },
+        textoBotonAgregar() {
+            const n = this.seleccionados().length;
+            if (this.agregar.guardando) return 'Agregando…';
+            return n ? `Agregar (${n})` : 'Agregar';
+        },
+        async agregarElegidos() {
+            const elegidos = this.seleccionados();
+            if (!elegidos.length) return;
+            this.agregar.guardando = true;
+            this.agregar.error = null;
+            try {
+                const r = await this.pedir('items', {method: 'POST', body: JSON.stringify({proveedor_ids: elegidos.map(c => c.id)})});
+                const n = r.agregados.length;
+                Alpine.store('toasts').success(n === 1 ? `«${elegidos[0].nombre}» agregado a la evaluación`
+                                                       : `${n} proveedores agregados a la evaluación`);
+                this.agregar.abierto = false;
+                await this.cargar();
+            } catch (e) {
+                this.agregar.error = e.message;  // no se agregó ninguno: la selección queda para corregir
+            } finally {
+                this.agregar.guardando = false;
+            }
+        },
+
+        metricas() {
+            const m = this.datos.metricas;
+            return [
+                {clave: 'total', etiqueta: 'Proveedores y herramientas', valor: m.total, filtro: 'todos', color: 'text-dark-900'},
+                {clave: 'evaluados', etiqueta: 'Evaluados', valor: m.evaluados, filtro: 'evaluados', color: 'text-emerald-600'},
+                {clave: 'pendientes', etiqueta: 'Pendientes', valor: m.pendientes, filtro: 'pendientes', color: 'text-amber-600'},
+                {clave: 'hallazgos', etiqueta: 'Con hallazgos', valor: m.con_hallazgo, filtro: 'hallazgos', color: 'text-red-600'},
+            ];
+        },
+
+        itemsVista() {
+            if (!this.datos) return [];
+            // Sin importar mayúsculas ni acentos, como el buscador del registro
+            const plegar = t => (t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+            const texto = plegar(this.filtros.texto.trim());
+            return this.datos.items.filter(item => {
+                if (texto && !plegar(item.proveedor.nombre).includes(texto)) return false;
+                if (this.filtros.estado === 'pendientes' && item.evaluado) return false;
+                if (this.filtros.estado === 'evaluados' && !item.evaluado) return false;
+                if (this.filtros.estado === 'hallazgos' && !item.con_hallazgo) return false;
+                if (this.filtros.evaluador === 'sin' && item.evaluador) return false;
+                if (this.filtros.evaluador && this.filtros.evaluador !== 'sin' && item.evaluador?.id !== this.filtros.evaluador) return false;
+                return true;
+            });
+        },
+
+        fecha(valor) {
+            if (!valor) return '';
+            const texto = String(valor);
+            if (texto.includes('T')) {
+                // Fecha y hora en UTC (sin zona): se muestra en la hora del navegador
+                return new Date(texto.endsWith('Z') ? texto : `${texto}Z`).toLocaleDateString('es-AR');
+            }
+            const [a, m, d] = texto.slice(0, 10).split('-');
+            return `${d}/${m}/${a}`;
+        },
+        claseValor(valor) {
+            return {
+                'Si': 'bg-red-100 text-red-700', 'No': 'bg-emerald-100 text-emerald-700', 'N/A': 'bg-dark-100 text-dark-600',
+            }[valor] || 'bg-dark-100 text-dark-600';
+        },
+        textoEstado(estado) {
+            return {programada: 'Programada', abierta: 'Abierta', cerrada: 'Cerrada', reemplazada: 'Finalizada'}[estado] || '';
+        },
+        claseEstado(estado) {
+            return {programada: 'bg-blue-100 text-blue-700', abierta: 'bg-emerald-100 text-emerald-700',
+                    cerrada: 'bg-amber-100 text-amber-700', reemplazada: 'bg-dark-100 text-dark-600'}[estado] || '';
+        },
+    };
+}
+</script>
+{% endblock %}

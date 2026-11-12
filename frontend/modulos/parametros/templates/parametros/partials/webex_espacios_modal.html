@@ -1,0 +1,58 @@
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" onclick="document.getElementById('modal-editar').innerHTML = ''"></div>
+    <div class="bg-white rounded-2xl shadow-soft z-10 max-w-lg w-full border border-dark-100 overflow-hidden max-h-[90vh] flex flex-col">
+        <div class="px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+            <h3 class="text-lg font-semibold text-dark-900 flex items-center gap-2">
+                <i data-lucide="users" class="w-5 h-5 text-primary-500"></i>Espacios de Webex a sincronizar
+            </h3>
+            <button type="button" onclick="document.getElementById('modal-editar').innerHTML = ''"
+                    class="p-2 text-dark-400 hover:text-dark-600 hover:bg-dark-100 rounded-lg transition-colors">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+
+        <form hx-post="{{ url_for('parametros.guardar_webex_espacios', id=p.id) }}"
+              hx-target="#parametros-table" hx-swap="innerHTML" hx-include="#parametros-filtros"
+              class="flex flex-col min-h-0">
+
+            <div class="px-6 pt-4">
+                <p class="text-sm text-dark-500">
+                    Elegí los espacios del team Dicsys donde la sincronización debe asegurar que estén todos los empleados activos.
+                </p>
+                {% if not api_ok %}
+                <div class="mt-3 p-3 rounded-xl text-sm bg-amber-50 border border-amber-200 text-amber-700">
+                    ⚠️ No se pudo cargar la lista desde Webex ({{ api_error }}). Se muestra la selección actual guardada.
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="px-6 py-4 overflow-y-auto space-y-1.5">
+                {% for room in rooms %}
+                <label class="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-dark-100 hover:bg-dark-50 cursor-pointer transition-colors">
+                    <input type="checkbox" name="espacio"
+                           value='{{ {"id": room.id, "nombre": room.nombre}|tojson }}'
+                           {% if room.id in seleccion_ids %}checked{% endif %}
+                           class="w-4 h-4 text-primary-600 border-dark-300 rounded focus:ring-primary-500">
+                    <span class="flex-1 text-sm font-medium text-dark-800">{{ room.nombre or '(sin nombre)' }}</span>
+                    <code class="text-[10px] text-dark-300 font-mono truncate max-w-[40%]" title="{{ room.id }}">{{ room.id[-12:] }}</code>
+                </label>
+                {% else %}
+                <div class="px-3 py-8 text-center text-sm text-dark-400 border border-dashed border-dark-200 rounded-xl">
+                    No hay espacios para mostrar. Verificá el Team ID y que el bot sea miembro del team.
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="px-6 py-4 border-t border-dark-100 flex space-x-3">
+                <button type="button" onclick="document.getElementById('modal-editar').innerHTML = ''"
+                        class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">
+                    Cancelar
+                </button>
+                <button type="submit"
+                        class="flex-1 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                    <i data-lucide="check" class="w-4 h-4 inline mr-2"></i>Guardar selección
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

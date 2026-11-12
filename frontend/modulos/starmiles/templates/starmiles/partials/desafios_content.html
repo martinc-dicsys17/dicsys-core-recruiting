@@ -1,0 +1,59 @@
+<!-- Vista Cards -->
+<div x-show="viewMode === 'cards'">
+    {% include "starmiles/partials/desafios_grid.html" %}
+</div>
+
+<!-- Vista Tabla -->
+<div x-show="viewMode === 'table'" x-cloak class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+    {% include "starmiles/partials/desafios_table.html" %}
+</div>
+
+<!-- Paginación -->
+{% if total_paginas is defined and total_paginas > 1 %}
+<div class="flex items-center justify-between mt-6">
+    <p class="text-sm text-dark-500">
+        Página {{ pagina }} de {{ total_paginas }} ({{ total }} desafíos)
+    </p>
+    <div class="flex items-center gap-2">
+        {% if pagina > 1 %}
+        <button @click="irAPagina({{ pagina - 1 }})"
+                class="px-4 py-2 text-sm font-medium border border-dark-200 rounded-xl hover:bg-dark-50 transition-colors text-dark-700">
+            <i data-lucide="chevron-left" class="w-4 h-4 inline mr-1"></i>Anterior
+        </button>
+        {% endif %}
+
+        {% set start_page = [1, pagina - 2]|max %}
+        {% set end_page = [total_paginas, pagina + 2]|min %}
+
+        {% if start_page > 1 %}
+        <button @click="irAPagina(1)"
+                class="w-9 h-9 text-sm rounded-lg hover:bg-dark-50 text-dark-600">1</button>
+        {% if start_page > 2 %}
+        <span class="px-1 text-dark-400">...</span>
+        {% endif %}
+        {% endif %}
+
+        {% for p in range(start_page, end_page + 1) %}
+        <button @click="irAPagina({{ p }})"
+                class="w-9 h-9 text-sm rounded-lg transition-colors {{ 'bg-primary-500 text-white font-semibold' if p == pagina else 'hover:bg-dark-50 text-dark-600' }}">
+            {{ p }}
+        </button>
+        {% endfor %}
+
+        {% if end_page < total_paginas %}
+        {% if end_page < total_paginas - 1 %}
+        <span class="px-1 text-dark-400">...</span>
+        {% endif %}
+        <button @click="irAPagina({{ total_paginas }})"
+                class="w-9 h-9 text-sm rounded-lg hover:bg-dark-50 text-dark-600">{{ total_paginas }}</button>
+        {% endif %}
+
+        {% if pagina < total_paginas %}
+        <button @click="irAPagina({{ pagina + 1 }})"
+                class="px-4 py-2 text-sm font-medium border border-dark-200 rounded-xl hover:bg-dark-50 transition-colors text-dark-700">
+            Siguiente<i data-lucide="chevron-right" class="w-4 h-4 inline ml-1"></i>
+        </button>
+        {% endif %}
+    </div>
+</div>
+{% endif %}

@@ -1,0 +1,241 @@
+{% extends "core/base.html" %}
+{% block title %}Clientes - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="clientesFiltros()" x-init="init()">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Clientes</h1>
+            <p class="text-dark-500">Gestión de clientes de la empresa</p>
+        </div>
+        <div class="flex gap-2 mt-4 md:mt-0 items-center">
+            <a href="{{ url_for('administracion.categorias_list') }}"
+               class="flex items-center px-4 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-all font-medium">
+                <i data-lucide="tag" class="w-4 h-4 mr-2"></i>Categorías
+            </a>
+            <a href="{{ url_for('administracion.clientes_create') }}"
+               class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nuevo Cliente
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6"
+         x-effect="
+            ['buscar-input', 'tipo-select', 'categoria-select'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.setAttribute('hx-target', viewMode === 'table' ? '#clientes-table' : '#clientes-cards');
+                    htmx.process(el);
+                }
+            })
+         ">
+        <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+            <div class="relative flex-1 max-w-md">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input id="buscar-input" type="text" name="buscar" placeholder="Buscar por razón social, fantasía o CUIT..."
+                       value="{{ buscar }}"
+                       hx-get="{{ url_for('administracion.clientes_list') }}"
+                       hx-trigger="keyup changed delay:300ms"
+                       hx-target="#clientes-table"
+                       hx-include="[name='tipo'],[name='categoria_id'],[name='ordenar_por'],[name='ordenar_dir']"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+            </div>
+            <select id="tipo-select" name="tipo"
+                    hx-get="{{ url_for('administracion.clientes_list') }}"
+                    hx-trigger="change"
+                    hx-target="#clientes-table"
+                    hx-include="[name='buscar'],[name='categoria_id'],[name='ordenar_por'],[name='ordenar_dir']"
+                    class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-dark-700">
+                <option value="">Todos los tipos</option>
+                <option value="Individual" {% if filtro_tipo == 'Individual' %}selected{% endif %}>Individual</option>
+                <option value="Empresa" {% if filtro_tipo == 'Empresa' %}selected{% endif %}>Empresa</option>
+            </select>
+            <select id="categoria-select" name="categoria_id"
+                    hx-get="{{ url_for('administracion.clientes_list') }}"
+                    hx-trigger="change"
+                    hx-target="#clientes-table"
+                    hx-include="[name='buscar'],[name='tipo'],[name='ordenar_por'],[name='ordenar_dir']"
+                    class="px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 text-dark-700">
+                <option value="">Todas las categorías</option>
+                {% for cat in categorias %}
+                <option value="{{ cat.id }}" {% if filtro_categoria == cat.id %}selected{% endif %}>{{ cat.nombre }}</option>
+                {% endfor %}
+            </select>
+
+            <!-- Ordenar por -->
+            <div class="relative" x-data="{ openOrdenar: false }">
+                <button @click="openOrdenar = !openOrdenar"
+                        class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                        :class="ordenarPor ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                    <i data-lucide="arrow-up-down" class="w-4 h-4 mr-2"></i>
+                    <span x-text="ordenarPor ? 'Orden: ' + ordenarLabels[ordenarPor + '_' + ordenarDir] : 'Ordenar'"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 ml-2 text-dark-400"></i>
+                </button>
+                <div x-show="openOrdenar" @click.away="openOrdenar = false" x-cloak
+                     class="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-dark-100 shadow-lg z-20">
+                    <div class="p-2">
+                        <button @click="setOrdenar(null); openOrdenar = false"
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700"
+                                :class="{ 'bg-primary-50 text-primary-700': !ordenarPor }">
+                            Por defecto (Razón Social)
+                        </button>
+                        <button @click="setOrdenar('razon_social', 'asc'); openOrdenar = false"
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'razon_social' && ordenarDir === 'asc' }">
+                            <span>Razón Social A-Z</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('razon_social', 'desc'); openOrdenar = false"
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'razon_social' && ordenarDir === 'desc' }">
+                            <span>Razón Social Z-A</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                        <div class="border-t border-dark-100 my-1"></div>
+                        <button @click="setOrdenar('cuit', 'asc'); openOrdenar = false"
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'cuit' && ordenarDir === 'asc' }">
+                            <span>CUIT A-Z</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <div class="border-t border-dark-100 my-1"></div>
+                        <button @click="setOrdenar('activo', 'desc'); openOrdenar = false"
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'activo' && ordenarDir === 'desc' }">
+                            <span>Activos primero</span>
+                            <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                        </button>
+                        <button @click="setOrdenar('activo', 'asc'); openOrdenar = false"
+                                class="w-full text-left px-3 py-2 rounded-lg hover:bg-dark-50 text-dark-700 flex items-center justify-between"
+                                :class="{ 'bg-primary-50 text-primary-700': ordenarPor === 'activo' && ordenarDir === 'asc' }">
+                            <span>Inactivos primero</span>
+                            <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inputs hidden para ordenamiento (incluidos en hx-include) -->
+            <input type="hidden" name="ordenar_por" :value="ordenarPor">
+            <input type="hidden" name="ordenar_dir" :value="ordenarDir">
+
+            <!-- Toggle vista -->
+            <div class="flex items-center bg-dark-100 rounded-xl p-1 ml-auto">
+                <button @click="viewMode = 'table'"
+                        :class="viewMode === 'table' ? 'bg-white shadow-sm text-dark-900' : 'text-dark-500 hover:text-dark-700'"
+                        class="flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                        aria-label="Vista lista">
+                    <i data-lucide="list" class="w-4 h-4 mr-1.5"></i>Lista
+                </button>
+                <button @click="viewMode = 'cards'"
+                        :class="viewMode === 'cards' ? 'bg-white shadow-sm text-dark-900' : 'text-dark-500 hover:text-dark-700'"
+                        class="flex items-center px-3 py-1.5 rounded-lg text-sm font-medium transition-all"
+                        aria-label="Vista cards">
+                    <i data-lucide="layout-grid" class="w-4 h-4 mr-1.5"></i>Cards
+                </button>
+            </div>
+
+            <!-- Conteo -->
+            <div class="flex items-center text-sm text-dark-500 whitespace-nowrap">
+                <i data-lucide="building-2" class="w-4 h-4 mr-2"></i>
+                <span>{{ total }} clientes</span>
+            </div>
+        </div><!-- fin flex row -->
+    </div><!-- fin filtros -->
+
+    <!-- Vista Tabla -->
+    <div x-show="viewMode === 'table'" class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="clientes-table"
+             hx-get="{{ url_for('administracion.clientes_list') }}"
+             hx-trigger="clienteDeleted from:body">
+            {% include "administracion/partials/clientes_table.html" %}
+        </div>
+    </div>
+
+    <!-- Vista Cards -->
+    <div x-show="viewMode === 'cards'" x-cloak>
+        <div id="clientes-cards"
+             hx-get="{{ url_for('administracion.clientes_list') }}"
+             hx-trigger="clienteDeleted from:body">
+            {% include "administracion/partials/clientes_cards.html" %}
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar cliente?</h3>
+                <p class="text-dark-500 mb-6">Esta acción marcará el cliente como eliminado.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false"
+                        class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">
+                    Cancelar
+                </button>
+                <button @click="htmx.ajax('DELETE', '/administracion/clientes/' + deleteId + '/eliminar', {target: '#clientes-table'}); showDeleteModal = false"
+                        class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600">
+                    Eliminar
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function clientesFiltros() {
+    return {
+        viewMode: localStorage.getItem('clientes_viewMode') || 'table',
+        ordenarPor: '{{ ordenar_por or "" }}',
+        ordenarDir: '{{ ordenar_dir or "asc" }}',
+        showDeleteModal: false,
+        deleteId: null,
+        ordenarLabels: {
+            'razon_social_asc': 'Razón Social A-Z',
+            'razon_social_desc': 'Razón Social Z-A',
+            'cuit_asc': 'CUIT A-Z',
+            'activo_desc': 'Activos primero',
+            'activo_asc': 'Inactivos primero',
+        },
+
+        init() {
+            this.$watch('viewMode', v => localStorage.setItem('clientes_viewMode', v));
+        },
+
+        setOrdenar(campo, dir) {
+            if (campo === null) {
+                this.ordenarPor = '';
+                this.ordenarDir = 'asc';
+            } else {
+                this.ordenarPor = campo;
+                this.ordenarDir = dir || 'asc';
+            }
+            this.$nextTick(() => {
+                const target = this.viewMode === 'cards' ? '#clientes-cards' : '#clientes-table';
+                htmx.ajax('GET', '{{ url_for("administracion.clientes_list") }}', {
+                    target: target,
+                    values: {
+                        buscar: document.querySelector('[name="buscar"]')?.value || '',
+                        tipo: document.querySelector('[name="tipo"]')?.value || '',
+                        categoria_id: document.querySelector('[name="categoria_id"]')?.value || '',
+                        ordenar_por: this.ordenarPor,
+                        ordenar_dir: this.ordenarDir,
+                    }
+                });
+            });
+        },
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,37 @@
+<table class="w-full">
+    <thead>
+        <tr class="bg-dark-50 border-b border-dark-100">
+            <th class="px-6 py-4 text-left text-xs font-semibold text-dark-500 uppercase">Nombre</th>
+            <th class="px-6 py-4 text-left text-xs font-semibold text-dark-500 uppercase">Descripción</th>
+            <th class="px-6 py-4 text-right text-xs font-semibold text-dark-500 uppercase">Acciones</th>
+        </tr>
+    </thead>
+    <tbody class="divide-y divide-dark-100">
+        {% for cat in categorias %}
+        <tr class="hover:bg-dark-50/50 transition-colors group">
+            <td class="px-6 py-4 font-semibold text-dark-900">{{ cat.nombre }}</td>
+            <td class="px-6 py-4 text-dark-500 text-sm">{{ (cat.descripcion or '-') }}</td>
+            <td class="px-6 py-4">
+                <div class="flex items-center justify-end space-x-1">
+                    <button @click="editId = '{{ cat.id }}'; editNombre = '{{ cat.nombre }}'; editDesc = '{{ (cat.descripcion or '') }}'; showForm = true"
+                            class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg"
+                            aria-label="Editar categoría">
+                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    </button>
+                    <button @click="deleteId = '{{ cat.id }}'; showDeleteModal = true"
+                            class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                            aria-label="Eliminar categoría">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="3" class="px-6 py-12 text-center text-dark-400">
+                No hay categorías creadas todavía.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>

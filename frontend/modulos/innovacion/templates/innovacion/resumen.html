@@ -1,0 +1,203 @@
+{% extends "core/base.html" %}
+
+{% block title %}Resumen Innovación - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">Path de Certificación de AI</h1>
+            <p class="text-dark-500">Métricas y KPIs del programa de certificación</p>
+        </div>
+        <a href="https://dicsys.notion.site/Track-2-Teams-2bcb8570e45980d48fe7c6f93edf326c"
+           target="_blank" rel="noopener"
+           class="inline-flex items-center gap-2 mt-4 md:mt-0 px-5 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold transition-all">
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            Documentación del programa
+            <i data-lucide="external-link" class="w-4 h-4"></i>
+        </a>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <!-- Total Personal -->
+        <a href="{{ url_for('innovacion.cards') }}" class="bg-white rounded-2xl border border-dark-100 p-6 hover:shadow-soft hover:border-dark-200 transition-all block">
+            <div class="flex items-center justify-between mb-3">
+                <div class="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="users" class="w-6 h-6 text-primary-600"></i>
+                </div>
+                <i data-lucide="arrow-up-right" class="w-4 h-4 text-dark-300"></i>
+            </div>
+            <p class="text-3xl font-bold text-dark-900">{{ resumen.total or 0 }}</p>
+            <p class="text-dark-500 text-sm">Total Personal</p>
+        </a>
+        <!-- En Progreso -->
+        <a href="{{ url_for('innovacion.cards', estado='en_progreso,en_revision') }}" class="bg-white rounded-2xl border border-dark-100 p-6 hover:shadow-soft hover:border-blue-200 transition-all block">
+            <div class="flex items-center justify-between mb-3">
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="clock" class="w-6 h-6 text-blue-600"></i>
+                </div>
+                <i data-lucide="arrow-up-right" class="w-4 h-4 text-dark-300"></i>
+            </div>
+            <p class="text-3xl font-bold text-dark-900">{{ resumen.en_progreso or 0 }}</p>
+            <p class="text-dark-500 text-sm">En Progreso</p>
+        </a>
+        <!-- Completadas -->
+        <a href="{{ url_for('innovacion.cards', estado='completada') }}" class="bg-white rounded-2xl border border-dark-100 p-6 hover:shadow-soft hover:border-emerald-200 transition-all block">
+            <div class="flex items-center justify-between mb-3">
+                <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="check-circle" class="w-6 h-6 text-emerald-600"></i>
+                </div>
+                <i data-lucide="arrow-up-right" class="w-4 h-4 text-dark-300"></i>
+            </div>
+            <p class="text-3xl font-bold text-dark-900">{{ resumen.completadas or 0 }}</p>
+            <p class="text-dark-500 text-sm">Completadas</p>
+        </a>
+        <!-- % Certificación -->
+        <div class="bg-white rounded-2xl border border-dark-100 p-6">
+            <div class="flex items-center justify-between mb-3">
+                <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="percent" class="w-6 h-6 text-amber-600"></i>
+                </div>
+            </div>
+            <p class="text-3xl font-bold text-dark-900">{% if resumen.total %}{{ ((resumen.completadas or 0) * 100 / resumen.total) | round(1) }}%{% else %}0%{% endif %}</p>
+            <p class="text-dark-500 text-sm">% Certificación</p>
+        </div>
+        <!-- Asistentes a eventos -->
+        <a href="{{ url_for('innovacion.asistentes_eventos', agrupar_equipo=1) }}" class="bg-white rounded-2xl border border-dark-100 p-6 hover:shadow-soft hover:border-violet-200 transition-all block">
+            {% set porcentaje_participacion_eventos = ((resumen.total_asistentes_eventos or 0) * 100 / resumen.total_personal_eventos) | round(1) if resumen.total_personal_eventos else 0 %}
+            <div class="flex items-center justify-between mb-3">
+                <div class="w-12 h-12 bg-violet-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="calendar-check" class="w-6 h-6 text-violet-600"></i>
+                </div>
+                <i data-lucide="arrow-up-right" class="w-4 h-4 text-dark-300"></i>
+            </div>
+            <p class="text-4xl font-bold text-violet-700 leading-tight">{{ porcentaje_participacion_eventos }}%</p>
+            <p class="text-dark-500 text-sm">% participación en eventos</p>
+            <p class="text-xs text-dark-400 mt-1">{{ resumen.total_asistentes_eventos or 0 }} de {{ resumen.total_personal_eventos or 0 }} · personal elegible (excluye equipos Dicsys)</p>
+        </a>
+    </div>
+
+    <!-- Dos columnas: Por Path y Por Equipo -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+
+        <!-- Certificaciones por Path -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden lg:sticky lg:top-[92px]">
+            <div class="p-6 border-b border-dark-100">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center mr-3">
+                        <i data-lucide="route" class="w-5 h-5 text-primary-600"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-dark-900">Certificaciones por Path</h2>
+                        <p class="text-dark-500 text-xs">Participantes y aprobados por tipo</p>
+                    </div>
+                </div>
+            </div>
+            {% if resumen.por_path %}
+            <div class="divide-y divide-dark-100">
+                {% for item in resumen.por_path %}
+                <a href="{{ url_for('innovacion.cards', tipo_certificacion=item.codigo) }}" class="block p-5 hover:bg-dark-50/50 transition-colors">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center">
+                            <i data-lucide="{{ item.icono or 'award' }}" class="w-5 h-5 text-primary-500 mr-2"></i>
+                            <span class="font-semibold text-dark-900">{{ item.nombre }}</span>
+                        </div>
+                        <span class="text-sm font-bold text-emerald-600">{{ item.porcentaje }}%</span>
+                    </div>
+                    <div class="w-full bg-dark-100 rounded-full h-2 mb-2">
+                        <div class="bg-gradient-to-r from-primary-400 to-emerald-500 h-2 rounded-full transition-all" style="width: {{ [item.porcentaje, 100] | min }}%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-dark-500">
+                        <span><span class="font-semibold text-dark-700">{{ item.participantes }}</span> participantes</span>
+                        <span><span class="font-semibold text-emerald-600">{{ item.aprobados }}</span> aprobados</span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <div class="w-16 h-16 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="bar-chart-3" class="w-8 h-8 text-dark-300"></i>
+                </div>
+                <p class="text-dark-500">Aún no hay certificaciones registradas</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Por Equipo -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden flex flex-col" style="max-height: calc(100vh - 92px);">
+            <div class="p-6 border-b border-dark-100 flex-shrink-0">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center mr-3">
+                        <i data-lucide="building-2" class="w-5 h-5 text-blue-600"></i>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-dark-900">Avance por Equipo</h2>
+                        <p class="text-dark-500 text-xs">% de aprobación por departamento</p>
+                    </div>
+                </div>
+            </div>
+            {% if resumen.por_equipo %}
+            <div class="divide-y divide-dark-100 overflow-y-auto scroll-smooth
+                        [&::-webkit-scrollbar]:w-1.5
+                        [&::-webkit-scrollbar-track]:bg-transparent
+                        [&::-webkit-scrollbar-thumb]:bg-dark-200
+                        [&::-webkit-scrollbar-thumb]:rounded-full
+                        [&::-webkit-scrollbar-thumb:hover]:bg-dark-300">
+                {% for eq in resumen.por_equipo %}
+                <a href="{{ url_for('innovacion.cards', equipo_id=eq.id) if eq.id else url_for('innovacion.cards', sin_equipo='1') }}" class="block p-5 hover:bg-dark-50/50 transition-colors">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center min-w-0">
+                            <div class="w-8 h-8 bg-{% if eq.porcentaje >= 50 %}emerald{% elif eq.porcentaje > 0 %}amber{% else %}dark{% endif %}-100 rounded-lg flex items-center justify-center mr-2 flex-shrink-0">
+                                <i data-lucide="{% if eq.porcentaje >= 50 %}trophy{% elif eq.porcentaje > 0 %}trending-up{% else %}minus{% endif %}" class="w-4 h-4 text-{% if eq.porcentaje >= 50 %}emerald{% elif eq.porcentaje > 0 %}amber{% else %}dark{% endif %}-600"></i>
+                            </div>
+                            <div class="min-w-0 mr-3">
+                                <span class="font-semibold text-dark-900 text-sm">{{ eq.nombre }}</span>
+                                <p class="text-xs text-dark-400">{{ eq.total_empleados }} miembros</p>
+                            </div>
+                            {% if eq.miembros_preview %}
+                            <div class="flex -space-x-2 flex-shrink-0">
+                                {% for m in eq.miembros_preview[:4] %}
+                                {% if m.foto %}
+                                <img src="{{ m.foto|storage_url }}" alt="{{ m.nombre }} {{ m.apellido }}" class="w-7 h-7 rounded-full border-2 border-white object-cover" title="{{ m.nombre }} {{ m.apellido }}">
+                                {% else %}
+                                <div class="w-7 h-7 bg-dark-200 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-medium text-dark-600" title="{{ m.nombre }} {{ m.apellido }}">
+                                    {{ m.nombre[:1] }}{{ m.apellido[:1] }}
+                                </div>
+                                {% endif %}
+                                {% endfor %}
+                                {% if eq.total_miembros > 4 %}
+                                <div class="w-7 h-7 bg-primary-100 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-medium text-primary-600">
+                                    +{{ eq.total_miembros - 4 }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        <span class="text-lg font-bold text-{% if eq.porcentaje >= 50 %}emerald{% elif eq.porcentaje > 0 %}amber{% else %}dark{% endif %}-600 flex-shrink-0 ml-2">{{ eq.porcentaje }}%</span>
+                    </div>
+                    <div class="w-full bg-dark-100 rounded-full h-2 mb-2">
+                        <div class="bg-gradient-to-r {% if eq.porcentaje >= 50 %}from-emerald-400 to-emerald-500{% elif eq.porcentaje > 0 %}from-amber-400 to-amber-500{% else %}from-dark-200 to-dark-300{% endif %} h-2 rounded-full transition-all" style="width: {{ [eq.porcentaje, 100] | min }}%"></div>
+                    </div>
+                    <div class="flex items-center justify-between text-xs text-dark-500">
+                        <span><span class="font-semibold text-dark-700">{{ eq.participantes }}</span> participantes</span>
+                        <span><span class="font-semibold text-emerald-600">{{ eq.aprobados }}</span> aprobados</span>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-12">
+                <div class="w-16 h-16 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="building-2" class="w-8 h-8 text-dark-300"></i>
+                </div>
+                <p class="text-dark-500">No hay datos de equipos</p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endblock %}

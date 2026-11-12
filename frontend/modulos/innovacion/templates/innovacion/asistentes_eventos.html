@@ -1,0 +1,319 @@
+{% extends "core/base.html" %}
+
+{% block title %}Asistentes a Eventos - Innovación - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('innovacion.resumen') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver al resumen">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div class="flex-1">
+            <h1 class="text-2xl font-bold text-dark-900">Asistentes de Charlas AI</h1>
+            <p class="text-dark-500 text-sm">
+                {{ total }} miembro{{ 's' if total != 1 else '' }}
+                {{ 'sin participación' if sin_participacion else 'con participación registrada' }}
+            </p>
+        </div>
+    </div>
+
+    <form method="get" class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        {% if sin_participacion %}
+        <input type="hidden" name="sin_participacion" value="1">
+        {% endif %}
+        {% if agrupar_equipo %}
+        <input type="hidden" name="agrupar_equipo" value="1">
+        {% endif %}
+        <div class="grid grid-cols-1 lg:grid-cols-5 gap-3">
+            <div class="lg:col-span-2">
+                <label class="block text-xs font-semibold text-dark-500 mb-1">Buscar asistente</label>
+                <div class="relative">
+                    <i data-lucide="search" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="search" name="buscar" value="{{ buscar }}"
+                           placeholder="Nombre, apellido, email o DNI"
+                           class="w-full pl-9 pr-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-dark-500 mb-1">Tag</label>
+                <select name="tag"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    <option value="">Todos los tags</option>
+                    {% for t in tags %}
+                    <option value="{{ t }}" {% if filtro_tag == t %}selected{% endif %}>{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-dark-500 mb-1">Equipo</label>
+                <select name="equipo_id"
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    <option value="">Todos los equipos</option>
+                    {% for equipo in equipos %}
+                    <option value="{{ equipo.id }}" {% if filtro_equipo == equipo.id %}selected{% endif %}>{{ equipo.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-dark-500 mb-1">Evento</label>
+                <select name="evento_id"
+                        {% if sin_participacion %}disabled{% endif %}
+                        class="w-full px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all disabled:opacity-50">
+                    <option value="">Todos los eventos</option>
+                    {% for evento in eventos %}
+                    <option value="{{ evento.id }}" {% if filtro_evento == evento.id %}selected{% endif %}>{{ evento.nombre }} · {{ evento.fecha }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
+            <div class="flex flex-wrap gap-2">
+                {% if agrupar_equipo %}
+                <a href="{{ url_for('innovacion.asistentes_eventos', buscar=buscar, equipo_id=filtro_equipo, evento_id=filtro_evento, tag=filtro_tag, sin_participacion='1' if sin_participacion else '') }}"
+                   class="inline-flex items-center px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 border border-blue-300 rounded-xl hover:bg-blue-200 transition-all">
+                    <i data-lucide="list" class="w-4 h-4 mr-1.5"></i>
+                    Ver listado
+                </a>
+                {% else %}
+                <a href="{{ url_for('innovacion.asistentes_eventos', buscar=buscar, equipo_id=filtro_equipo, evento_id=filtro_evento, tag=filtro_tag, agrupar_equipo='1') }}"
+                   class="inline-flex items-center px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 border border-blue-200 rounded-xl hover:bg-blue-100 transition-all">
+                    <i data-lucide="layers" class="w-4 h-4 mr-1.5"></i>
+                    Agrupar por Equipo
+                </a>
+                {% endif %}
+                {% if sin_participacion %}
+                <a href="{{ url_for('innovacion.asistentes_eventos', buscar=buscar, equipo_id=filtro_equipo, evento_id=filtro_evento, tag=filtro_tag, agrupar_equipo='1' if agrupar_equipo else '') }}"
+                   class="inline-flex items-center px-4 py-2 text-sm font-semibold text-violet-700 bg-violet-100 border border-violet-300 rounded-xl hover:bg-violet-200 transition-all">
+                    <i data-lucide="users" class="w-4 h-4 mr-1.5"></i>
+                    Ver miembros con participación
+                </a>
+                {% else %}
+                <a href="{{ url_for('innovacion.asistentes_eventos', buscar=buscar, equipo_id=filtro_equipo, tag=filtro_tag, sin_participacion='1') }}"
+                   class="inline-flex items-center px-4 py-2 text-sm font-semibold text-dark-600 bg-white border border-dark-200 rounded-xl hover:bg-dark-50 transition-all">
+                    <i data-lucide="user-minus" class="w-4 h-4 mr-1.5"></i>
+                    Mostrar miembros sin participación
+                </a>
+                {% endif %}
+            </div>
+            <div class="flex gap-2">
+                <button type="submit" class="px-4 py-2 text-sm font-semibold text-white bg-primary-600 rounded-xl hover:bg-primary-700 transition-all">
+                    Aplicar filtros
+                </button>
+                {% if buscar or filtro_equipo or filtro_evento or sin_participacion or agrupar_equipo or filtro_tag != 'Track#1' %}
+                <a href="{{ url_for('innovacion.asistentes_eventos') }}" class="px-4 py-2 text-sm font-medium text-dark-500 hover:text-dark-700 border border-dark-200 rounded-xl hover:bg-dark-50 transition-all">
+                    Limpiar
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    {% if agrupar_equipo and agrupado %}
+    {% set resumen = agrupado.resumen or {} %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-2xl font-bold text-dark-900">{{ resumen.total_equipos or 0 }}</p>
+            <p class="text-sm text-dark-500">Equipos</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-2xl font-bold text-dark-900">{{ resumen.total_miembros or 0 }}</p>
+            <p class="text-sm text-dark-500">Miembros</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-2xl font-bold text-emerald-600">{{ resumen.total_asistentes or 0 }}</p>
+            <p class="text-sm text-dark-500">Con participación</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-2xl font-bold text-amber-600">{{ resumen.total_sin_participacion or 0 }}</p>
+            <p class="text-sm text-dark-500">Sin participación</p>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <p class="text-2xl font-bold text-violet-600">{{ resumen.porcentaje_participacion or 0 }}%</p>
+            <p class="text-sm text-dark-500">Participación</p>
+        </div>
+    </div>
+
+    {% if agrupado.grupos %}
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {% for grupo in agrupado.grupos %}
+        <div x-data="{ open: {{ 'true' if buscar else 'false' }} }" class="bg-white rounded-2xl border border-dark-100 p-5 hover:shadow-soft transition-all">
+            <div @click="open = !open" role="button" tabindex="0" @keydown.enter="open = !open" @keydown.space.prevent="open = !open"
+                 class="flex items-start justify-between gap-4 mb-3 cursor-pointer select-none">
+                <div class="min-w-0">
+                    <h2 class="font-bold text-dark-900 truncate">{{ grupo.nombre }}</h2>
+                    <p class="text-xs text-dark-500 mt-0.5" x-show="open" x-cloak>{{ grupo.total_miembros }} miembros · {{ grupo.participaciones }} participaciones</p>
+                </div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="text-xl font-bold {% if grupo.porcentaje >= 50 %}text-emerald-600{% elif grupo.porcentaje > 0 %}text-amber-600{% else %}text-dark-600{% endif %}">{{ grupo.porcentaje }}%</span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-dark-400 transition-transform duration-200" :class="open && 'rotate-180'"></i>
+                </div>
+            </div>
+            <div class="w-full bg-dark-100 rounded-full h-2">
+                <div class="h-2 rounded-full {% if grupo.porcentaje >= 50 %}bg-emerald-500{% elif grupo.porcentaje > 0 %}bg-amber-500{% else %}bg-dark-300{% endif %}" style="width: {{ [grupo.porcentaje, 100] | min }}%"></div>
+            </div>
+            <div x-show="open" x-collapse x-cloak>
+                <div class="grid grid-cols-3 gap-2 mt-4 mb-4">
+                    <div class="rounded-xl bg-emerald-50 p-3">
+                        <p class="text-lg font-bold text-emerald-700">{{ grupo.asistentes }}</p>
+                        <p class="text-xs text-emerald-700">Participaron</p>
+                    </div>
+                    <div class="rounded-xl bg-amber-50 p-3">
+                        <p class="text-lg font-bold text-amber-700">{{ grupo.sin_participacion }}</p>
+                        <p class="text-xs text-amber-700">Ausentes</p>
+                    </div>
+                    <div class="rounded-xl bg-violet-50 p-3">
+                        <p class="text-lg font-bold text-violet-700">{{ grupo.participaciones }}</p>
+                        <p class="text-xs text-violet-700">Eventos</p>
+                    </div>
+                </div>
+                {% if grupo.integrantes %}
+                <div class="space-y-2 {% if grupo.integrantes|length > 5 %}max-h-64 overflow-y-auto pr-1{% endif %}">
+                    {% for integrante in grupo.integrantes %}
+                    <div class="flex items-center justify-between rounded-xl px-3 py-2 {% if integrante.cantidad_eventos > 0 %}bg-dark-50{% else %}bg-dark-50/60{% endif %}">
+                        <a href="{{ url_for('innovacion.profile', id=integrante.id) }}"
+                           class="text-sm font-medium {% if integrante.cantidad_eventos > 0 %}text-dark-700{% else %}text-dark-400{% endif %} truncate hover:text-violet-700 hover:underline"
+                           title="Ver perfil">{{ integrante.display }}</a>
+                        {% if integrante.cantidad_eventos > 0 %}
+                        <span class="text-xs font-bold text-violet-700 flex-shrink-0 ml-2">{{ integrante.cantidad_eventos }} evento{{ 's' if integrante.cantidad_eventos != 1 else '' }}</span>
+                        {% else %}
+                        <span class="text-xs font-medium text-dark-400 flex-shrink-0 ml-2">Sin participación</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center py-16">
+        <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="users" class="w-10 h-10 text-dark-300"></i>
+        </div>
+        <p class="text-dark-900 font-semibold mb-1">No se encontraron equipos</p>
+        <p class="text-dark-500 text-sm">
+            {% if buscar %}Ninguna persona coincide con "{{ buscar }}" en los equipos.{% else %}Probá ajustar los filtros.{% endif %}
+        </p>
+    </div>
+    {% endif %}
+
+    {% elif items %}
+    <div class="space-y-3">
+        {% for item in items %}
+        {% set rank = ((pagina - 1) * 50) + loop.index %}
+        <div class="bg-white rounded-2xl border p-4 hover:shadow-soft transition-all
+                    {% if not sin_participacion and rank == 1 %}border-amber-200 bg-gradient-to-r from-amber-50 to-white
+                    {% elif not sin_participacion and rank == 2 %}border-slate-200 bg-gradient-to-r from-slate-50 to-white
+                    {% elif not sin_participacion and rank == 3 %}border-orange-200 bg-gradient-to-r from-orange-50 to-white
+                    {% else %}border-dark-100{% endif %}">
+            <div class="flex flex-col lg:flex-row lg:items-center gap-4">
+                <div class="flex items-center gap-4 min-w-0 flex-1">
+                    <div class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0
+                                {% if sin_participacion %}bg-dark-100 text-dark-500
+                                {% elif rank == 1 %}bg-amber-100 text-amber-700
+                                {% elif rank == 2 %}bg-slate-100 text-slate-700
+                                {% elif rank == 3 %}bg-orange-100 text-orange-700
+                                {% else %}bg-dark-100 text-dark-600{% endif %}">
+                        {% if sin_participacion %}
+                        <i data-lucide="user-minus" class="w-5 h-5"></i>
+                        {% elif rank <= 3 %}
+                        <i data-lucide="trophy" class="w-5 h-5"></i>
+                        {% else %}
+                        <span class="text-sm font-bold">#{{ rank }}</span>
+                        {% endif %}
+                    </div>
+
+                {% if item.foto %}
+                <img src="{{ item.foto|storage_url }}" alt="Foto de {{ item.display }}" class="w-12 h-12 rounded-xl object-cover flex-shrink-0">
+                {% else %}
+                <div class="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center flex-shrink-0">
+                    <span class="text-violet-700 font-bold text-sm">{{ (((item.nombre or '')[:1]) ~ ((item.apellido or '')[:1])) | upper }}</span>
+                </div>
+                {% endif %}
+
+                    <div class="min-w-0 flex-1">
+                        <div class="flex items-center gap-2 min-w-0">
+                            {% if not sin_participacion and rank <= 3 %}
+                            <span class="text-sm font-bold
+                                {% if rank == 1 %}text-amber-600
+                                {% elif rank == 2 %}text-slate-600
+                                {% else %}text-orange-600{% endif %}">#{{ rank }}</span>
+                            {% endif %}
+                            <a href="{{ url_for('innovacion.profile', id=item.id) }}"
+                               class="font-semibold text-dark-900 truncate hover:text-violet-700 hover:underline"
+                               title="Ver perfil">{{ item.display }}</a>
+                        </div>
+                        <p class="text-xs text-dark-500 truncate">{{ item.puesto or item.perfil or '' }}</p>
+                        <p class="text-xs text-dark-400 truncate">{{ item.departamento or item.email_corporativo or '' }}</p>
+                        {% if item.equipos %}
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            {% for equipo in item.equipos[:2] %}
+                            <span class="px-2 py-0.5 text-[11px] font-medium bg-blue-50 text-blue-700 rounded-md">{{ equipo.nombre }}</span>
+                            {% endfor %}
+                            {% if item.equipos|length > 2 %}
+                            <span class="px-2 py-0.5 text-[11px] font-medium bg-dark-100 text-dark-500 rounded-md">+{{ item.equipos|length - 2 }}</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row lg:items-center gap-3 lg:w-[55%]">
+                    <div class="flex items-center justify-between sm:justify-start sm:gap-4 lg:w-40 flex-shrink-0">
+                        <span class="inline-flex items-center px-3 py-1 rounded-lg bg-violet-100 text-violet-700 text-sm font-bold">
+                            <i data-lucide="calendar-check" class="w-4 h-4 mr-1.5"></i>
+                            {{ item.cantidad_eventos }} evento{{ 's' if item.cantidad_eventos != 1 else '' }}
+                        </span>
+                    </div>
+
+                    {% if item.eventos %}
+                    <div class="flex flex-wrap gap-2 min-w-0">
+                        {% for evento in item.eventos[:4] %}
+                        <span class="inline-flex items-center max-w-full rounded-lg bg-dark-50 px-2.5 py-1 text-xs text-dark-600">
+                            <span class="truncate">{{ evento.nombre }}</span>
+                            <span class="ml-1.5 text-dark-400 flex-shrink-0">{{ evento.fecha }}</span>
+                        </span>
+                        {% endfor %}
+                        {% if item.eventos|length > 4 %}
+                        <span class="inline-flex items-center rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-700">
+                            +{{ item.eventos|length - 4 }}
+                        </span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if total_paginas > 1 %}
+    <div class="flex items-center justify-center gap-2 mt-8">
+        {% if pagina > 1 %}
+        <a href="{{ url_for('innovacion.asistentes_eventos', buscar=buscar, equipo_id=filtro_equipo, evento_id=filtro_evento, tag=filtro_tag, sin_participacion='1' if sin_participacion else '', pagina=pagina-1) }}"
+           class="px-4 py-2 text-sm font-medium text-dark-600 bg-white border border-dark-200 rounded-xl hover:bg-dark-50 transition-colors">
+            <i data-lucide="chevron-left" class="w-4 h-4 inline"></i> Anterior
+        </a>
+        {% endif %}
+        <span class="px-4 py-2 text-sm text-dark-500">Página {{ pagina }} de {{ total_paginas }}</span>
+        {% if pagina < total_paginas %}
+        <a href="{{ url_for('innovacion.asistentes_eventos', buscar=buscar, equipo_id=filtro_equipo, evento_id=filtro_evento, tag=filtro_tag, sin_participacion='1' if sin_participacion else '', pagina=pagina+1) }}"
+           class="px-4 py-2 text-sm font-medium text-dark-600 bg-white border border-dark-200 rounded-xl hover:bg-dark-50 transition-colors">
+            Siguiente <i data-lucide="chevron-right" class="w-4 h-4 inline"></i>
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-16">
+        <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="calendar-x" class="w-10 h-10 text-dark-300"></i>
+        </div>
+        <p class="text-dark-900 font-semibold mb-1">No hay resultados</p>
+        <p class="text-dark-500 text-sm">Probá ajustar los filtros del ranking.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

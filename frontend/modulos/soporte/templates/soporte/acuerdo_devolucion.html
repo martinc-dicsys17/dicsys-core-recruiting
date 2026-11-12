@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Acuerdo de Devolución de Equipos</title>
+
+    <style>
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 15mm 15mm 15mm 15mm;
+            }
+
+            html, body {
+                width: 210mm;
+                margin: 0;
+                padding: 0;
+                background-color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+                color: black;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+
+            .document-container {
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                border: none !important;
+                max-width: none !important;
+                width: 100% !important;
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.4;
+            color: #000;
+            background-color: #e5e5e5;
+            padding: 0;
+            margin: 0;
+        }
+
+        .document-container {
+            background-color: white;
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10px auto;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        /* Header */
+        .header-box {
+            display: table;
+            width: 100%;
+            border: 2px solid #000;
+            margin-bottom: 1.2rem;
+        }
+
+        .header-cell {
+            display: table-cell;
+            vertical-align: middle;
+            border-right: 2px solid #000;
+            padding: 8px 12px;
+        }
+
+        .header-cell:last-child {
+            border-right: none;
+        }
+
+        .header-info {
+            width: 15%;
+            font-size: 10px;
+            line-height: 1.3;
+            text-align: left;
+        }
+
+        .header-title {
+            width: 60%;
+            font-weight: bold;
+            font-size: 13px;
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .header-logo {
+            width: 25%;
+            text-align: center;
+        }
+
+        .header-logo img {
+            max-width: 140px;
+            height: auto;
+        }
+
+        .fecha-lugar {
+            text-align: right;
+            font-size: 12px;
+            margin-bottom: 1.2rem;
+        }
+
+        .highlight {
+            background-color: #ffff00;
+        }
+
+        p {
+            margin: 0 0 0.8rem 0;
+            text-align: justify;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .equipo-box {
+            background-color: #f0f0f0;
+            border: 1px solid #000;
+            padding: 10px;
+            margin: 0.8rem 0;
+            font-size: 11px;
+        }
+
+        .equipo-box div {
+            margin-bottom: 2px;
+        }
+
+        .equipo-box strong {
+            display: inline-block;
+            min-width: 120px;
+            text-decoration: underline;
+        }
+
+        .estado-label {
+            font-size: 11px;
+            margin: 1.5rem 0 0.5rem 0;
+        }
+
+        /* Tabla de estado con formato grid (igual que custodia) */
+        .estado-table-grid {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 0.8rem 0;
+            font-size: 10px;
+        }
+
+        .estado-table-grid th {
+            background-color: #4a7ba7;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            padding: 5px;
+            border: 1px solid #000;
+        }
+
+        .estado-table-grid td {
+            border: 1px solid #000;
+            padding: 5px;
+            text-align: center;
+        }
+
+        .componente-label {
+            font-weight: bold;
+            background-color: #4a7ba7;
+            color: white;
+            text-align: left !important;
+            width: 30%;
+        }
+
+        .checkbox {
+            width: 14px;
+            height: 14px;
+            border: 1.5px solid #000;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* Periféricos */
+        .perifericos-table {
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            font-size: 11px;
+        }
+
+        .perifericos-table td {
+            border: 1px solid #000;
+            padding: 5px 10px;
+        }
+
+        .periferico-label {
+            background-color: #4a7ba7;
+            color: white;
+            font-weight: bold;
+            width: 160px;
+        }
+
+        /* Firmas */
+        .firma-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 4rem;
+            padding: 0 2rem;
+        }
+
+        .firma-box {
+            width: 200px;
+            text-align: center;
+        }
+
+        .firma-line {
+            border-top: 1.5px solid #000;
+            margin-bottom: 0.5rem;
+        }
+
+        .firma-label {
+            font-size: 10px;
+            font-weight: normal;
+        }
+
+        .print-button {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .print-button:hover {
+            background: #b91c1c;
+        }
+</style>
+</head>
+
+<body>
+    <button class="print-button no-print" onclick="window.print()">🖨️ Imprimir</button>
+
+    <div class="document-container">
+        <!-- Header -->
+        <div class="header-box">
+            <div class="header-cell header-info">
+                RC 05-04 (2)<br>
+                Rev 01<br>
+                Fecha 20/04/2023
+            </div>
+            <div class="header-cell header-title">
+                ACUERDO DE DEVOLUCIÓN DE EQUIPOS
+            </div>
+            <div class="header-cell header-logo">
+                <img src="{{ url_for('static', filename='logo-dicsys-ai-azul.svg') }}" alt="Dicsys">
+            </div>
+        </div>
+
+        <div class="fecha-lugar">
+            <u>Córdoba, {{ fecha_actual }}</u>
+        </div>
+
+        <p>Mediante la presente, entre Dicsys SA y <strong class="highlight">{{ colaborador_nombre }}</strong>, DNI: <strong class="highlight">{{ colaborador_dni }}</strong> se deja constancia de devolución del siguiente equipo que abajo se detalla:</p>
+
+        <div class="equipo-box">
+            <div><strong>Equipo:</strong> {{ item.nombre }} {{ item.marca_nombre or '' }} {{ item.modelo or '' }}</div>
+            <div><strong>Nº de serie:</strong> {{ item.numero_serie or '' }}</div>
+            <div><strong>Nº de inventario:</strong> {{ item.numero_inventario or '' }}</div>
+        </div>
+
+        <p class="estado-label">Estado en el cual se encuentra el equipo:</p>
+
+        <!-- Matriz de estado físico completa -->
+        <table class="estado-table-grid">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Excelente</th>
+                    <th>Bueno</th>
+                    <th>Regular</th>
+                    <th>Malo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="componente-label">Carcasa Superior</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_superior == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Carcasa Inferior</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.carcasa_inferior == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Pantalla</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.pantalla == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Teclado</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.teclado == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Batería</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.bateria == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Touchpad</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.touchpad == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Puertos</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.puertos == 'Malo' else '' }}</div></td>
+                </tr>
+                <tr>
+                    <td class="componente-label">Cargador</td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Excelente' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Bueno' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Regular' else '' }}</div></td>
+                    <td><div class="checkbox">{{ 'X' if matriz_estado.cargador == 'Malo' else '' }}</div></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Periféricos -->
+        <table class="perifericos-table">
+            <tr>
+                <td class="periferico-label">Devuelve headset</td>
+                <td class="opcion-label">Sí</td>
+                <td class="opcion-check"><div class="checkbox">{{ 'X' if devuelve_headset else '' }}</div></td>
+                <td class="opcion-label">No</td>
+                <td class="opcion-check"><div class="checkbox">{{ '' if devuelve_headset else 'X' }}</div></td>
+            </tr>
+            <tr>
+                <td class="periferico-label">Devuelve mouse:</td>
+                <td class="opcion-label">Sí</td>
+                <td class="opcion-check"><div class="checkbox">{{ 'X' if devuelve_mouse else '' }}</div></td>
+                <td class="opcion-label">No</td>
+                <td class="opcion-check"><div class="checkbox">{{ '' if devuelve_mouse else 'X' }}</div></td>
+            </tr>
+        </table>
+
+        <!-- Firmas -->
+        <div class="firma-section">
+            <div class="firma-box">
+                <div class="firma-line"></div>
+                <div class="firma-label">Firma Dicsys</div>
+            </div>
+            <div class="firma-box">
+                <div class="firma-line"></div>
+                <div class="firma-label">Firma del Colaborador</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

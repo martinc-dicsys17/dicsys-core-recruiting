@@ -1,0 +1,61 @@
+{% extends "core/base.html" %}
+
+{% block title %}Verificación 2FA - {{ config.APP_NAME }}{% endblock %}
+
+{% block public_content %}
+<div class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+    <div class="w-full max-w-md">
+        <div class="text-center mb-8">
+            <img src="/static/logo-dicsys-ai-azul.svg" alt="Dicsys" class="h-10 mx-auto mb-4">
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-xl border border-dark-100 overflow-hidden">
+            <div class="p-8">
+                <div class="flex justify-center mb-6">
+                    <div class="w-16 h-16 bg-primary-100 rounded-2xl flex items-center justify-center">
+                        <i data-lucide="shield-check" class="w-8 h-8 text-primary-600"></i>
+                    </div>
+                </div>
+
+                <h2 class="text-xl font-bold text-center text-dark-900 mb-1">Verificación de dos factores</h2>
+                <p class="text-center text-dark-500 text-sm mb-6">
+                    Hola {{ user_2fa.nombre or '' }}, ingresá el código de tu app authenticator
+                </p>
+
+                <div id="twofa-login-error" class="mb-4">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="p-4 bg-red-50 border border-red-300 rounded-xl text-red-700 text-sm font-medium">{{ message }}</div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+                </div>
+
+                <form method="POST" action="{{ url_for('core.login_2fa') }}"
+                      x-data="{ code: '' }"
+                      x-ref="form2fa">
+                    <div class="mb-6">
+                        <input type="text" name="code" x-model="code" maxlength="16" autocomplete="one-time-code" autofocus required
+                               placeholder="000000"
+                               @input="if(/^\d{6}$/.test(code)) $nextTick(() => $refs.form2fa.submit())"
+                               class="w-full px-4 py-4 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-center text-3xl font-mono tracking-[0.5em] transition-all">
+                        <p class="text-xs text-dark-400 mt-2 text-center">También podés usar un código de recuperación (por ejemplo <span class="font-mono">a1b2c-3d4e5</span>) y apretar Verificar</p>
+                    </div>
+                    <button type="submit"
+                            class="w-full py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 font-semibold transition-all shadow-soft">
+                        Verificar
+                    </button>
+                </form>
+
+                <div class="mt-6 text-center">
+                    <a href="{{ url_for('core.login') }}" class="text-sm text-dark-500 hover:text-dark-700">← Volver al login</a>
+                </div>
+                <div class="mt-2 text-center">
+                    <p class="text-xs text-dark-400">¿Perdiste acceso a tu authenticator? Contactá al administrador.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

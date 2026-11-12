@@ -1,0 +1,114 @@
+{% extends "core/base.html" %}
+
+{% block title %}Gestionar Empleados - Star Miles{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">👥 Gestionar Empleados</h1>
+            <p class="text-dark-500">Vista 360° de empleados y sus Star Miles</p>
+        </div>
+    </div>
+
+    <!-- Resumen General -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-dark-500 text-sm">Millas Acreditadas</p>
+                    <p id="counter-millas-acreditadas" class="text-2xl font-bold text-emerald-600">{{ resumen.total_millas_acreditadas | default(0) }}</p>
+                </div>
+                <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="trending-up" class="w-6 h-6 text-emerald-600"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-dark-500 text-sm">Millas Canjeadas</p>
+                    <p id="counter-millas-canjeadas" class="text-2xl font-bold text-amber-600">{{ resumen.total_millas_canjeadas | default(0) }}</p>
+                </div>
+                <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="gift" class="w-6 h-6 text-amber-600"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-dark-500 text-sm">Inscripciones</p>
+                    <p id="counter-inscripciones" class="text-2xl font-bold text-blue-600">{{ resumen.total_inscripciones | default(0) }}</p>
+                </div>
+                <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="target" class="w-6 h-6 text-blue-600"></i>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white rounded-2xl border border-dark-100 p-5">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-dark-500 text-sm">Canjes</p>
+                    <p id="counter-canjes" class="text-2xl font-bold text-purple-600">{{ resumen.total_canjes | default(0) }}</p>
+                </div>
+                <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <i data-lucide="package" class="w-6 h-6 text-purple-600"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-6">
+        <form id="filtros-form"
+              hx-get="{{ url_for('starmiles.admin_empleados') }}"
+              hx-target="#empleados-table"
+              hx-trigger="submit, keyup changed delay:300ms from:input[name='search'], change delay:500ms from:input[name='millas_min'], change delay:500ms from:input[name='millas_max']"
+              onsubmit="return false;"
+              class="flex flex-col lg:flex-row lg:items-end gap-4">
+            <!-- Mantener orden activo al filtrar -->
+            <input type="hidden" id="filtro-orden" name="orden" value="{{ filtros.orden | default('millas_historicas') }}">
+            <input type="hidden" id="filtro-direccion" name="direccion" value="{{ filtros.direccion | default('desc') }}">
+
+            <div class="flex-1">
+                <label class="block text-xs font-semibold text-dark-500 uppercase mb-1">Buscar</label>
+                <div class="relative">
+                    <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                    <input type="text" placeholder="Nombre, apellido o email..." name="search"
+                           value="{{ filtros.search | default('') }}"
+                           class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-dark-500 uppercase mb-1">Millas acumuladas (mín.)</label>
+                <input type="number" min="0" step="1" name="millas_min" placeholder="0"
+                       value="{{ filtros.millas_min | default('') }}"
+                       class="w-full lg:w-36 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-dark-500 uppercase mb-1">Millas acumuladas (máx.)</label>
+                <input type="number" min="0" step="1" name="millas_max" placeholder="Sin límite"
+                       value="{{ filtros.millas_max | default('') }}"
+                       class="w-full lg:w-36 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+            </div>
+
+            <a href="{{ url_for('starmiles.admin_empleados') }}"
+               class="inline-flex items-center justify-center px-4 py-2.5 text-sm font-medium text-dark-600 hover:bg-dark-100 rounded-xl border border-dark-200">
+                <i data-lucide="rotate-ccw" class="w-4 h-4 mr-1"></i>
+                Limpiar
+            </a>
+        </form>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="empleados-table">
+            {% include "starmiles/partials/empleados_360_table.html" %}
+        </div>
+    </div>
+</div>
+{% endblock %}

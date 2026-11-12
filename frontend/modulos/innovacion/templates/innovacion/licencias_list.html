@@ -1,0 +1,1147 @@
+{% extends "core/base.html" %}
+
+{% block title %}Gestión de Licencias - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="licenciasFiltros()"
+     @htmx:response-error.camel="errorLicencia($event)">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-2xl sm:text-3xl font-semibold tracking-tight text-dark-900 mb-1">Gestión de Licencias</h1>
+            <p class="text-dark-500">Administración de licencias de herramientas y software</p>
+        </div>
+        <div class="flex items-center gap-3 mt-4 md:mt-0">
+            <button type="button" @click="showCatalogo = true"
+                    class="flex items-center px-4 py-2.5 bg-white border border-dark-200 text-dark-700 rounded-xl hover:border-primary-400 hover:text-primary-600 transition-all font-medium">
+                <i data-lucide="settings-2" class="w-4 h-4 mr-2"></i>Catálogo
+            </button>
+            <button type="button" @click="abrirNueva()"
+                    class="flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Licencia
+            </button>
+        </div>
+    </div>
+    
+    <!-- Barra de Filtros Principal -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-4">
+        <!-- Fila 1: Búsqueda + Filtros + Ordenar -->
+        <div class="flex flex-col xl:flex-row xl:items-center gap-3">
+            <div class="relative flex-1 min-w-0"
+                 @click.outside="showEmpleados = false"
+                 @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) showEmpleados = false"
+                 @keydown.escape.stop.prevent="$refs.buscarEmpleado.focus(); showEmpleados = false">
+                <label for="licencias-buscar-empleados" class="sr-only">Buscar empleados</label>
+                <i data-lucide="users" class="w-5 h-5 text-dark-400 absolute left-4 top-3 pointer-events-none"></i>
+                <input id="licencias-buscar-empleados" type="search" autocomplete="off"
+                       x-ref="buscarEmpleado" x-model="buscar"
+                       placeholder="Buscar y seleccionar empleados..."
+                       @focus="showEmpleados = true" @click="showEmpleados = true" @input="showEmpleados = true; programarFiltros()"
+                       @keydown.arrow-down.prevent="showEmpleados = true; $nextTick(() => $refs.opcionesEmpleados.querySelector('input[type=checkbox]')?.focus())"
+                       :aria-expanded="showEmpleados" aria-controls="licencias-opciones-empleados"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                <div id="licencias-opciones-empleados" x-show="showEmpleados" x-cloak
+                     class="absolute left-0 right-0 top-full mt-2 z-30 bg-white border border-dark-200 rounded-xl shadow-lg overflow-hidden"
+                     role="group" aria-label="Seleccionar empleados">
+                    <div class="px-3 py-2 border-b border-dark-100 space-y-2">
+                        <p class="text-xs text-dark-500" aria-live="polite">
+                            <span x-text="empleadosVisibles().length"></span> resultados ·
+                            <span x-text="filtros.empleado_ids.length"></span> seleccionados
+                        </p>
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs font-medium">
+                            <button type="button" @click="seleccionarResultadosEmpleados()"
+                                    :disabled="!empleadosVisibles().length"
+                                    class="text-primary-700 hover:text-primary-800 disabled:opacity-40 disabled:cursor-not-allowed">
+                                Seleccionar resultados
+                            </button>
+                            <button type="button" @click="limpiarEmpleados()" :disabled="!filtros.empleado_ids.length"
+                                    class="text-dark-500 hover:text-dark-700 disabled:opacity-40 disabled:cursor-not-allowed">
+                                Quitar selección
+                            </button>
+                        </div>
+                    </div>
+                    <div x-ref="opcionesEmpleados" class="max-h-72 overflow-y-auto overscroll-contain p-1">
+                        <template x-for="emp in empleadosVisibles()" :key="emp.id">
+                            <label class="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover:bg-primary-50"
+                                   :class="filtros.empleado_ids.includes(emp.id) ? 'bg-primary-50/60' : ''">
+                                <input type="checkbox" :value="emp.id" :checked="filtros.empleado_ids.includes(emp.id)"
+                                       @change="alternarEmpleado(emp.id)"
+                                       class="w-4 h-4 shrink-0 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                <span class="min-w-0 flex-1 text-sm text-dark-800 break-words" x-text="emp.nombre"></span>
+                                <span class="shrink-0 text-xs text-dark-400" x-text="emp.codigo || ''"></span>
+                            </label>
+                        </template>
+                        <p x-show="!empleadosVisibles().length" class="px-3 py-5 text-sm text-dark-500 text-center">
+                            No hay empleados que coincidan con la búsqueda.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botón Filtros -->
+            <div class="relative flex shrink-0 items-center gap-2 text-sm font-medium text-dark-600" x-data="{ abierto: false }" @click.outside="abierto = false" @keydown.escape.stop="abierto = false; $refs.activador.focus()" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) abierto = false">
+                <span>Ver por</span>
+                <button type="button" x-ref="activador" @click="abierto = !abierto" :aria-expanded="abierto" aria-controls="licencias-vistas" aria-label="Ver por"
+                        class="flex items-center gap-3 px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl">
+                    <span x-text="vista === 'equipos' ? 'Equipos' : 'Empleados'"></span><i data-lucide="chevron-down" class="w-4 h-4"></i>
+                </button>
+                <div id="licencias-vistas" x-show="abierto" x-cloak class="absolute top-full right-0 z-40 mt-2 min-w-40 p-1.5 bg-white border border-dark-200 rounded-xl shadow-lg">
+                    <template x-for="opcion in ['empleados', 'equipos']" :key="opcion">
+                        <button type="button" @click="vista = opcion; aplicarFiltros(); abierto = false; $refs.activador.focus()" :aria-pressed="vista === opcion"
+                                class="block w-full text-left px-3 py-2 rounded-lg hover:bg-primary-50" :class="vista === opcion ? 'bg-primary-50 text-primary-700' : 'text-dark-700'" x-text="opcion === 'equipos' ? 'Equipos' : 'Empleados'"></button>
+                    </template>
+                </div>
+            </div>
+            <button @click="showFiltros = !showFiltros" 
+                    class="flex items-center px-4 py-2.5 border rounded-xl transition-colors"
+                    :class="tieneFilrosActivos() ? 'bg-primary-50 border-primary-200 text-primary-700' : 'bg-dark-50 border-dark-200 text-dark-700 hover:bg-dark-100'">
+                <i data-lucide="filter" class="w-4 h-4 mr-2"></i>
+                <span>Filtros</span>
+                <span x-show="tieneFilrosActivos()" class="ml-2 px-2 py-0.5 text-xs bg-primary-500 text-white rounded-full" x-text="contarFiltros()"></span>
+            </button>
+            
+        </div>
+        
+        <!-- Fila 2: Panel de Filtros (desplegable) -->
+        <div x-show="showFiltros" x-cloak class="mt-4 pt-4 border-t border-dark-100">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Filtro Equipo -->
+                <div class="relative" x-data="{ abierto: false }" @click.outside="abierto = false" @keydown.escape.stop="abierto = false; $refs.activador.focus()" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) abierto = false">
+                    <label class="block text-xs font-semibold text-dark-500 uppercase mb-2">Equipo</label>
+                    <button type="button" x-ref="activador" @click="abierto = !abierto; if (abierto) $nextTick(() => $refs.busqueda.focus())" :aria-expanded="abierto" aria-controls="filtro-opciones-equipos" aria-label="Seleccionar equipos"
+                            class="w-full flex items-center justify-between px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm text-dark-700">
+                        <span x-text="filtros.equipo_ids.length ? filtros.equipo_ids.length + ' equipos seleccionados' : 'Todos los equipos'"></span>
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+                    <div id="filtro-opciones-equipos" x-show="abierto" x-cloak class="absolute top-full left-0 right-0 z-40 mt-2 bg-white border border-dark-200 rounded-xl shadow-lg p-3">
+                        <input type="search" x-ref="busqueda" x-model="busquedaEquipo" placeholder="Buscar equipos..." aria-label="Buscar equipos"
+                               class="w-full px-3 py-2 mb-3 bg-dark-50 border border-dark-200 rounded-lg text-sm">
+                        <div class="flex justify-between text-xs text-primary-600 mb-2">
+                            <button type="button" @click="filtros.equipo_ids = [...new Set([...filtros.equipo_ids, ...buscarOpciones(equipos, busquedaEquipo).map(eq => eq.id)])]; aplicarFiltros()">Seleccionar resultados</button>
+                            <button type="button" @click="filtros.equipo_ids = []; aplicarFiltros()">Quitar selección</button>
+                        </div>
+                        <div class="max-h-48 overflow-y-auto">
+                            <template x-for="eq in buscarOpciones(equipos, busquedaEquipo)" :key="eq.id">
+                                <label class="flex gap-2 items-center p-2 text-sm cursor-pointer hover:bg-primary-50 rounded-lg">
+                                    <input type="checkbox" :value="eq.id" x-model="filtros.equipo_ids" @change="programarFiltros()">
+                                    <span x-text="eq.nombre"></span>
+                                </label>
+                            </template>
+                            <p x-show="!buscarOpciones(equipos, busquedaEquipo).length" class="text-sm text-dark-500 p-2">No hay equipos que coincidan.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtro Proveedor -->
+                <div class="relative" x-data="{ abierto: false, busqueda: '' }" @click.outside="abierto = false" @keydown.escape.stop="abierto = false; $refs.activador.focus()" @focusout="if ($event.relatedTarget && !$el.contains($event.relatedTarget)) abierto = false">
+                    <label class="block text-xs font-semibold text-dark-500 uppercase mb-2">Proveedor</label>
+                    <button type="button" x-ref="activador" @click="abierto = !abierto; if (abierto) $nextTick(() => $refs.busqueda.focus())" :aria-expanded="abierto" aria-controls="filtro-opciones-proveedores" aria-label="Seleccionar proveedor"
+                            class="w-full flex items-center justify-between px-3 py-2 bg-dark-50 border border-dark-200 rounded-xl text-sm text-dark-700">
+                        <span x-text="filtros.proveedor_id ? getNombreProveedor(filtros.proveedor_id) : 'Todos los proveedores'"></span>
+                        <i data-lucide="chevron-down" class="w-4 h-4"></i>
+                    </button>
+                    <div id="filtro-opciones-proveedores" x-show="abierto" x-cloak class="absolute top-full left-0 right-0 z-40 mt-2 bg-white border border-dark-200 rounded-xl shadow-lg p-3">
+                        <input type="search" x-ref="busqueda" x-model="busqueda" placeholder="Buscar proveedores..." aria-label="Buscar proveedores"
+                               class="w-full px-3 py-2 mb-2 bg-dark-50 border border-dark-200 rounded-lg text-sm">
+                        <div class="max-h-48 overflow-y-auto" @change="aplicarFiltros(); abierto = false; $refs.activador.focus()">
+                            <label class="flex gap-2 items-center p-2 text-sm cursor-pointer hover:bg-primary-50 rounded-lg">
+                                <input type="radio" name="filtro-proveedor" value="" x-model="filtros.proveedor_id"><span>Todos los proveedores</span>
+                            </label>
+                            <template x-for="p in buscarOpciones(proveedores, busqueda)" :key="p.id">
+                                <label class="flex gap-2 items-center p-2 text-sm cursor-pointer hover:bg-primary-50 rounded-lg">
+                                    <input type="radio" name="filtro-proveedor" :value="p.id" x-model="filtros.proveedor_id"><span x-text="p.nombre"></span>
+                                </label>
+                            </template>
+                            <p x-show="!buscarOpciones(proveedores, busqueda).length" class="text-sm text-dark-500 p-2">No hay proveedores que coincidan.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <!-- Botón limpiar filtros -->
+            <div class="mt-4 flex justify-end">
+                <button @click="limpiarFiltros()" x-show="tieneFilrosActivos()"
+                        class="text-sm text-dark-500 hover:text-dark-700 flex items-center">
+                    <i data-lucide="x" class="w-4 h-4 mr-1"></i>
+                    Limpiar filtros
+                </button>
+            </div>
+        </div>
+        
+        <!-- Fila 3: Chips de filtros activos -->
+        <div x-show="tieneFilrosActivos()" class="mt-4 flex flex-wrap gap-2">
+            <!-- Chip Equipo -->
+            <template x-for="id in filtros.equipo_ids" :key="id">
+                <span class="inline-flex items-center px-3 py-1 bg-sky-50 text-sky-700 rounded-full text-sm">
+                    <span x-text="'Equipo: ' + getNombreEquipo(id)"></span>
+                    <button @click="filtros.equipo_ids = filtros.equipo_ids.filter(equipo => equipo !== id); aplicarFiltros()" class="ml-2 hover:text-sky-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+
+            <!-- Chip Proveedor -->
+            <template x-if="filtros.proveedor_id">
+                <span class="inline-flex items-center px-3 py-1 bg-amber-50 text-amber-700 rounded-full text-sm">
+                    <span x-text="'Proveedor: ' + getNombreProveedor(filtros.proveedor_id)"></span>
+                    <button @click="filtros.proveedor_id = ''; aplicarFiltros()" class="ml-2 hover:text-amber-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+
+            <!-- Selección acotada visualmente aunque incluya toda la nómina. -->
+            <template x-for="id in filtros.empleado_ids.slice(0, 3)" :key="id">
+                <span class="inline-flex items-center px-3 py-1 bg-violet-50 text-violet-700 rounded-full text-sm">
+                    <span x-text="getNombreEmpleado(id)"></span>
+                    <button type="button" @click="alternarEmpleado(id)" :aria-label="'Quitar a ' + getNombreEmpleado(id)"
+                            class="ml-2 hover:text-violet-900">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+                </span>
+            </template>
+            <span x-show="filtros.empleado_ids.length > 3" class="self-center text-sm text-violet-700"
+                  x-text="'+' + (filtros.empleado_ids.length - 3) + ' más'"></span>
+            <button type="button" x-show="filtros.empleado_ids.length" @click="limpiarEmpleados()"
+                    class="self-center text-xs text-dark-500 hover:text-dark-700">Quitar empleados</button>
+        </div>
+        <div x-show="filtros.empleado_ids.length || filtros.equipo_ids.length" class="mt-4 pt-3 border-t border-dark-100 flex items-center justify-between gap-4">
+            <span class="text-xs text-dark-500">Acciones sobre la selección</span>
+            <div class="flex items-center gap-2"><button type="button" @click="abrirAltaSeleccion()" class="inline-flex items-center gap-2 px-3 py-2 text-sm text-primary-700 border border-primary-200 rounded-xl hover:bg-primary-50"><i data-lucide="plus" class="w-4 h-4"></i>Asignar licencias</button>
+            <button type="button" @click="showRevocar = true; herramientaRevocar = ''; errorRevocacion = ''; buscarHerramientaRevocar = ''; $nextTick(() => $refs.buscarRevocacion.focus())" class="inline-flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50"><i data-lucide="minus" class="w-4 h-4"></i>Revocar licencias</button></div>
+        </div>
+    </div>
+
+    <!-- Métricas + tabla: van juntas en el fragmento que refresca HTMX, para que
+         el gasto se recalcule al activar o suspender una licencia. -->
+    <div id="licencias-table">
+        {% include "innovacion/partials/licencias_table.html" %}
+    </div>
+
+    {# Alta de licencia en modal: se carga y se guarda sin salir del listado. #}
+    <div x-show="showNueva" x-cloak
+         class="fixed inset-0 z-50 flex items-start justify-center p-4 sm:pt-8 overflow-y-auto">
+        <div class="fixed inset-0 bg-dark-900/50 backdrop-blur-sm" @click="cerrarNueva()"></div>
+
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[calc(100dvh-4rem)] flex flex-col"
+             role="dialog" aria-modal="true" aria-labelledby="nueva-licencia-titulo"
+             @keydown.escape.window="cerrarNueva()">
+            <div class="px-6 py-4 border-b border-dark-100 flex items-start justify-between shrink-0">
+                <div>
+                    <h3 id="nueva-licencia-titulo" class="text-lg font-semibold text-dark-900"
+                        x-text="empleadoFijo ? 'Asignar licencia' : 'Asignar licencias'"></h3>
+                    <p class="text-sm text-dark-500"
+                       x-text="altaSeleccion ? 'Elegí una o varias herramientas para la selección actual' : empleadoFijo ? 'Para ' + empleadoFijo.nombre : 'Elegí personas o equipos y completá los datos una sola vez'"></p>
+                </div>
+                <button type="button" @click="cerrarNueva()" aria-label="Cerrar asignación" class="text-dark-400 hover:text-dark-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-5 overflow-y-auto">
+                <fieldset x-show="!empleadoFijo && !altaSeleccion" :disabled="guardandoNueva" class="min-w-0">
+                    <legend class="text-sm font-semibold text-dark-700 mb-2">Asignar a *</legend>
+                    <div class="border border-dark-200 rounded-xl overflow-hidden">
+                        <div class="p-3 bg-dark-50 space-y-3">
+                            <div class="flex items-center gap-1" role="group" aria-label="Buscar destinatarios por">
+                                <template x-for="opcion in ['empleados', 'equipos']" :key="opcion">
+                                    <button type="button" @click="tipoDestinatario = opcion; busquedaDestinatario = ''; soloSeleccionadosNueva = false"
+                                            :aria-pressed="tipoDestinatario === opcion"
+                                            class="px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors"
+                                            :class="tipoDestinatario === opcion ? 'bg-white text-primary-700 shadow-sm' : 'text-dark-500 hover:text-dark-800'"
+                                            x-text="opcion === 'empleados' ? 'Empleados' : 'Equipos'"></button>
+                                </template>
+                            </div>
+                            <label for="buscar-destinatarios" class="sr-only">Buscar empleados o equipos</label>
+                            <input id="buscar-destinatarios" type="search" x-ref="buscarDestinatarios"
+                                   x-model="busquedaDestinatario" autocomplete="off"
+                                   :placeholder="tipoDestinatario === 'equipos' ? 'Buscar equipo...' : 'Buscar por nombre, apellido o código...'"
+                                   class="w-full px-3 py-2 bg-white border border-dark-200 rounded-lg text-sm focus:ring-2 focus:ring-primary-500">
+                        </div>
+                        <div class="flex items-center justify-between gap-2 px-3 py-2 border-y border-dark-100 text-xs text-dark-500">
+                            <span x-text="destinatariosVisibles().length + ' resultados'"></span>
+                            <label x-show="tipoDestinatario === 'empleados'" class="flex items-center gap-1.5 cursor-pointer">
+                                <input type="checkbox" x-model="soloSeleccionadosNueva" class="rounded border-dark-300 text-primary-600">
+                                Solo seleccionados
+                            </label>
+                            <button type="button" @click="seleccionarDestinatariosVisibles()" :disabled="!destinatariosVisibles().length"
+                                    class="font-semibold text-primary-600 hover:text-primary-800 disabled:opacity-40">Seleccionar resultados</button>
+                        </div>
+                        <div class="max-h-44 overflow-y-auto divide-y divide-dark-50" role="group" aria-label="Destinatarios de las licencias">
+                            <template x-for="item in destinatariosVisibles()" :key="tipoDestinatario + item.id">
+                                <label class="flex items-center gap-3 px-3 py-2.5 hover:bg-primary-50 cursor-pointer">
+                                    <input type="checkbox" :checked="destinatarioSeleccionado(item)"
+                                           :disabled="tipoDestinatario === 'equipos' && !item.empleado_ids.length"
+                                           x-effect="$el.indeterminate = tipoDestinatario === 'equipos' && item.empleado_ids.some(id => nueva.empleado_ids.includes(id)) && !destinatarioSeleccionado(item)"
+                                           @change="alternarDestinatario(item)" class="w-4 h-4 rounded border-dark-300 text-primary-600 focus:ring-primary-500">
+                                    <span class="flex-1 min-w-0 text-sm font-medium text-dark-800 truncate" x-text="item.nombre"></span>
+                                    <span class="text-xs text-dark-400 shrink-0"
+                                          x-text="tipoDestinatario === 'equipos' ? item.empleado_ids.length + (item.empleado_ids.length === 1 ? ' integrante' : ' integrantes') : item.codigo"></span>
+                                </label>
+                            </template>
+                            <p x-show="!destinatariosVisibles().length" class="px-3 py-5 text-sm text-dark-500 text-center">No hay coincidencias</p>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 mt-3 text-xs" aria-live="polite">
+                        <span class="font-semibold text-dark-700" x-text="nueva.empleado_ids.length + (nueva.empleado_ids.length === 1 ? ' persona seleccionada' : ' personas seleccionadas')"></span>
+                        <template x-for="id in nueva.empleado_ids.slice(0, 3)" :key="id">
+                            <span class="inline-flex items-center gap-1 rounded-lg bg-primary-50 text-primary-700 px-2 py-1">
+                                <span class="max-w-36 truncate" x-text="getNombreEmpleado(id)"></span>
+                                <button type="button" @click="nueva.empleado_ids = nueva.empleado_ids.filter(actual => actual !== id)"
+                                        :aria-label="'Quitar de la asignación a ' + getNombreEmpleado(id)" class="px-1 hover:text-primary-900">×</button>
+                            </span>
+                        </template>
+                        <span x-show="nueva.empleado_ids.length > 3" class="text-dark-500" x-text="'+' + (nueva.empleado_ids.length - 3) + ' más'"></span>
+                        <button type="button" x-show="nueva.empleado_ids.length" @click="nueva.empleado_ids = []"
+                                class="text-dark-500 underline hover:text-dark-800">Quitar selección</button>
+                    </div>
+                </fieldset>
+                    <div x-show="!altaSeleccion">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Herramienta *</label>
+                        <div class="flex gap-2">
+                            <select x-ref="herramientaLicencia" x-model="nueva.herramienta_id" @change="alElegirHerramienta()" aria-label="Herramienta" :disabled="guardandoNueva"
+                                    class="flex-1 min-w-0 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                                <option value="">Seleccionar...</option>
+                                <template x-for="h in herramientas" :key="h.id">
+                                    <option :value="h.id" x-text="h.proveedor ? h.nombre + ' — ' + h.proveedor : h.nombre"></option>
+                                </template>
+                            </select>
+                            <button type="button" @click="abrirHerramienta()" title="Crear una herramienta nueva" :disabled="guardandoNueva"
+                                    class="px-3 py-2.5 bg-white border border-dark-200 rounded-xl hover:border-primary-400 hover:text-primary-600 text-dark-500 transition-colors">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                <fieldset x-show="altaSeleccion" :disabled="guardandoNueva">
+                    <legend class="text-sm font-medium mb-2" x-text="'Herramientas para ' + nueva.empleado_ids.length + ' personas'"></legend>
+                    <input type="search" x-ref="buscarAltaHerramientas" x-model="buscarAltaHerramientas" placeholder="Buscar herramientas..." aria-label="Buscar herramientas para asignar" class="w-full border border-dark-200 rounded-xl px-3 py-2 mb-3">
+                    <div class="max-h-60 overflow-y-auto space-y-2">
+                        <template x-for="h in (altaSeleccion ? buscarOpciones(herramientas, buscarAltaHerramientas) : [])" :key="h.id">
+                            <div class="border border-dark-100 rounded-xl p-3">
+                                <label class="flex gap-2 items-center cursor-pointer text-sm"><input type="checkbox" :value="h.id" x-model="herramientasAlta"><span x-text="h.nombre + ' — ' + getNombreProveedor(h.proveedor_id)"></span></label>
+                                <div x-show="herramientasAlta.includes(h.id)" class="grid grid-cols-2 gap-3 mt-2">
+                                    <label class="text-xs text-dark-500">Costo mensual por persona<input type="number" min="0" step="0.01" x-model="costosAlta[h.id].costo_mensual" class="block w-full rounded-lg border border-dark-200 px-2 py-1 text-sm"></label>
+                                    <label class="text-xs text-dark-500">Moneda<select x-model="costosAlta[h.id].moneda" class="block w-full rounded-lg border border-dark-200 px-2 py-1 text-sm"><option>ARS</option><option>USD</option></select></label>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </fieldset>
+                <!-- Las fechas necesitan ancho para mostrar el año y el calendario. -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="licencia-desde" class="block text-sm font-semibold text-dark-700 mb-2">Desde *</label>
+                        <input id="licencia-desde" type="date" x-model="nueva.fecha_inicio" :disabled="guardandoNueva"
+                               class="w-full min-w-0 px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label for="licencia-hasta" class="block text-sm font-semibold text-dark-700 mb-2">Hasta</label>
+                        <input id="licencia-hasta" type="date" x-model="nueva.fecha_fin" :disabled="guardandoNueva"
+                               class="w-full min-w-0 px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+                <div x-show="!altaSeleccion" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="licencia-costo" class="block text-sm font-semibold text-dark-700 mb-2">Costo mensual <span class="font-normal text-dark-400">(por persona)</span></label>
+                        <input id="licencia-costo" type="text" inputmode="decimal" x-model="nueva.costo_mensual" placeholder="0.00" :disabled="guardandoNueva"
+                               class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label for="licencia-moneda" class="block text-sm font-semibold text-dark-700 mb-2">Moneda</label>
+                        <select id="licencia-moneda" x-model="nueva.moneda" :disabled="guardandoNueva"
+                                class="w-full px-3 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                            <option value="ARS">ARS</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">
+                        Nro. Pedido de Compra
+                        <span class="font-normal text-dark-400">(opcional)</span>
+                    </label>
+                    <input type="text" x-model="nueva.nro_pedido_compra" placeholder="Ej: OC-2026-001" :disabled="guardandoNueva"
+                           @keydown.enter.prevent="guardarNueva()"
+                           class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                </div>
+
+                <p x-show="errorNueva" x-cloak x-text="errorNueva"
+                   class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5"></p>
+            </div>
+
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex flex-wrap gap-3 items-center justify-between shrink-0 rounded-b-2xl">
+                <label x-show="!altaSeleccion" class="flex items-center text-sm text-dark-500">
+                    <input type="checkbox" x-model="seguirCargando" :disabled="guardandoNueva"
+                           class="w-4 h-4 rounded border-dark-300 text-primary-600 mr-2">
+                    Seguir cargando
+                </label>
+                <div class="flex items-center gap-3">
+                    <button type="button" @click="cerrarNueva()"
+                            class="px-4 py-2 text-dark-500 hover:text-dark-700 font-medium">Cancelar</button>
+                    <button type="button" @click="guardarNueva()" :disabled="guardandoNueva || !nueva.empleado_ids.length || (altaSeleccion && !herramientasAlta.length)"
+                            class="px-5 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 font-semibold disabled:opacity-50">
+                        <span x-text="guardandoNueva ? 'Asignando...' : 'Asignar ' + (nueva.empleado_ids.length * (altaSeleccion ? herramientasAlta.length : 1)) + ' licencias'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# Catalogo: donde se limpian los duplicados y los nombres mal escritos.
+       Las bajas del catálogo avisan y quitan también sus asignaciones. #}
+    <div x-show="showCatalogo" x-cloak
+         class="fixed inset-0 z-50 flex items-start justify-center p-4 pt-16 overflow-y-auto">
+        <div class="fixed inset-0 bg-dark-900/50 backdrop-blur-sm" @click="showCatalogo = false"></div>
+
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-2xl"
+             role="dialog" aria-modal="true" aria-labelledby="catalogo-titulo"
+             @keydown.escape.window="if (!showHerramienta) showCatalogo = false">
+            <div class="px-6 py-4 border-b border-dark-100 flex items-start justify-between">
+                <div>
+                    <h3 id="catalogo-titulo" class="text-lg font-semibold text-dark-900">Catálogo</h3>
+                    <p class="text-sm text-dark-500">Creá, editá y eliminá herramientas y proveedores</p>
+                </div>
+                <button type="button" @click="showCatalogo = false" class="text-dark-400 hover:text-dark-600">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="px-6 pt-4 flex gap-1 border-b border-dark-100">
+                <button type="button" @click="tabCatalogo = 'herramientas'"
+                        class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors"
+                        :class="tabCatalogo === 'herramientas' ? 'border-primary-500 text-primary-700' : 'border-transparent text-dark-500 hover:text-dark-700'">
+                    Herramientas <span x-text="'(' + herramientas.length + ')'"></span>
+                </button>
+                <button type="button" @click="tabCatalogo = 'proveedores'"
+                        class="px-4 py-2 text-sm font-semibold border-b-2 -mb-px transition-colors"
+                        :class="tabCatalogo === 'proveedores' ? 'border-primary-500 text-primary-700' : 'border-transparent text-dark-500 hover:text-dark-700'">
+                    Proveedores <span x-text="'(' + proveedores.length + ')'"></span>
+                </button>
+            </div>
+
+            <div class="p-6 max-h-96 overflow-y-auto">
+                <!-- Herramientas: reapuntar el proveedor es lo que desbloquea su borrado -->
+                <div x-show="tabCatalogo === 'herramientas'" class="space-y-2">
+                    <div class="flex justify-end mb-3">
+                        <button type="button" @click="abrirHerramienta()"
+                                class="px-3 py-2 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700">Nueva herramienta</button>
+                    </div>
+                    <template x-for="h in herramientas" :key="h.id">
+                        <div class="flex flex-wrap items-center gap-3 px-3 py-2 rounded-xl border border-dark-100 hover:bg-dark-50/60">
+                            <div class="flex-1 min-w-36">
+                                <p class="text-sm font-medium text-dark-800 break-words" x-text="h.nombre"></p>
+                                <p class="text-xs text-dark-500" x-text="h.costo_referencia == null ? 'Sin costo de referencia' : h.moneda + ' ' + Number(h.costo_referencia).toFixed(2)"></p>
+                            </div>
+                            <select :value="h.proveedor_id || ''"
+                                    :aria-label="'Proveedor de ' + h.nombre"
+                                    @change="reapuntarProveedor(h, $event.target)"
+                                    class="w-44 px-2 py-1.5 bg-dark-50 border border-dark-200 rounded-lg text-sm">
+                                <option value="">Sin proveedor</option>
+                                <template x-for="p in proveedores" :key="p.id">
+                                    <option :value="p.id" x-text="p.nombre" :selected="p.id === h.proveedor_id"></option>
+                                </template>
+                            </select>
+                            <button type="button" @click="abrirHerramienta(h)" :aria-label="'Editar ' + h.nombre"
+                                    class="text-sm font-medium text-primary-600 hover:text-primary-800">Editar</button>
+                            <button type="button" @click="borrarHerramienta(h, $el)"
+                                    title="Borrar del catálogo" :aria-label="'Borrar ' + h.nombre"
+                                    class="text-dark-300 hover:text-red-600 transition-colors">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+                    <p x-show="herramientas.length === 0" class="text-sm text-dark-400">El catálogo está vacío.</p>
+                </div>
+
+                <!-- Proveedores -->
+                <div x-show="tabCatalogo === 'proveedores'" x-cloak class="space-y-2">
+                    <div class="flex justify-end mb-3">
+                        <button type="button" @click="abrirProveedor()" :disabled="guardandoProveedor"
+                                class="px-3 py-2 rounded-xl bg-primary-600 text-white text-sm font-semibold hover:bg-primary-700 disabled:opacity-50">Nuevo proveedor</button>
+                    </div>
+                    <form x-show="showProveedor" x-cloak @submit.prevent="guardarProveedor()"
+                          class="p-3 mb-3 bg-primary-50/50 border border-primary-100 rounded-xl space-y-2">
+                        <label for="catalogo-proveedor-nombre" class="block text-sm font-semibold text-dark-700"
+                               x-text="proveedorEditando.id ? 'Editar proveedor' : 'Nuevo proveedor'"></label>
+                        <div class="flex flex-wrap gap-2">
+                            <input id="catalogo-proveedor-nombre" x-ref="nombreProveedor" type="text" x-model="proveedorEditando.nombre"
+                                   required minlength="2" maxlength="150" :disabled="guardandoProveedor"
+                                   placeholder="Nombre del proveedor"
+                                   class="flex-1 min-w-40 px-3 py-2 border border-dark-200 rounded-lg bg-white text-sm focus:ring-2 focus:ring-primary-500">
+                            <button type="submit" :disabled="guardandoProveedor" class="px-3 py-2 rounded-lg bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
+                                    x-text="guardandoProveedor ? 'Guardando...' : 'Guardar'"></button>
+                            <button type="button" @click="showProveedor = false; errorCatalogo = ''" :disabled="guardandoProveedor"
+                                    class="px-2 py-2 text-dark-500 text-sm">Cancelar</button>
+                        </div>
+                    </form>
+                    <template x-for="p in proveedores" :key="p.id">
+                        <div class="flex items-center gap-3 px-3 py-2 rounded-xl border border-dark-100 hover:bg-dark-50/60">
+                            <span class="flex-1 min-w-0 truncate text-sm font-medium text-dark-800" x-text="p.nombre"></span>
+                            <span class="text-xs text-dark-400"
+                                  x-text="herramientas.filter(h => h.proveedor_id === p.id).length + ' herramientas'"></span>
+                            <button type="button" @click="abrirProveedor(p)" :disabled="guardandoProveedor"
+                                    :aria-label="'Editar proveedor ' + p.nombre"
+                                    class="text-sm font-medium text-primary-600 hover:text-primary-800 disabled:opacity-50">Editar</button>
+                            <button type="button" @click="borrarProveedor(p, $el)"
+                                    title="Borrar del catálogo" :aria-label="'Borrar proveedor ' + p.nombre" :disabled="guardandoProveedor"
+                                    class="text-dark-300 hover:text-red-600 transition-colors">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+                    <p x-show="proveedores.length === 0" class="text-sm text-dark-400">No hay proveedores cargados.</p>
+                </div>
+
+                <p x-show="errorCatalogo" x-cloak x-text="errorCatalogo"
+                   class="mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5"></p>
+            </div>
+
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                <p class="text-xs text-dark-400">Al eliminar se quitarán también las asignaciones vinculadas</p>
+                <button type="button" @click="showCatalogo = false"
+                        class="px-4 py-2 text-dark-600 hover:text-dark-800 font-medium">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    {# Alta y edicion de herramienta desde Catalogo o sin perder la licencia. #}
+    <div x-show="showHerramienta" x-cloak
+         class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/40" @click="if (!guardandoHerramienta) showHerramienta = false"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto"
+             role="dialog" aria-modal="true" aria-labelledby="herramienta-titulo"
+             @keydown.escape.stop.prevent="if (!guardandoHerramienta) showHerramienta = false">
+            <div class="px-6 py-4 border-b border-dark-100">
+                <h3 id="herramienta-titulo" class="font-semibold text-dark-900" x-text="herramientaEditandoId ? 'Editar herramienta' : 'Nueva herramienta'"></h3>
+                <p class="text-sm text-dark-500">Queda disponible para todas las licencias</p>
+            </div>
+            <fieldset :disabled="guardandoHerramienta" class="p-6 space-y-4">
+                <div>
+                    <label for="catalogo-herramienta-nombre" class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                    <input id="catalogo-herramienta-nombre" type="text" x-ref="nombreHerramienta" maxlength="150" x-model="herramientaNueva.nombre" @keydown.enter.prevent="guardarHerramienta()"
+                           placeholder="Ej: Microsoft 365"
+                           class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                </div>
+                <div>
+                    <label for="catalogo-herramienta-proveedor" class="block text-sm font-semibold text-dark-700 mb-2">Proveedor</label>
+                    <div class="flex gap-2" x-show="!creandoProveedor">
+                        <select id="catalogo-herramienta-proveedor" x-model="herramientaNueva.proveedor_id"
+                                class="flex-1 min-w-0 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                            <option value="">Sin proveedor</option>
+                            <template x-for="p in proveedores" :key="p.id">
+                                <option :value="p.id" x-text="p.nombre"></option>
+                            </template>
+                        </select>
+                        <button type="button" @click="creandoProveedor = true; herramientaNueva.proveedor_id = ''"
+                                title="Crear un proveedor nuevo"
+                                class="px-3 py-2.5 bg-white border border-dark-200 rounded-xl hover:border-primary-400 hover:text-primary-600 text-dark-500 transition-colors">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                    <div class="flex gap-2" x-show="creandoProveedor" x-cloak>
+                        <input type="text" x-model="herramientaNueva.proveedor_nombre" aria-label="Nombre del proveedor nuevo" maxlength="150"
+                               @keydown.enter.prevent="guardarHerramienta()"
+                               placeholder="Nombre del proveedor nuevo"
+                               class="flex-1 min-w-0 px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                        <button type="button" @click="creandoProveedor = false; herramientaNueva.proveedor_nombre = ''"
+                                title="Elegir uno existente"
+                                class="px-3 py-2.5 bg-white border border-dark-200 rounded-xl hover:border-dark-400 text-dark-500 transition-colors">
+                            <i data-lucide="list" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="catalogo-herramienta-costo" class="block text-sm font-semibold text-dark-700 mb-2">Costo de referencia</label>
+                        <input id="catalogo-herramienta-costo" type="text" inputmode="decimal" x-model="herramientaNueva.costo_referencia" placeholder="0.00"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label for="catalogo-herramienta-moneda" class="block text-sm font-semibold text-dark-700 mb-2">Moneda</label>
+                        <select id="catalogo-herramienta-moneda" x-model="herramientaNueva.moneda"
+                                class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all">
+                            <option value="ARS">ARS</option>
+                            <option value="USD">USD</option>
+                        </select>
+                    </div>
+                </div>
+                <p x-show="errorHerramienta" x-cloak x-text="errorHerramienta"
+                   class="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5"></p>
+            </fieldset>
+            <div class="px-6 py-4 bg-dark-50 border-t border-dark-100 flex items-center justify-end gap-3">
+                <button type="button" @click="showHerramienta = false" :disabled="guardandoHerramienta"
+                        class="px-4 py-2 text-dark-500 hover:text-dark-700 font-medium">Cancelar</button>
+                <button type="button" @click="guardarHerramienta()" :disabled="guardandoHerramienta"
+                        class="px-5 py-2 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 font-semibold disabled:opacity-50">
+                    <span x-text="guardandoHerramienta ? 'Guardando...' : (herramientaEditandoId ? 'Guardar cambios' : 'Crear')"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div x-show="showRevocar" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4" @keydown.escape.stop="if (!revisandoRevocacion) showRevocar = false">
+        <div class="absolute inset-0 bg-dark-900/60 backdrop-blur-sm" @click="if (!revisandoRevocacion) showRevocar = false"></div>
+        <div class="relative bg-white rounded-2xl p-6 shadow-lg w-full max-w-md" role="dialog" aria-modal="true" aria-labelledby="revocar-titulo">
+            <h3 id="revocar-titulo" class="text-xl font-medium mb-2">Revocar licencias de la selección</h3>
+            <p class="text-sm text-dark-500 mb-4">Elegí la herramienta que querés quitar. Se incluyen las asignaciones activas e inactivas.</p>
+            <input type="search" x-ref="buscarRevocacion" @keydown.shift.tab.prevent="$refs.revisarRevocacion.disabled ? $refs.cancelarRevocacion.focus() : $refs.revisarRevocacion.focus()" x-model="buscarHerramientaRevocar" aria-label="Buscar herramienta para revocar" placeholder="Buscar herramienta..." class="w-full rounded-xl border border-dark-200 px-3 py-2 mb-3">
+            <div class="max-h-60 overflow-y-auto">
+                <template x-for="h in buscarOpciones(herramientas, buscarHerramientaRevocar)" :key="h.id">
+                    <label class="flex items-center gap-2 p-2 rounded-lg hover:bg-primary-50 cursor-pointer text-sm">
+                        <input type="radio" name="herramienta-revocar" :value="h.id" x-model="herramientaRevocar" :disabled="revisandoRevocacion">
+                        <span x-text="h.nombre + ' — ' + getNombreProveedor(h.proveedor_id)"></span>
+                    </label>
+                </template>
+            </div>
+            <p x-show="errorRevocacion" x-text="errorRevocacion" role="alert" class="text-sm text-red-600 mt-3"></p>
+            <div class="flex justify-end gap-3 mt-5">
+                <button type="button" x-ref="cancelarRevocacion" @keydown.tab="if (!$event.shiftKey && $refs.revisarRevocacion.disabled) { $event.preventDefault(); $refs.buscarRevocacion.focus(); }" @click="showRevocar = false" :disabled="revisandoRevocacion" class="px-4 py-2 rounded-xl border border-dark-200">Cancelar</button>
+                <button type="button" x-ref="revisarRevocacion" @keydown.tab="if (!$event.shiftKey) { $event.preventDefault(); $refs.buscarRevocacion.focus(); }" @click="revisarRevocacion()" :disabled="!herramientaRevocar || revisandoRevocacion" class="px-4 py-2 rounded-xl bg-red-500 text-white disabled:opacity-50" x-text="revisandoRevocacion ? 'Revisando...' : 'Revisar baja'"></button>
+            </div>
+        </div>
+    </div>
+    {% include "innovacion/partials/licencias_quitar.html" %}
+</div>
+
+<script>
+function licenciasFiltros() {
+    return {
+        buscar: {{ buscar | tojson }},
+        vista: {{ vista | tojson }},
+        showFiltros: false,
+        showEmpleados: false,
+        busquedaEquipo: '',
+        _filtrosTimer: null,
+        gruposAbiertos: [],
+        filtros: {
+            equipo_ids: {{ filtro_equipos | tojson }},
+            proveedor_id: {{ filtro_proveedor | tojson }},
+            empleado_ids: {{ filtro_empleados | tojson }}
+        },
+        empleados: {{ empleados | tojson | safe }},
+        herramientas: {{ herramientas | tojson | safe }},
+        equipos: {{ equipos | tojson | safe }},
+        proveedores: {{ proveedores | tojson | safe }},
+
+        altaSeleccion: false,
+        herramientasAlta: [],
+        costosAlta: {},
+        buscarAltaHerramientas: '',
+        showRevocar: false,
+        herramientaRevocar: '',
+        buscarHerramientaRevocar: '',
+        revisandoRevocacion: false,
+        errorRevocacion: '',
+        bajaPendiente: null,
+        confirmandoBaja: false,
+        errorBaja: '',
+        _bajaDisparador: null,
+        
+        // Catalogo
+        showCatalogo: false,
+        tabCatalogo: 'herramientas',
+        errorCatalogo: '',
+        showProveedor: false,
+        proveedorEditando: { id: '', nombre: '' },
+        guardandoProveedor: false,
+        herramientaEditandoId: '',
+        seleccionarHerramientaCreada: false,
+
+        // Alta en modal
+        showNueva: false,
+        empleadoFijo: null,
+        showHerramienta: false,
+        seguirCargando: false,
+        guardandoNueva: false,
+        guardandoHerramienta: false,
+        creandoProveedor: false,
+        errorNueva: '',
+        errorHerramienta: '',
+        nueva: { empleado_ids: [] },
+        tipoDestinatario: 'empleados',
+        busquedaDestinatario: '',
+        soloSeleccionadosNueva: false,
+        herramientaNueva: {},
+
+        init() {
+            document.body.addEventListener('htmx:beforeSwap', (e) => {
+                if (e.detail.target.id !== 'licencias-table' || !e.detail.shouldSwap) return;
+                this.gruposAbiertos = Array.from(e.detail.target.querySelectorAll('details[data-grupo]'))
+                    .filter(grupo => grupo.open).map(grupo => grupo.dataset.grupo);
+            });
+            document.body.addEventListener('htmx:afterSwap', (e) => {
+                if (e.detail.target.id !== 'licencias-table') return;
+                e.detail.target.querySelectorAll('details[data-grupo]').forEach(grupo => {
+                    grupo.open = this.gruposAbiertos.includes(grupo.dataset.grupo);
+                });
+            });
+            // El checkbox de cada licencia dispara el evento al guardar el estado.
+            document.body.addEventListener('licenciaEstadoCambiado', () => this.aplicarFiltros(true));
+            // El + de cada fila abre el modal con ese empleado ya elegido.
+            // El nombre del evento es el que emite $dispatch en el partial.
+            document.body.addEventListener('nueva-licencia-para', (e) => {
+                this.abrirNueva(e.detail.empleadoId, e.detail.empleadoNombre);
+            });
+        },
+
+        abrirBaja(baja, disparador = null) {
+            if (this.confirmandoBaja) return;
+            this.bajaPendiente = baja;
+            this._bajaDisparador = disparador;
+            this.errorBaja = '';
+            this.errorCatalogo = '';
+            this.$nextTick?.(() => this.$refs?.cancelarBaja?.focus());
+        },
+
+        cancelarBaja() {
+            if (this.confirmandoBaja || !this.bajaPendiente) return;
+            this.bajaPendiente = null;
+            this.errorBaja = '';
+            this._bajaDisparador?.focus();
+            this._bajaDisparador = null;
+        },
+
+        borrarLicencia(boton) {
+            this.abrirBaja({
+                tipo: 'licencia', url: boton.dataset.url,
+                nombre: boton.dataset.herramienta, empleado: boton.dataset.empleado,
+            }, boton);
+        },
+
+        async revisarRevocacion() {
+            if (this.revisandoRevocacion || !this.herramientaRevocar) return;
+            this.revisandoRevocacion = true;
+            this.errorRevocacion = '';
+            try {
+                const r = await fetch('{{ url_for("innovacion.licencias_revocacion") }}/preview', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ herramienta_id: this.herramientaRevocar,
+                        empleado_ids: this.filtros.empleado_ids, equipo_ids: this.filtros.equipo_ids }),
+                });
+                const datos = await r.json();
+                if (!r.ok) throw new Error(typeof datos.detail === 'string' ? datos.detail : 'No se pudo revisar la selección');
+                if (!datos.licencia_ids.length) { this.errorRevocacion = 'No hay asignaciones de esta herramienta en la selección.'; return; }
+                this.showRevocar = false;
+                this.abrirBaja({ tipo: 'lote', url: '{{ url_for("innovacion.licencias_revocacion") }}',
+                    nombre: this.herramientas.find(h => h.id === this.herramientaRevocar)?.nombre,
+                    empleados: datos.empleados, licencia_ids: datos.licencia_ids });
+            } catch (error) { this.errorRevocacion = error.message || 'No se pudo conectar'; }
+            finally { this.revisandoRevocacion = false; }
+        },
+
+        async confirmarBaja() {
+            if (!this.bajaPendiente || this.confirmandoBaja) return;
+            const baja = this.bajaPendiente;
+            this.confirmandoBaja = true;
+            this.errorBaja = '';
+            if (baja.tipo !== 'licencia') this.errorCatalogo = '';
+            this.$refs?.bajaDialogo?.focus();
+            try {
+                const respuesta = await fetch(baja.url, baja.tipo === 'lote'
+                    ? { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ licencia_ids: baja.licencia_ids }) }
+                    : { method: 'DELETE' });
+                if (!respuesta.ok) {
+                    let mensaje = 'No se pudo completar la eliminación';
+                    try { mensaje = (await respuesta.json()).detail || mensaje; } catch (_) {}
+                    this.errorBaja = mensaje;
+                    if (baja.tipo !== 'licencia') this.errorCatalogo = mensaje;
+                    return;
+                }
+                if (baja.tipo === 'licencia' || baja.tipo === 'lote') {
+                    this.aplicarFiltros();
+                } else if (baja.tipo === 'herramienta') {
+                    this.herramientas = this.herramientas.filter(h => h.id !== baja.id);
+                    if (this.nueva.herramienta_id === baja.id) this.nueva.herramienta_id = '';
+                    this.aplicarFiltros();
+                } else {
+                    this.proveedores = this.proveedores.filter(p => p.id !== baja.id);
+                    this.herramientas = this.herramientas.filter(h => h.proveedor_id !== baja.id);
+                    if (!this.herramientas.some(h => h.id === this.nueva.herramienta_id)) this.nueva.herramienta_id = '';
+                    if (this.proveedorEditando.id === baja.id) this.showProveedor = false;
+                    if (this.filtros.proveedor_id === baja.id) {
+                        this.filtros.proveedor_id = '';
+                    }
+                    this.aplicarFiltros();
+                }
+                this.bajaPendiente = null;
+                this._bajaDisparador = null;
+            } catch (_) {
+                this.errorBaja = 'No se pudo conectar. Intentá nuevamente.';
+                if (baja.tipo !== 'licencia') this.errorCatalogo = this.errorBaja;
+            } finally {
+                this.confirmandoBaja = false;
+            }
+        },
+
+        errorLicencia(evento) {
+            let mensaje = 'No se pudo guardar el cambio de la licencia';
+            try { mensaje = JSON.parse(evento.detail.xhr.responseText).detail || mensaje; } catch (_) {}
+            Alpine.store('toasts').error(mensaje);
+        },
+
+        async cambiarCatalogo(url, opciones) {
+            this.errorCatalogo = '';
+            try {
+                const r = await fetch(url, opciones);
+                if (r.status === 204) return {};
+                const datos = await r.json();
+                if (r.ok) return datos;
+                this.errorCatalogo = datos.detail || 'No se pudo guardar el cambio';
+            } catch (_) {
+                this.errorCatalogo = 'No se pudo conectar. Intentá nuevamente.';
+            }
+            return null;
+        },
+
+        abrirProveedor(proveedor = null) {
+            this.errorCatalogo = '';
+            this.proveedorEditando = { id: proveedor?.id || '', nombre: proveedor?.nombre || '' };
+            this.showProveedor = true;
+            this.$nextTick(() => this.$refs.nombreProveedor.focus());
+        },
+
+        async guardarProveedor() {
+            if (this.guardandoProveedor) return;
+            const nombre = this.proveedorEditando.nombre.trim();
+            if (!nombre) {
+                this.errorCatalogo = 'El nombre del proveedor es obligatorio';
+                return;
+            }
+            this.guardandoProveedor = true;
+            const id = this.proveedorEditando.id;
+            try {
+                const datos = await this.cambiarCatalogo(`/innovacion/proveedores${id ? '/' + id : ''}`, {
+                    method: id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nombre }),
+                });
+                if (!datos) return;
+                this.proveedores = this.proveedores.filter(p => p.id !== datos.id).concat(datos)
+                    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+                this.herramientas.forEach(h => {
+                    if (h.proveedor_id === datos.id) h.proveedor = datos.nombre;
+                });
+                this.showProveedor = false;
+                this.aplicarFiltros();
+            } finally {
+                this.guardandoProveedor = false;
+            }
+        },
+
+        async reapuntarProveedor(herramienta, selector) {
+            selector.disabled = true;
+            const datos = await this.cambiarCatalogo(`/innovacion/herramientas/${herramienta.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ proveedor_id: selector.value }),
+            });
+            if (datos) {
+                herramienta.proveedor_id = datos.proveedor_id;
+                herramienta.proveedor = datos.proveedor;
+                this.aplicarFiltros();
+            }
+            selector.value = herramienta.proveedor_id || '';
+            selector.disabled = false;
+        },
+
+        borrarHerramienta(herramienta, disparador = null) {
+            this.abrirBaja({
+                tipo: 'herramienta', id: herramienta.id, nombre: herramienta.nombre,
+                url: `/innovacion/herramientas/${herramienta.id}`,
+            }, disparador);
+        },
+
+        borrarProveedor(proveedor, disparador = null) {
+            this.abrirBaja({
+                tipo: 'proveedor', id: proveedor.id, nombre: proveedor.nombre,
+                url: `/innovacion/proveedores/${proveedor.id}`,
+            }, disparador);
+        },
+
+        licenciaEnBlanco(empleadoId) {
+            return {
+                empleado_ids: empleadoId ? [empleadoId] : [],
+                herramienta_id: '',
+                // Arranca hoy: es el caso normal y ahorra un click.
+                fecha_inicio: new Date().toISOString().slice(0, 10),
+                fecha_fin: '',
+                costo_mensual: '',
+                moneda: 'ARS',
+                nro_pedido_compra: '',
+            };
+        },
+
+        abrirAltaSeleccion() {
+            const equipos = this.equipos.filter(eq => this.filtros.equipo_ids.includes(eq.id));
+            const integrantes = [...new Set(equipos.flatMap(eq => eq.empleado_ids))];
+            const personas = this.filtros.empleado_ids.length
+                ? this.filtros.empleado_ids.filter(id => !equipos.length || integrantes.includes(id)) : integrantes;
+            this.abrirNueva();
+            this.altaSeleccion = true;
+            this.nueva.empleado_ids = [...personas];
+            this.herramientasAlta = [];
+            this.costosAlta = Object.fromEntries(this.herramientas.map(h => [h.id, { costo_mensual: h.costo_referencia ?? '', moneda: h.moneda || 'ARS' }]));
+            this.buscarAltaHerramientas = '';
+            this.$nextTick(() => this.$refs.buscarAltaHerramientas.focus());
+        },
+
+        abrirNueva(empleadoId, empleadoNombre) {
+            if (this.guardandoNueva) return;
+            this.errorNueva = '';
+            this.altaSeleccion = false;
+            this.empleadoFijo = empleadoId ? { id: empleadoId, nombre: empleadoNombre || this.getNombreEmpleado(empleadoId) } : null;
+            this.nueva = this.licenciaEnBlanco(empleadoId);
+            this.tipoDestinatario = 'empleados';
+            this.busquedaDestinatario = '';
+            this.soloSeleccionadosNueva = false;
+            this.showNueva = true;
+            this.$nextTick(() => this.$refs[this.empleadoFijo ? 'herramientaLicencia' : 'buscarDestinatarios'].focus());
+        },
+
+        cerrarNueva() {
+            if (this.guardandoNueva) return;
+            this.showNueva = false;
+            this.showHerramienta = false;
+        },
+
+        alElegirHerramienta() {
+            // El costo de referencia prellena el costo, sin pisar lo tipeado.
+            const h = this.herramientas.find(x => x.id === this.nueva.herramienta_id);
+            if (!h || h.costo_referencia === null || h.costo_referencia === undefined) return;
+            if (!this.nueva.costo_mensual) {
+                this.nueva.costo_mensual = String(h.costo_referencia);
+                this.nueva.moneda = h.moneda;
+            }
+        },
+
+        abrirHerramienta(herramienta = null) {
+            this.errorHerramienta = '';
+            this.creandoProveedor = false;
+            this.herramientaEditandoId = herramienta?.id || '';
+            this.seleccionarHerramientaCreada = this.showNueva && !this.showCatalogo;
+            this.herramientaNueva = {
+                nombre: herramienta?.nombre || '',
+                proveedor_id: herramienta?.proveedor_id || '', proveedor_nombre: '',
+                costo_referencia: herramienta?.costo_referencia ?? '',
+                moneda: herramienta?.moneda || 'ARS',
+            };
+            this.showHerramienta = true;
+            this.$nextTick(() => this.$refs.nombreHerramienta.focus());
+        },
+
+        async guardarHerramienta() {
+            if (this.guardandoHerramienta) return;
+            if (!(this.herramientaNueva.nombre || '').trim()) {
+                this.errorHerramienta = 'El nombre es obligatorio';
+                return;
+            }
+            this.guardandoHerramienta = true;
+            this.errorHerramienta = '';
+            try {
+                const payload = { ...this.herramientaNueva };
+                if (this.creandoProveedor) delete payload.proveedor_id;
+                else delete payload.proveedor_nombre;
+                const id = this.herramientaEditandoId;
+                const r = await fetch(`/innovacion/herramientas${id ? '/' + id : ''}`, {
+                    method: id ? 'PUT' : 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                const datos = await r.json();
+                if (!r.ok) {
+                    this.errorHerramienta = datos.detail || 'No se pudo guardar la herramienta';
+                    return;
+                }
+                this.herramientas = this.herramientas.filter(h => h.id !== datos.id).concat(datos)
+                    .sort((a, b) => a.nombre.localeCompare(b.nombre));
+                // El proveedor pudo crearse al vuelo: que aparezca en el filtro.
+                if (datos.proveedor_id && !this.proveedores.some(p => p.id === datos.proveedor_id)) {
+                    this.proveedores.push({ id: datos.proveedor_id, nombre: datos.proveedor });
+                    this.proveedores.sort((a, b) => a.nombre.localeCompare(b.nombre));
+                }
+                this.showHerramienta = false;
+                if (this.seleccionarHerramientaCreada) {
+                    this.nueva.herramienta_id = datos.id;
+                    this.alElegirHerramienta();
+                }
+                this.aplicarFiltros();
+            } catch (e) {
+                this.errorHerramienta = 'Error de red al guardar la herramienta';
+            } finally {
+                this.guardandoHerramienta = false;
+            }
+        },
+
+        async guardarNueva() {
+            if (this.guardandoNueva) return;
+            if (!this.nueva.empleado_ids.length || !(this.altaSeleccion ? this.herramientasAlta.length : this.nueva.herramienta_id) || !this.nueva.fecha_inicio) {
+                this.errorNueva = 'Seleccioná al menos una persona, una herramienta y la fecha de inicio';
+                return;
+            }
+            this.guardandoNueva = true;
+            this.errorNueva = '';
+            try {
+                const r = await fetch('{{ url_for("innovacion.licencias_create_lote") }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(this.altaSeleccion ? {
+                        empleado_ids: this.nueva.empleado_ids,
+                        licencias: this.herramientasAlta.map(id => ({
+                            herramienta_id: id, fecha_inicio: this.nueva.fecha_inicio,
+                            fecha_fin: this.nueva.fecha_fin || null,
+                            nro_pedido_compra: this.nueva.nro_pedido_compra || null,
+                            costo_mensual: this.costosAlta[id].costo_mensual === '' ? null : this.costosAlta[id].costo_mensual,
+                            moneda: this.costosAlta[id].moneda,
+                        })),
+                    } : this.nueva),
+                });
+                const datos = await r.json();
+                if (!r.ok) {
+                    this.errorNueva = String(datos.detail || 'No se pudieron asignar las licencias').replace(/<[^>]*>/g, '').trim();
+                    return;
+                }
+                Alpine.store('toasts').success(datos.creadas === 1 ? 'Licencia asignada' : datos.creadas + ' licencias asignadas');
+                // Conserva los destinatarios para asignarles otra herramienta.
+                if (this.seguirCargando && !this.altaSeleccion) {
+                    const empleados = this.nueva.empleado_ids;
+                    this.nueva = { ...this.licenciaEnBlanco(), empleado_ids: empleados };
+                } else {
+                    this.showNueva = false;
+                    this.showHerramienta = false;
+                }
+                this.aplicarFiltros();
+            } catch (e) {
+                this.errorNueva = 'No se pudo confirmar la asignación. Revisá el listado antes de volver a intentar.';
+            } finally {
+                this.guardandoNueva = false;
+            }
+        },
+        
+        normalizarBusqueda(valor) {
+            return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        },
+
+        empleadosVisibles() {
+            return this.buscarOpciones(this.empleados, this.buscar);
+        },
+
+        buscarOpciones(opciones, busqueda) {
+            const palabras = this.normalizarBusqueda(busqueda).split(/\s+/).filter(Boolean);
+            return opciones.filter(emp => {
+                const texto = this.normalizarBusqueda(emp.nombre + ' ' + (emp.codigo || ''));
+                return palabras.every(palabra => texto.includes(palabra));
+            });
+        },
+
+        destinatariosVisibles() {
+            const opciones = this.tipoDestinatario === 'equipos' ? this.equipos : this.empleados;
+            return this.buscarOpciones(opciones, this.busquedaDestinatario).filter(item =>
+                this.tipoDestinatario === 'equipos' || !this.soloSeleccionadosNueva || this.nueva.empleado_ids.includes(item.id));
+        },
+
+        destinatarioIds(item) {
+            return this.tipoDestinatario === 'equipos' ? item.empleado_ids : [item.id];
+        },
+
+        destinatarioSeleccionado(item) {
+            const ids = this.destinatarioIds(item);
+            return ids.length > 0 && ids.every(id => this.nueva.empleado_ids.includes(id));
+        },
+
+        alternarDestinatario(item) {
+            const ids = this.destinatarioIds(item);
+            this.nueva.empleado_ids = this.destinatarioSeleccionado(item)
+                ? this.nueva.empleado_ids.filter(id => !ids.includes(id))
+                : [...new Set([...this.nueva.empleado_ids, ...ids])];
+        },
+
+        seleccionarDestinatariosVisibles() {
+            this.nueva.empleado_ids = [...new Set([
+                ...this.nueva.empleado_ids, ...this.destinatariosVisibles().flatMap(item => this.destinatarioIds(item))
+            ])];
+        },
+
+        alternarEmpleado(id) {
+            this.filtros.empleado_ids = this.filtros.empleado_ids.includes(id)
+                ? this.filtros.empleado_ids.filter(actual => actual !== id)
+                : [...this.filtros.empleado_ids, id];
+            this.programarFiltros();
+        },
+
+        seleccionarResultadosEmpleados() {
+            this.filtros.empleado_ids = [...new Set([
+                ...this.filtros.empleado_ids, ...this.empleadosVisibles().map(emp => emp.id)
+            ])];
+            this.programarFiltros();
+        },
+
+        limpiarEmpleados() {
+            this.buscar = '';
+            this.filtros.empleado_ids = [];
+            this.programarFiltros();
+        },
+
+        programarFiltros() {
+            clearTimeout(this._filtrosTimer);
+            this._filtrosTimer = setTimeout(() => this.aplicarFiltros(), 250);
+        },
+
+        tieneFilrosActivos() {
+            return this.filtros.equipo_ids.length || this.filtros.proveedor_id
+                || this.filtros.empleado_ids.length;
+        },
+        
+        contarFiltros() {
+            let count = 0;
+            if (this.filtros.equipo_ids.length) count++;
+            if (this.filtros.proveedor_id) count++;
+            if (this.filtros.empleado_ids.length) count++;
+            return count;
+        },
+        
+        limpiarFiltros() {
+            this.filtros = {
+                equipo_ids: [],
+                proveedor_id: '',
+                empleado_ids: []
+            };
+            this.buscar = '';
+            this.aplicarFiltros();
+        },
+        
+        getNombreEmpleado(id) {
+            const emp = this.empleados.find(e => e.id === id);
+            return emp ? emp.nombre : id;
+        },
+
+        getNombreEquipo(id) {
+            const eq = this.equipos.find(x => x.id === id);
+            return eq ? eq.nombre : id;
+        },
+
+        getNombreProveedor(id) {
+            const p = this.proveedores.find(x => x.id === id);
+            return p ? p.nombre : id;
+        },
+        
+        aplicarFiltros(conservarPagina = false) {
+            clearTimeout(this._filtrosTimer);
+            let url = '{{ url_for("innovacion.licencias_list") }}?';
+            const params = ['vista=' + this.vista];
+            if (conservarPagina) {
+                const pagina = document.querySelector('#licencias-table [data-pagina]')?.dataset.pagina || '1';
+                params.push('pagina=' + encodeURIComponent(pagina));
+            }
+            if (this.buscar && !this.filtros.empleado_ids.length) params.push('buscar=' + encodeURIComponent(this.buscar));
+            this.filtros.equipo_ids.forEach(id => params.push('equipo_id=' + encodeURIComponent(id)));
+            if (this.filtros.proveedor_id) params.push('proveedor_id=' + this.filtros.proveedor_id);
+            this.filtros.empleado_ids.forEach(id => params.push('empleado_id=' + encodeURIComponent(id)));
+            url += params.join('&');
+            htmx.ajax('GET', url, {target: '#licencias-table'});
+        }
+    }
+}
+</script>
+{% endblock %}

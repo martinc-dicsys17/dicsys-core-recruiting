@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prueba de la sesión del navegador</title>
+<!--
+  DoD del gate de F07 (F07-P12, D-14): una página fuera de Flask que hace lo que hará la SPA de v2 con la API.
+  Entra con email y contraseña (la API deja la cookie httpOnly del refresh), renueva el access token con esa cookie,
+  pide /auth/me, lista usuarios (403 si no tiene permiso), baja el PDF de un recibo con una URL firmada y sale.
+  El access token vive solo en memoria (la variable `access`). La sirve FastAPI en /prueba/sesion.html con
+  PAGINA_DE_PRUEBA_DE_SESION=true; necesita AUTH_REFRESH_ENABLED=true para que el login emita la cookie.
+-->
+<style>
+  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+  body { max-width: 760px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+  form, section { margin: 1rem 0; }
+  input, button { font: inherit; padding: .35rem .6rem; margin: .2rem .2rem .2rem 0; }
+  #registro { background: #8881; padding: .75rem; min-height: 6rem; white-space: pre-wrap; }
+  .nota { color: #888; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Prueba de la sesión del navegador</h1>
+<p class="nota">Página de prueba de F07, fuera de Flask: usa la API como la va a usar la SPA de v2.</p>
+
+<form id="form-login">
+  <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+  <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+  <button type="submit">Entrar</button>
+</form>
+
+<form id="form-2fa" hidden>
+  <input id="codigo" placeholder="Código del 2FA" autocomplete="one-time-code" required>
+  <button type="submit">Verificar</button>
+</form>
+
+<section id="acciones" hidden>
+  <p>Sesión: <strong id="estado-sesion"></strong></p>
+  <button id="btn-refrescar">Refrescar el token</button>
+  <button id="btn-me">Pedir /auth/me</button>
+  <button id="btn-usuarios">Listar usuarios</button>
+  <button id="btn-recibos">Mis recibos</button>
+  <button id="btn-salir">Salir</button>
+  <ul id="recibos"></ul>
+  <p>Último resultado: <span id="resultado"></span></p>
+</section>
+
+<h2>Registro</h2>
+<pre id="registro"></pre>
+
+<script>
+const API = '/api/v1';
+let access = null; // el access token: solo en memoria
+
+const $ = (id) => document.getElementById(id);
+const anotar = (linea) => { $('registro').textContent += linea + '\n'; };
+const resultado = (texto) => { $('resultado').textContent = texto; };
+
+async function pedir(metodo, ruta, { cuerpo, conBearer = true, csrf = false } = {}) {
+  const cabeceras = {};
+  if (cuerpo !== undefined) cabeceras['Content-Type'] = 'application/json';
+  if (conBearer && access) cabeceras.Authorization = `Bearer ${access}`;
+  if (csrf) cabeceras['X-Requested-With'] = 'XMLHttpRequest'; // /auth/refresh y /auth/logout lo exigen (F07-P04)
+  const r = await fetch(API + ruta, {
+    method: metodo,
+    headers: cabeceras,
+    body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
+    credentials: 'same-origin',
+  });
+  let datos = null;
+  try { datos = await r.json(); } catch { /* 204 o un cuerpo que no es JSON */ }
+  anotar(`${metodo} ${API}${ruta} → ${r.status}`);
+  return { status: r.status, datos };
+}
+
+async function abrirSesion(datos) {
+  access = datos.access_token;
+  if (datos.requiere_seleccion_empresa) {
+    // varias empresas: el token es temporal hasta elegir una (la primera, para la prueba)
+    const r = await pedir('POST', '/auth/seleccionar-empresa', { cuerpo: { empresa_id: datos.empresas[0].id } });
+    if (r.status !== 200) return resultado(`no se pudo elegir la empresa (${r.status})`);
+    access = r.datos.access_token;
+  }
+  $('form-login').hidden = true;
+  $('form-2fa').hidden = true;
+  $('acciones').hidden = false;
+  const visible = document.cookie.includes('refresh_token') ? 'la ve' : 'no la ve';
+  anotar(`cookie del refresh: JavaScript ${visible} (httpOnly)`);
+  await verSesion();
+}
+
+async function verSesion() {
+  const r = await pedir('GET', '/auth/me');
+  $('estado-sesion').textContent = r.status === 200 ? `${r.datos.email} · ${r.datos.empresa?.razon_social ?? ''}` : `sin sesión (${r.status})`;
+  resultado(`/auth/me → ${r.status}`);
+}
+
+$('form-login').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await pedir('POST', '/auth/login', { cuerpo: { email: $('email').value, password: $('password').value }, conBearer: false });
+  if (r.status !== 200) return resultado(r.datos?.detail ?? `login → ${r.status}`);
+  if (r.datos.requires_2fa) {
+    access = r.datos.temp_token;
+    $('form-2fa').hidden = false;
+    return resultado('falta el código del 2FA');
+  }
+  if (r.datos.requires_2fa_setup) return resultado('la cuenta tiene que configurar el 2FA (en Flask)');
+  await abrirSesion(r.datos);
+});
+
+$('form-2fa').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const r = await pedir('POST', '/auth/verify-2fa', { cuerpo: { temp_token: access, code: $('codigo').value }, conBearer: false });
+  if (r.status !== 200) return resultado(r.datos?.detail ?? `2FA → ${r.status}`);
+  await abrirSesion(r.datos);
+});
+
+$('btn-refrescar').addEventListener('click', async () => {
+  const r = await pedir('POST', '/auth/refresh', { conBearer: false, csrf: true });
+  if (r.status === 200) {
+    const nuevo = r.datos.access_token !== access;
+    access = r.datos.access_token;
+    resultado(`token renovado${nuevo ? '' : ' (igual al anterior)'}, vence en ${r.datos.expires_in} s`);
+  } else {
+    access = null;
+    resultado(`refresh → ${r.status}: ${r.datos?.detail ?? 'sin sesión'}`);
+  }
+});
+
+$('btn-me').addEventListener('click', verSesion);
+
+$('btn-usuarios').addEventListener('click', async () => {
+  const r = await pedir('GET', '/usuarios');
+  resultado(r.status === 200 ? `usuarios → 200, ${r.datos.total} en total` : `usuarios → ${r.status}: ${r.datos?.detail ?? ''}`);
+});
+
+$('btn-recibos').addEventListener('click', async () => {
+  const r = await pedir('GET', '/recibos/mis-recibos');
+  const lista = $('recibos');
+  lista.replaceChildren();
+  if (r.status !== 200) return resultado(`mis recibos → ${r.status}: ${r.datos?.detail ?? ''}`);
+  for (const recibo of r.datos.items) {
+    const item = document.createElement('li');
+    const boton = document.createElement('button');
+    boton.textContent = `Bajar el PDF de ${recibo.periodo ?? recibo.id}`;
+    boton.addEventListener('click', async () => {
+      // un <a href> no manda el Bearer: se pide una URL firmada de corta duración (F07-P06)
+      const ruta = `${API}/recibos/descargar/${recibo.id}/original`;
+      const f = await pedir('POST', '/auth/descargas', { cuerpo: { ruta } });
+      if (f.status !== 200) return resultado(`firma → ${f.status}`);
+      const enlace = document.createElement('a');
+      enlace.href = f.datos.url;
+      enlace.textContent = `PDF (URL firmada, vence en ${f.datos.expira_en} s)`;
+      enlace.className = 'pdf-firmado';
+      item.append(' ', enlace);
+      resultado('URL firmada lista');
+    });
+    item.append(boton);
+    lista.append(item);
+  }
+  resultado(`mis recibos → 200, ${r.datos.items.length}`);
+});
+
+$('btn-salir').addEventListener('click', async () => {
+  const r = await pedir('POST', '/auth/logout', { conBearer: false, csrf: true });
+  access = null;
+  $('estado-sesion').textContent = 'sesión cerrada';
+  resultado(`logout → ${r.status}`);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,124 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if item else 'Nuevo' }} Perfil - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('nomina.perfiles_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar' if item else 'Nuevo' }} Perfil</h1>
+            <p class="text-dark-500 text-sm">{{ 'Modifica la información del perfil' if item else 'Completa el formulario para crear un perfil' }}</p>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="form-error"></div>
+        
+        <form hx-post="{{ url_for('nomina.perfiles_edit', id=item.id) if item else url_for('nomina.perfiles_create') }}" 
+              hx-target="#form-error" 
+              hx-indicator="#submit-spinner" 
+              method="POST"
+              x-data="perfilFormData()">
+            
+            <div class="p-8 space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                    <input type="text" name="nombre" value="{{ item.nombre if item else '' }}" required
+                           placeholder="Ej: Frontend Developer, Data Analyst..."
+                           class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Tipo</label>
+                    <select name="tipo" class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <option value="">Seleccionar...</option>
+                        <option value="DEVELOPER" {{ 'selected' if item and item.tipo == 'DEVELOPER' else '' }}>DEVELOPER</option>
+                        <option value="MANAGER" {{ 'selected' if item and item.tipo == 'MANAGER' else '' }}>MANAGER</option>
+                        <option value="LIDER" {{ 'selected' if item and item.tipo == 'LIDER' else '' }}>LIDER</option>
+                        <option value="HRBP" {{ 'selected' if item and item.tipo == 'HRBP' else '' }}>HRBP</option>
+                        <option value="DIRECTOR" {{ 'selected' if item and item.tipo == 'DIRECTOR' else '' }}>DIRECTOR</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Departamento</label>
+                    <select x-model="deptoId" @change="categoriaId = ''" class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                        <option value="">Todos los departamentos...</option>
+                        <template x-for="dep in departamentos" :key="dep.id">
+                            <option :value="dep.id" x-text="dep.nombre"></option>
+                        </template>
+                    </select>
+                    <p class="text-xs text-dark-400 mt-1">Filtrá por departamento para ver solo sus categorías</p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Categoría</label>
+                    <div class="flex gap-2">
+                        <select name="categoria_id" x-model="categoriaId" class="flex-1 px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <template x-for="cat in categoriasFiltradas" :key="cat.id">
+                                <option :value="cat.id" x-text="cat.nombre"></option>
+                            </template>
+                        </select>
+                        <a href="{{ url_for('nomina.categorias_create') }}" target="_blank" title="Registrar nueva categoría"
+                           class="flex items-center justify-center px-3 py-3 bg-amber-50 border border-amber-200 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                        </a>
+                    </div>
+                    <p class="text-xs text-dark-400 mt-1">¿No encontrás la categoría? <a href="{{ url_for('nomina.categorias_list') }}" target="_blank" class="text-primary-600 hover:underline">Gestionar categorías</a></p>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Descripción</label>
+                    <textarea name="descripcion" rows="4" placeholder="Descripción del perfil laboral..."
+                              class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">{{ item.descripcion if item and item.descripcion else '' }}</textarea>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="px-8 py-5 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('nomina.perfiles_list') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+                <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                    <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                    {{ 'Guardar Cambios' if item else 'Crear Perfil' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function perfilFormData() {
+    const _deptoId = '{{ item.departamento_cat_id if item and item.departamento_cat_id else "" }}';
+    const _catId = '{{ item.categoria_id if item and item.categoria_id else "" }}';
+    return {
+        deptoId: '',
+        categoriaId: '',
+        departamentos: JSON.parse('{{ departamentos | tojson }}'),
+        categorias: JSON.parse('{{ categorias | tojson }}'),
+        get categoriasFiltradas() {
+            if (!this.deptoId) return this.categorias;
+            return this.categorias.filter(c => c.departamento_id === this.deptoId);
+        },
+        init() {
+            this.$nextTick(() => {
+                this.deptoId = _deptoId;
+                this.$nextTick(() => {
+                    this.categoriaId = _catId;
+                });
+            });
+        }
+    }
+}
+</script>
+{% endblock %}

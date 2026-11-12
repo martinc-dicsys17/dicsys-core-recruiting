@@ -1,0 +1,160 @@
+{% extends "core/base.html" %}
+
+{% block title %}Star Miles - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in">
+    <!-- Advertencia si no hay empleado asociado -->
+    {% if not tiene_empleado %}
+    <div class="mb-6 bg-amber-50 border border-amber-200 rounded-2xl p-5">
+        <div class="flex items-start space-x-4">
+            <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <i data-lucide="alert-triangle" class="w-6 h-6 text-amber-600"></i>
+            </div>
+            <div>
+                <h3 class="font-semibold text-amber-800 mb-1">No tenés un empleado asociado</h3>
+                <p class="text-amber-700 text-sm">
+                    Tu usuario no está vinculado a un registro de empleado. 
+                    Contactá a RRHH para que asocien tu cuenta con tu legajo de empleado.
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Header con mis millas -->
+    <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-8">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">⭐ Star Miles</h1>
+            <p class="text-dark-500">Programa de reconocimiento y recompensas</p>
+        </div>
+        {% if mis_millas %}
+        <div class="mt-4 lg:mt-0 bg-gradient-to-r from-amber-400 to-orange-500 rounded-2xl p-6 text-white shadow-lg">
+            <div class="flex items-center space-x-4">
+                <div class="w-14 h-14 bg-white/20 rounded-xl flex items-center justify-center">
+                    <i data-lucide="star" class="w-8 h-8"></i>
+                </div>
+                <div>
+                    <p class="text-white/80 text-sm">Tus Star Miles</p>
+                    <p class="text-3xl font-bold">{{ mis_millas.millas_disponibles }}</p>
+                    <p class="text-white/70 text-xs">{{ mis_millas.millas_historicas }} acumuladas</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Accesos rápidos -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {% if tiene_empleado %}
+        <a href="{{ url_for('starmiles.desafios_list') }}" class="bg-white rounded-2xl border border-dark-100 p-5 hover:shadow-soft transition-all group">
+            <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-blue-200 transition-colors">
+                <i data-lucide="target" class="w-6 h-6 text-blue-600"></i>
+            </div>
+            <h3 class="font-semibold text-dark-900">Desafíos</h3>
+            <p class="text-dark-500 text-sm">Ver y participar</p>
+        </a>
+        <a href="{{ url_for('starmiles.canjes_list') }}" class="bg-white rounded-2xl border border-dark-100 p-5 hover:shadow-soft transition-all group">
+            <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-emerald-200 transition-colors">
+                <i data-lucide="gift" class="w-6 h-6 text-emerald-600"></i>
+            </div>
+            <h3 class="font-semibold text-dark-900">Canjes</h3>
+            <p class="text-dark-500 text-sm">Canjear millas</p>
+        </a>
+        <a href="{{ url_for('starmiles.mis_inscripciones') }}" class="bg-white rounded-2xl border border-dark-100 p-5 hover:shadow-soft transition-all group">
+            <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-purple-200 transition-colors">
+                <i data-lucide="clipboard-list" class="w-6 h-6 text-purple-600"></i>
+            </div>
+            <h3 class="font-semibold text-dark-900">Mis Desafíos</h3>
+            <p class="text-dark-500 text-sm">Ver estado</p>
+        </a>
+        <a href="{{ url_for('starmiles.mis_canjes') }}" class="bg-white rounded-2xl border border-dark-100 p-5 hover:shadow-soft transition-all group">
+            <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-3 group-hover:bg-amber-200 transition-colors">
+                <i data-lucide="package" class="w-6 h-6 text-amber-600"></i>
+            </div>
+            <h3 class="font-semibold text-dark-900">Mis Canjes</h3>
+            <p class="text-dark-500 text-sm">Ver solicitudes</p>
+        </a>
+        {% else %}
+        <!-- Botones deshabilitados -->
+        <div class="bg-dark-50 rounded-2xl border border-dark-200 p-5 opacity-60 cursor-not-allowed">
+            <div class="w-12 h-12 bg-dark-200 rounded-xl flex items-center justify-center mb-3">
+                <i data-lucide="target" class="w-6 h-6 text-dark-400"></i>
+            </div>
+            <h3 class="font-semibold text-dark-500">Desafíos</h3>
+            <p class="text-dark-400 text-sm">No disponible</p>
+        </div>
+        <div class="bg-dark-50 rounded-2xl border border-dark-200 p-5 opacity-60 cursor-not-allowed">
+            <div class="w-12 h-12 bg-dark-200 rounded-xl flex items-center justify-center mb-3">
+                <i data-lucide="gift" class="w-6 h-6 text-dark-400"></i>
+            </div>
+            <h3 class="font-semibold text-dark-500">Canjes</h3>
+            <p class="text-dark-400 text-sm">No disponible</p>
+        </div>
+        <div class="bg-dark-50 rounded-2xl border border-dark-200 p-5 opacity-60 cursor-not-allowed">
+            <div class="w-12 h-12 bg-dark-200 rounded-xl flex items-center justify-center mb-3">
+                <i data-lucide="clipboard-list" class="w-6 h-6 text-dark-400"></i>
+            </div>
+            <h3 class="font-semibold text-dark-500">Mis Desafíos</h3>
+            <p class="text-dark-400 text-sm">No disponible</p>
+        </div>
+        <div class="bg-dark-50 rounded-2xl border border-dark-200 p-5 opacity-60 cursor-not-allowed">
+            <div class="w-12 h-12 bg-dark-200 rounded-xl flex items-center justify-center mb-3">
+                <i data-lucide="package" class="w-6 h-6 text-dark-400"></i>
+            </div>
+            <h3 class="font-semibold text-dark-500">Mis Canjes</h3>
+            <p class="text-dark-400 text-sm">No disponible</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Banners -->
+    {% if banners %}
+    <div class="mb-8">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {% for banner in banners[:4] %}
+            <div class="relative rounded-2xl overflow-hidden h-48 bg-gradient-to-r from-primary-500 to-primary-600">
+                {% if banner.imagen_url %}
+                <img src="{{ banner.imagen_url }}" alt="{{ banner.titulo }}" class="absolute inset-0 w-full h-full object-cover">
+                <div class="absolute inset-0 bg-gradient-to-r from-dark-900/70 to-transparent"></div>
+                {% endif %}
+                <div class="absolute inset-0 p-6 flex flex-col justify-end text-white">
+                    <h3 class="text-xl font-bold mb-1">{{ banner.titulo }}</h3>
+                    {% if banner.contenido %}
+                    <p class="text-white/80 text-sm line-clamp-2">{{ banner.contenido }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Noticias -->
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-dark-100">
+            <h2 class="text-lg font-bold text-dark-900">📰 Noticias</h2>
+        </div>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 divide-y md:divide-y-0 divide-dark-100">
+            {% for noticia in noticias[:6] %}
+            <div class="p-6 hover:bg-dark-50/50 transition-colors border-b md:border-b-0 md:border-r border-dark-100 last:border-0">
+                <div class="flex flex-col">
+                    {% if noticia.imagen_url %}
+                    <img src="{{ noticia.imagen_url }}" alt="" class="w-full h-32 rounded-xl object-cover mb-3">
+                    {% endif %}
+                    <h3 class="font-semibold text-dark-900 mb-1">{{ noticia.titulo }}</h3>
+                    {% if noticia.contenido %}
+                    <p class="text-dark-500 text-sm line-clamp-2">{{ noticia.contenido }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <div class="p-8 text-center text-dark-400 col-span-3">
+                <i data-lucide="newspaper" class="w-10 h-10 mx-auto mb-2 opacity-50"></i>
+                <p>No hay noticias</p>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

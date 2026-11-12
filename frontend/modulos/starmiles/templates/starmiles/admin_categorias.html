@@ -1,0 +1,75 @@
+{% extends "core/base.html" %}
+
+{% block title %}Admin Categorías - Star Miles{% endblock %}
+
+{% block content %}
+<div class="animate-fade-in" x-data="{ showDeleteModal: false, deleteId: null }">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900 mb-1">🏷️ Categorías de Desafíos</h1>
+            <p class="text-dark-500">Organiza los desafíos por categoría</p>
+        </div>
+        <a href="{{ url_for('starmiles.admin_categoria_crear') }}" class="mt-4 md:mt-0 flex items-center px-4 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 transition-all shadow-soft font-medium">
+            <i data-lucide="plus" class="w-4 h-4 mr-2"></i>Nueva Categoría
+        </a>
+    </div>
+
+    <!-- Grid -->
+    <div id="categorias-grid" hx-get="{{ url_for('starmiles.admin_categorias') }}" hx-trigger="categoriaDeleted from:body" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for cat in categorias %}
+        <div class="bg-white rounded-2xl border border-dark-100 p-5 hover:shadow-soft transition-all group">
+            <div class="flex items-start justify-between">
+                <div class="flex items-center space-x-3">
+                    <div class="w-12 h-12 rounded-xl flex items-center justify-center" style="background-color: {{ cat.color }}20;">
+                        <i data-lucide="{{ cat.icono }}" class="w-6 h-6" style="color: {{ cat.color }};"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-dark-900">{{ cat.nombre }}</h3>
+                        {% if cat.descripcion %}
+                        <p class="text-dark-500 text-sm">{{ cat.descripcion }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center space-x-1">
+                    <a href="{{ url_for('starmiles.admin_categoria_editar', id=cat.id) }}" class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg">
+                        <i data-lucide="edit-2" class="w-4 h-4"></i>
+                    </a>
+                    <button @click="deleteId = '{{ cat.id }}'; showDeleteModal = true" class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-span-full py-16 text-center">
+            <div class="w-20 h-20 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="tag" class="w-10 h-10 text-dark-300"></i>
+            </div>
+            <p class="text-dark-900 font-semibold mb-1">No hay categorías</p>
+            <a href="{{ url_for('starmiles.admin_categoria_crear') }}" class="text-primary-600 hover:text-primary-700 font-medium">
+                Crear primera →
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"></div>
+        <div class="bg-white rounded-2xl shadow-soft p-6 z-10 max-w-md w-full">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar categoría?</h3>
+                <p class="text-dark-500 mb-6">Los desafíos asociados quedarán sin categoría.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false" class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50">Cancelar</button>
+                <button @click="htmx.ajax('DELETE', '/starmiles/admin/categorias/' + deleteId + '/eliminar', {target: '#categorias-grid'}); showDeleteModal = false" class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600">Eliminar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

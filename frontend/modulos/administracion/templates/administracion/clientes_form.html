@@ -1,0 +1,522 @@
+{% extends "core/base.html" %}
+{% block title %}{{ 'Editar' if item else 'Nuevo' }} Cliente - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto animate-fade-in" x-data="{ activeTab: 'general' }">
+
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('administracion.clientes_list') }}"
+           class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar' if item else 'Nuevo' }} Cliente</h1>
+            <p class="text-dark-500 text-sm">{{ 'Modificá la información del cliente' if item else 'Completá el formulario para registrar un cliente' }}</p>
+        </div>
+    </div>
+
+    <form hx-post="{{ url_for('administracion.clientes_edit', id=item.id) if item else url_for('administracion.clientes_create') }}"
+          hx-target="#form-error"
+          hx-indicator="#submit-spinner"
+          {% if not item %}hx-encoding="multipart/form-data" enctype="multipart/form-data"{% endif %}
+          method="POST">
+
+        <div id="form-error" class="mb-4"></div>
+
+        <!-- Tabs Navigation -->
+        <div class="bg-white rounded-2xl border border-dark-100 mb-6 overflow-hidden">
+            <div class="flex border-b border-dark-100 overflow-x-auto">
+                <button type="button" @click="activeTab = 'general'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'general' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="file-text" class="w-4 h-4 mr-2"></i>
+                    Datos Generales
+                    <span x-show="activeTab === 'general'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'domicilio'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'domicilio' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="map-pin" class="w-4 h-4 mr-2"></i>
+                    {% if item %}Domicilios{% else %}Domicilio Inicial{% endif %}
+                    <span x-show="activeTab === 'domicilio'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'fiscal'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'fiscal' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="landmark" class="w-4 h-4 mr-2"></i>
+                    Datos Fiscales
+                    <span x-show="activeTab === 'fiscal'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+                <button type="button" @click="activeTab = 'contactos'"
+                        class="flex items-center px-6 py-4 text-sm font-semibold transition-colors relative whitespace-nowrap"
+                        :class="activeTab === 'contactos' ? 'text-primary-600 bg-primary-50/50' : 'text-dark-500 hover:text-dark-700 hover:bg-dark-50'">
+                    <i data-lucide="phone" class="w-4 h-4 mr-2"></i>
+                    Contactos
+                    <span x-show="activeTab === 'contactos'" class="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 1: DATOS GENERALES ==================== -->
+        <div x-show="activeTab === 'general'"
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-1"
+             x-transition:enter-end="opacity-100 translate-y-0">
+
+            <!-- Logo del Cliente -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="image" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Logo / Logotipo
+                    </h2>
+                </div>
+                <div class="p-6 flex justify-center">
+                    {% if item %}
+                    {# Edición: upload HTMX independiente del form principal #}
+                    <div id="logo-container" class="flex flex-col items-center gap-3">
+                        {% if item.logo %}
+                        <div class="w-40 h-28 rounded-2xl overflow-hidden border-2 border-dark-200 bg-dark-50 flex items-center justify-center p-2">
+                            <img src="{{ item.logo }}" alt="Logo de {{ item.razon_social }}" class="max-w-full max-h-full object-contain">
+                        </div>
+                        <div class="flex gap-2">
+                            <label class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                                <i data-lucide="upload" class="w-3 h-3 mr-1"></i>
+                                Cambiar logo
+                                <input type="file" name="logo_file" accept=".jpg,.jpeg,.png,.webp,.svg" class="hidden"
+                                       hx-post="{{ url_for('administracion.clientes_logo_upload', id=item.id) }}"
+                                       hx-target="#logo-container"
+                                       hx-swap="outerHTML"
+                                       hx-encoding="multipart/form-data"
+                                       hx-trigger="change">
+                            </label>
+                            <button type="button"
+                                    hx-delete="{{ url_for('administracion.clientes_logo_delete', id=item.id) }}"
+                                    hx-target="#logo-container"
+                                    hx-swap="outerHTML"
+                                    hx-confirm="¿Eliminar el logo?"
+                                    class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                                <i data-lucide="trash-2" class="w-3 h-3 mr-1"></i>
+                                Eliminar
+                            </button>
+                        </div>
+                        {% else %}
+                        <div class="w-40 h-28 rounded-2xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-2">
+                            <i data-lucide="building-2" class="w-10 h-10 text-dark-300"></i>
+                            <span class="text-xs text-dark-400">Sin logo</span>
+                        </div>
+                        <label class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                            <i data-lucide="upload" class="w-3 h-3 mr-1"></i>
+                            Subir logo
+                            <input type="file" name="logo_file" accept=".jpg,.jpeg,.png,.webp,.svg" class="hidden"
+                                   hx-post="{{ url_for('administracion.clientes_logo_upload', id=item.id) }}"
+                                   hx-target="#logo-container"
+                                   hx-swap="outerHTML"
+                                   hx-encoding="multipart/form-data"
+                                   hx-trigger="change">
+                        </label>
+                        <p class="text-xs text-dark-400">JPG, PNG, WebP o SVG. Máx 2MB</p>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    {# Creación: input simple que va dentro del form principal #}
+                    <div class="flex flex-col items-center gap-3" x-data="{ logoNombre: '' }">
+                        <div class="w-40 h-28 rounded-2xl overflow-hidden border-2 border-dashed border-dark-300 bg-dark-50 flex flex-col items-center justify-center gap-2"
+                             x-ref="preview">
+                            <i data-lucide="building-2" class="w-10 h-10 text-dark-300" x-show="!logoNombre"></i>
+                            <span class="text-xs text-dark-400" x-show="!logoNombre">Sin logo</span>
+                            <img id="logo-preview-img" src="" alt="Vista previa del logo" class="max-w-full max-h-full object-contain hidden">
+                        </div>
+                        <label class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer">
+                            <i data-lucide="upload" class="w-3 h-3 mr-1"></i>
+                            <span x-text="logoNombre ? 'Cambiar logo' : 'Subir logo'">Subir logo</span>
+                            <input type="file" name="logo_file" accept=".jpg,.jpeg,.png,.webp,.svg" class="hidden"
+                                   @change="
+                                       const f = $event.target.files[0];
+                                       if (f) {
+                                           logoNombre = f.name;
+                                           const reader = new FileReader();
+                                           reader.onload = e => {
+                                               const img = document.getElementById('logo-preview-img');
+                                               img.src = e.target.result;
+                                               img.classList.remove('hidden');
+                                           };
+                                           reader.readAsDataURL(f);
+                                       }
+                                   ">
+                        </label>
+                        <p class="text-xs text-dark-400" x-text="logoNombre || 'JPG, PNG, WebP o SVG. Máx 2MB'"></p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Identificación -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="id-card" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Identificación
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Tipo de Cliente *</label>
+                        <select name="tipo" required
+                                class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            <option value="Individual" {% if item and item.tipo == 'Individual' %}selected{% endif %}>Individual</option>
+                            <option value="Empresa" {% if item and item.tipo == 'Empresa' %}selected{% endif %}>Empresa</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">CUIT *</label>
+                        <input type="text" name="cuit" required
+                               value="{{ (item.cuit or '') if item else '' }}"
+                               inputmode="numeric" maxlength="13"
+                               placeholder="XX-XXXXXXXX-X"
+                               title="Formato: XX-XXXXXXXX-X"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Responsabilidad AFIP *</label>
+                        <select name="responsabilidad_afip" required
+                                class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                            <option value="">Seleccionar...</option>
+                            {% set opciones_afip = ['Responsable Inscripto', 'Sujeto Exento', 'Consumidor Final', 'Responsable Monotributo', 'Cliente del Exterior', 'Sujeto No Categorizado'] %}
+                            {% for op in opciones_afip %}
+                            <option value="{{ op }}" {% if item and item.responsabilidad_afip == op %}selected{% endif %}>{{ op }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Razón Social *</label>
+                        <input type="text" name="razon_social" required maxlength="200"
+                               value="{{ (item.razon_social or '') if item else '' }}"
+                               style="text-transform: uppercase"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre de Fantasía</label>
+                        <input type="text" name="nombre_fantasia" maxlength="200"
+                               value="{{ (item.nombre_fantasia or '') if item else '' }}"
+                               style="text-transform: uppercase"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Sitio Web</label>
+                        <input type="url" name="sitio_web" maxlength="255"
+                               value="{{ (item.sitio_web or '') if item else '' }}"
+                               placeholder="https://..."
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                    {% if item %}
+                    <div class="flex items-center gap-3 pt-2">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="activo" value="true"
+                                   {% if item.activo %}checked{% endif %} class="sr-only peer">
+                            <div class="w-11 h-6 bg-dark-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                        </label>
+                        <span class="text-sm font-medium text-dark-700">Cliente activo</span>
+                    </div>
+                    {% endif %}
+
+                </div>
+            </div>
+
+            <!-- Categorías -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50 flex items-center justify-between">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="tag" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Categorías
+                    </h2>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                hx-get="{{ url_for('administracion.clientes_categorias_partial') }}"
+                                hx-target="#categorias-checkboxes"
+                                hx-swap="innerHTML"
+                                class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors"
+                                aria-label="Actualizar lista de categorías">
+                            <i data-lucide="refresh-cw" class="w-3 h-3 mr-1"></i>
+                            Actualizar
+                        </button>
+                        <a href="{{ url_for('administracion.categorias_list') }}" target="_blank"
+                           class="flex items-center px-3 py-1.5 text-xs font-medium text-dark-600 bg-dark-50 border border-dark-200 rounded-lg hover:bg-dark-100 transition-colors">
+                            <i data-lucide="external-link" class="w-3 h-3 mr-1"></i>
+                            Administrar
+                        </a>
+                    </div>
+                </div>
+                <div class="p-6" id="categorias-checkboxes">
+                    {% include "administracion/partials/clientes_categorias_checkboxes.html" %}
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="message-square" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Observaciones
+                    </h2>
+                </div>
+                <div class="p-6">
+                    <textarea name="observaciones" rows="3"
+                              placeholder="Notas internas sobre el cliente..."
+                              class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">{{ (item.observaciones or '') if item else '' }}</textarea>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ==================== TAB 2: DOMICILIO ==================== -->
+        <div x-show="activeTab === 'domicilio'" x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-1"
+             x-transition:enter-end="opacity-100 translate-y-0">
+
+            {% if item and item.domicilios %}
+            <!-- Domicilios existentes en edición -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-6">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50 flex items-center justify-between">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="map-pin" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Historial de Domicilios
+                    </h2>
+                    <a href="{{ url_for('administracion.clientes_domicilio_add', id=item.id) }}"
+                       class="flex items-center text-sm text-primary-600 hover:text-primary-700 font-medium">
+                        <i data-lucide="plus" class="w-4 h-4 mr-1"></i>Agregar nuevo
+                    </a>
+                </div>
+                <div class="divide-y divide-dark-100">
+                    {% for dom in item.domicilios %}
+                    <div class="p-6 flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0
+                            {% if dom.vigente %}bg-primary-100{% else %}bg-dark-100{% endif %}">
+                            <i data-lucide="map-pin" class="w-5 h-5 {% if dom.vigente %}text-primary-600{% else %}text-dark-400{% endif %}"></i>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <p class="font-semibold text-dark-900">
+                                    {{ dom.calle }}{% if dom.numero %} {{ dom.numero }}{% endif %}{% if dom.piso %}, Piso {{ dom.piso }}{% endif %}{% if dom.departamento %} Dto. {{ dom.departamento }}{% endif %}
+                                </p>
+                                {% if dom.vigente %}
+                                <span class="px-2 py-0.5 text-xs font-semibold bg-primary-100 text-primary-700 rounded-lg">Vigente</span>
+                                {% else %}
+                                <span class="px-2 py-0.5 text-xs font-semibold bg-dark-100 text-dark-400 rounded-lg">Histórico</span>
+                                {% endif %}
+                            </div>
+                            <p class="text-sm text-dark-500">
+                                {{ dom.localidad }}, {{ dom.provincia }}, {{ dom.pais }}
+                                {% if dom.codigo_postal %}(CP: {{ dom.codigo_postal }}){% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {% else %}
+            <!-- Domicilio inicial en creación -->
+            <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+                <i data-lucide="info" class="w-5 h-5 text-amber-600 flex-shrink-0"></i>
+                <p class="text-sm text-amber-800">El domicilio es opcional. Podés cargarlo ahora o agregarlo después desde la ficha del cliente.</p>
+            </div>
+
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="map-pin" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Domicilio de Facturación
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Calle</label>
+                        <input type="text" name="dom_calle" maxlength="200"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Número</label>
+                        <input type="text" name="dom_numero" maxlength="20"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Piso</label>
+                        <input type="text" name="dom_piso" maxlength="20"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Departamento</label>
+                        <input type="text" name="dom_departamento" maxlength="20"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Localidad</label>
+                        <input type="text" name="dom_localidad" maxlength="100"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Provincia</label>
+                        <input type="text" name="dom_provincia" maxlength="100"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">País</label>
+                        <input type="text" name="dom_pais" maxlength="100" value="Argentina"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Código Postal</label>
+                        <input type="text" name="dom_codigo_postal" maxlength="10"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+
+        <!-- ==================== TAB 3: DATOS FISCALES ==================== -->
+        <div x-show="activeTab === 'fiscal'" x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-1"
+             x-transition:enter-end="opacity-100 translate-y-0">
+
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="landmark" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Datos Fiscales
+                    </h2>
+                </div>
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nro. Ingresos Brutos</label>
+                        <input type="text" name="nro_ingresos_brutos" maxlength="50"
+                               value="{{ (item.nro_ingresos_brutos or '') if item else '' }}"
+                               placeholder="Ej: 123-456789-0"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Fecha de Inicio de Actividades</label>
+                        <input type="date" name="fecha_inicio_actividades"
+                               value="{{ item.fecha_inicio_actividades if item and item.fecha_inicio_actividades else '' }}"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Nro. Inscripción Municipal</label>
+                        <input type="text" name="nro_inscripcion_municipal" maxlength="50"
+                               value="{{ (item.nro_inscripcion_municipal or '') if item else '' }}"
+                               placeholder="Ej: 00123456"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-semibold text-dark-700 mb-2">Régimen de Retención</label>
+                        <input type="text" name="regimen_retencion" maxlength="100"
+                               value="{{ (item.regimen_retencion or '') if item else '' }}"
+                               placeholder="Ej: Régimen General"
+                               class="w-full px-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ==================== TAB 4: CONTACTOS ==================== -->
+        <div x-show="activeTab === 'contactos'" x-cloak
+             x-transition:enter="transition ease-out duration-200"
+             x-transition:enter-start="opacity-0 translate-y-1"
+             x-transition:enter-end="opacity-100 translate-y-0">
+
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                    <h2 class="text-base font-semibold text-dark-900 flex items-center">
+                        <i data-lucide="phone" class="w-4 h-4 mr-2 text-primary-500"></i>
+                        Contactos
+                    </h2>
+                </div>
+                <div class="p-12 text-center">
+                    <div class="w-16 h-16 bg-dark-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                        <i data-lucide="phone" class="w-8 h-8 text-dark-300"></i>
+                    </div>
+                    <p class="text-dark-900 font-semibold mb-1">Próximamente</p>
+                    <p class="text-dark-400 text-sm">La gestión de contactos estará disponible en una próxima versión.</p>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Footer con botón de submit (siempre visible) -->
+        <div class="bg-white rounded-2xl border border-dark-100 mt-6 px-8 py-5 flex items-center justify-between">
+            <a href="{{ url_for('administracion.clientes_list') }}"
+               class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+            <button type="submit"
+                    class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                {{ 'Guardar Cambios' if item else 'Crear Cliente' }}
+            </button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function validarCuit(cuit) {
+    const limpio = cuit.replace(/\D/g, '');
+    if (limpio.length !== 11) return false;
+    const coef = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+    const digitos = limpio.split('').map(Number);
+    const suma = coef.reduce((acc, c, i) => acc + c * digitos[i], 0);
+    const resto = 11 - (suma % 11);
+    const verificador = resto === 10 ? 9 : resto === 11 ? 0 : resto;
+    return digitos[10] === verificador;
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const cuitInput = document.querySelector('input[name="cuit"]');
+    if (!cuitInput) return;
+
+    cuitInput.addEventListener('input', function () {
+        let digits = this.value.replace(/\D/g, '').substring(0, 11);
+        if (digits.length > 10) {
+            this.value = digits.slice(0, 2) + '-' + digits.slice(2, 10) + '-' + digits.slice(10);
+        } else if (digits.length > 2) {
+            this.value = digits.slice(0, 2) + '-' + digits.slice(2);
+        } else {
+            this.value = digits;
+        }
+    });
+
+    cuitInput.addEventListener('blur', function () {
+        const val = this.value.replace(/\D/g, '');
+        if (val.length === 11 && !validarCuit(val)) {
+            this.setCustomValidity('CUIT inválido: el dígito verificador no es correcto');
+            this.reportValidity();
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+});
+</script>
+{% endblock %}

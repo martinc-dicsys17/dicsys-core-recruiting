@@ -1,0 +1,56 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if item else 'Nueva' }} Carrera - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto animate-fade-in">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('nomina.carreras_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar' if item else 'Nueva' }} Carrera</h1>
+            <p class="text-dark-500 text-sm">{{ 'Modifica la información de la carrera' if item else 'Completa el formulario para crear una carrera' }}</p>
+        </div>
+    </div>
+    
+    <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div id="form-error"></div>
+        
+        <form hx-post="{{ url_for('nomina.carreras_edit', id=item.id) if item else url_for('nomina.carreras_create') }}" 
+              hx-target="#form-error" 
+              hx-indicator="#submit-spinner" 
+              method="POST">
+            
+            <div class="p-8 space-y-6">
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Nombre *</label>
+                    <input type="text" name="nombre" value="{{ item.nombre if item else '' }}" required
+                           placeholder="Ej: Ingeniería en Sistemas, Contador Público..."
+                           class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-semibold text-dark-700 mb-2">Descripción</label>
+                    <textarea name="descripcion" rows="4" placeholder="Descripción de la carrera..."
+                              class="w-full px-4 py-3 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 focus:bg-white transition-all">{{ item.descripcion if item and item.descripcion else '' }}</textarea>
+                </div>
+            </div>
+            
+            <!-- Footer -->
+            <div class="px-8 py-5 bg-dark-50 border-t border-dark-100 flex items-center justify-between">
+                <a href="{{ url_for('nomina.carreras_list') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+                <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                    <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                    </svg>
+                    <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                    {{ 'Guardar Cambios' if item else 'Crear Carrera' }}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

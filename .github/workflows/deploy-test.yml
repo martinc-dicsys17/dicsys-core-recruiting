@@ -1,0 +1,57 @@
+name: Deploy a la VM de test
+
+# Ambiente de test oficial (D-101): una VM aparte de producción que corre Dicsys Core, con todos sus servicios contra
+# una copia de la base de producción y un .env de prueba sin credenciales productivas, y la QA (innovacion-qa-engine).
+# Despliega la rama dev en cada push: lo que se mergea a dev queda en test. El disparo a mano (workflow_dispatch) solo
+# aparece cuando el workflow está en la rama por defecto (main, que no se toca): mientras tanto, el camino es el push a
+# dev. Mismo script que producción (despliegue/desplegar.sh), que al final rearma la QA contra el checkout nuevo.
+#
+# Variables del environment "test": GCP_PROJECT, GCP_PROJECT_NUMBER, GCP_SERVICE_ACCOUNT, VM_NAME, VM_ZONE,
+# PROJECT_DIR (checkout de la app en la VM) y QA_DIR (checkout de QA en la VM; vacío: sin QA). Se prende con la
+# variable de repo DEPLOY_TEST=true (el if del job no ve las del environment): hasta que exista la VM (F23-P05),
+# apagado. Procedimiento completo: docs/Ambiente-Test.md.
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ vars.DEPLOY_TEST == 'true' }}
+    runs-on: ubuntu-latest
+    environment: test
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout (el script de deploy)
+        uses: actions/checkout@v5
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/${{ vars.GCP_PROJECT_NUMBER }}/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy via IAP Tunnel
+        env:
+          # el token del propio job alcanza para clonar este repo desde la VM mientras dura el deploy; viaja por stdin
+          CODE_TOKEN: ${{ github.token }}
+        run: |
+          sed -i 's/\r$//' despliegue/desplegar.sh
+          gcloud compute scp despliegue/desplegar.sh ${{ vars.VM_NAME }}:/tmp/desplegar.sh \
+            --project=${{ vars.GCP_PROJECT }} \
+            --zone=${{ vars.VM_ZONE }} \
+            --tunnel-through-iap
+
+          printf '%s\n' "$CODE_TOKEN" | gcloud compute ssh ${{ vars.VM_NAME }} \
+            --project=${{ vars.GCP_PROJECT }} \
+            --zone=${{ vars.VM_ZONE }} \
+            --tunnel-through-iap \
+            --command="bash /tmp/desplegar.sh '${{ vars.PROJECT_DIR }}' 'https://github.com/${{ github.repository }}.git' '${{ github.ref_name }}' '${{ vars.QA_DIR }}'"

@@ -1,0 +1,117 @@
+{% extends "core/base.html" %}
+
+{% block title %}Asistentes - {{ (evento.nombre or 'Evento') }} - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto animate-fade-in" x-data="asistentesData()">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('innovacion.eventos_list') }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div class="flex-1">
+            <h1 class="text-2xl font-bold text-dark-900">Asistentes del Evento</h1>
+            <p class="text-dark-500 text-sm">{{ (evento.nombre or '') }} — {{ (evento.fecha or '') }}</p>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="px-3 py-1.5 bg-primary-100 text-primary-700 rounded-xl text-sm font-semibold"
+                  x-text="seleccionados.length + ' seleccionado' + (seleccionados.length !== 1 ? 's' : '')">
+            </span>
+        </div>
+    </div>
+
+    <div id="form-error"></div>
+
+    <form hx-post="{{ url_for('innovacion.eventos_asistentes', id=evento.id) }}"
+          hx-target="#form-error" hx-indicator="#submit-spinner" method="POST">
+
+        <!-- Input hidden con los IDs seleccionados como CSV -->
+        <input type="hidden" name="empleado_ids_csv" :value="seleccionados.join(',')">
+
+        <!-- Buscador -->
+        <div class="bg-white rounded-2xl border border-dark-100 p-4 mb-4">
+            <div class="relative">
+                <i data-lucide="search" class="w-5 h-5 text-dark-400 absolute left-4 top-1/2 -translate-y-1/2"></i>
+                <input type="text" placeholder="Buscar empleado por nombre o email..."
+                       x-model="busqueda"
+                       class="w-full pl-12 pr-4 py-2.5 bg-dark-50 border border-dark-200 rounded-xl focus:ring-2 focus:ring-primary-500">
+            </div>
+        </div>
+
+        <!-- Lista de empleados -->
+        <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden mb-4">
+            <div class="max-h-[500px] overflow-y-auto divide-y divide-dark-100">
+                <template x-for="emp in empleadosFiltrados" :key="emp.id">
+                    <label class="flex items-center px-6 py-3 hover:bg-dark-50/50 cursor-pointer transition-colors">
+                        <input type="checkbox"
+                               :value="emp.id"
+                               :checked="seleccionados.includes(emp.id)"
+                               @change="toggleEmpleado(emp.id)"
+                               class="w-4 h-4 text-primary-600 border-dark-300 rounded focus:ring-primary-500">
+                        <div class="ml-3 flex-1 min-w-0">
+                            <p class="font-semibold text-dark-900 text-sm truncate" x-text="emp.display"></p>
+                            <p class="text-dark-500 text-xs truncate" x-text="emp.email_corporativo"></p>
+                        </div>
+                        <span x-show="seleccionados.includes(emp.id)"
+                              class="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-md text-xs font-medium" x-cloak>
+                            Asiste
+                        </span>
+                    </label>
+                </template>
+                <div x-show="empleadosFiltrados.length === 0" class="px-6 py-8 text-center">
+                    <p class="text-dark-500 text-sm">No se encontraron empleados</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-between">
+            <a href="{{ url_for('innovacion.eventos_list') }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+            <button type="submit" class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center">
+                <svg id="submit-spinner" class="htmx-indicator animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                </svg>
+                <i data-lucide="check" class="w-4 h-4 mr-2"></i>Guardar Asistentes
+            </button>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function asistentesData() {
+    return {
+        busqueda: '',
+        seleccionados: {{ asistentes_ids | tojson }},
+        empleados: [
+            {% for e in empleados %}
+            {
+                id: '{{ e.id }}',
+                email_corporativo: '{{ (e.email_corporativo or "") }}',
+                display: '{{ (e.display or e.apellido + ", " + e.nombre) }}'
+            }{{ ',' if not loop.last else '' }}
+            {% endfor %}
+        ],
+
+        get empleadosFiltrados() {
+            if (!this.busqueda.trim()) return this.empleados;
+            const q = this.busqueda.toLowerCase();
+            return this.empleados.filter(e =>
+                e.display.toLowerCase().includes(q) || e.email_corporativo.toLowerCase().includes(q)
+            );
+        },
+
+        toggleEmpleado(id) {
+            const idx = this.seleccionados.indexOf(id);
+            if (idx >= 0) {
+                this.seleccionados.splice(idx, 1);
+            } else {
+                this.seleccionados.push(id);
+            }
+        }
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,874 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if item else 'Nuevo' }} proveedor - {{ config.APP_NAME }}{% endblock %}
+
+{% from 'administracion/partials/proveedores_macros.html' import selector_vista, badge, pestanas, boton_agregar, referente_elegido, RESPONSABILIDADES_IVA, EXTENSIONES_DOCUMENTOS, TEXTO_TIPOS_DOCUMENTOS %}
+
+{# Editar (lleva a su página) / Eliminar de una oficina o un contacto, en la tabla y en las cards #}
+{% macro acciones(editar, borrar, etiqueta) -%}
+<div class="flex items-center justify-end space-x-1">
+    <a :href="{{ editar }}" class="p-2 text-dark-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg" title="Editar" aria-label="Editar {{ etiqueta }}">
+        <span class="inline-flex"><i data-lucide="edit-2" class="w-4 h-4"></i></span>
+    </a>
+    <button type="button" @click="{{ borrar }}" class="p-2 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Eliminar" aria-label="Eliminar {{ etiqueta }}">
+        <span class="inline-flex"><i data-lucide="trash-2" class="w-4 h-4"></i></span>
+    </button>
+</div>
+{%- endmacro %}
+
+{# Mensaje del servidor para un campo (nombre repetido, URL inválida, adjunto…), debajo del campo #}
+{% macro error_campo(campo) -%}
+<p x-show="errores.{{ campo }}" x-cloak class="text-xs mt-1 text-red-600" x-text="errores.{{ campo }}"></p>
+{%- endmacro %}
+
+{% block content %}
+{# Alta y edición (como Nómina → Empleados). Referente, servicio, tipo de información y
+   acuerdo son obligatorios: con acuerdo firmado, el adjunto (en el alta viaja con los datos);
+   sin acuerdo, la política/NDA en texto. Oficinas, contactos, documentos y estado, solo en edición. Las dos
+   pantallas tienen pestañas; al guardar, lo que falta o tiene error se marca y se abre su pestaña. #}
+<script type="application/json" id="proveedor-datos">{{ (item or {})|tojson }}</script>
+<div class="max-w-5xl mx-auto animate-fade-in"
+     x-data="formularioProveedor({
+        api: '{{ url_for('administracion.proveedores_api') }}',
+        lista: '{{ url_for('administracion.proveedores_list') }}',
+        altaConAdjunto: '{{ url_for('administracion.proveedores_alta_con_adjunto') }}',
+        tab: '{{ tab or 'datos' }}',
+     })">
+    <!-- Header -->
+    <div class="flex items-center mb-6">
+        <a href="{{ url_for('administracion.proveedores_view', proveedor_id=item.id) if item else url_for('administracion.proveedores_list') }}"
+           class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar proveedor' if item else 'Nuevo proveedor' }}</h1>
+            <p class="text-dark-500 text-sm">{{ item.nombre if item else 'Completá los datos del proveedor o herramienta' }}</p>
+        </div>
+    </div>
+
+    <div x-show="error" x-cloak class="p-4 mb-6 rounded-xl bg-red-50 text-red-800 border border-red-200" x-text="error"></div>
+
+    <!-- Tabs con el estilo de /perfil: en el alta, las del formulario; Oficinas y Contactos, después de crear -->
+    {% if item %}
+    {{ pestanas([('datos', 'Datos', 'info'), ('contacto', 'Contacto', 'phone'), ('seguridad', 'Seguridad y acuerdos', 'shield-check'),
+                 ('oficinas', 'Oficinas', 'map-pin'), ('contactos', 'Contactos', 'users'), ('documentos', 'Documentos', 'folder-open')],
+                con_error='pestanaConError') }}
+    {% else %}
+    <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center gap-3">
+        <i data-lucide="info" class="w-5 h-5 text-amber-600 flex-shrink-0"></i>
+        <p class="text-sm text-amber-800">Las oficinas, los contactos y los documentos se cargan después de crear el proveedor, desde la pantalla de edición.</p>
+    </div>
+    {{ pestanas([('datos', 'Datos', 'info'), ('contacto', 'Contacto', 'phone'), ('seguridad', 'Seguridad y acuerdos', 'shield-check')],
+                con_error='pestanaConError') }}
+    {% endif %}
+
+    <!-- ═══ Datos, Contacto y Seguridad: un solo form, un Guardar para las tres pestañas ═══ -->
+    <form x-ref="form" x-show="PESTANAS_FORM.includes(tab)" @submit.prevent="guardar()" class="space-y-6"
+          :class="intentado && 'intentado'" @invalid.capture="alInvalido($event)"
+          @input="revisar($event)" @change="revisar($event)">
+        <div data-tab="datos" x-show="tab === 'datos'" class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="info" class="w-5 h-5 mr-2 text-primary-500"></i>Datos generales</h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-5">
+                <label data-campo="nombre" :class="errores.nombre && 'campo-con-error'" class="block md:col-span-2">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Nombre (de fantasía o herramienta) <span class="text-red-500">*</span></span>
+                    <input x-model="datos.nombre" required minlength="2" maxlength="200" class="campo">
+                    {{ error_campo('nombre') }}
+                </label>
+                <label class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Razón social</span>
+                    <input x-model="datos.razon_social" maxlength="200" class="campo">
+                </label>
+                <label class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Tipo</span>
+                    <select x-model="datos.tipo" class="campo">
+                        <option value="sin_clasificar">Sin clasificar</option>
+                        <option value="proveedor">Proveedor</option>
+                        <option value="herramienta">Herramienta</option>
+                    </select>
+                </label>
+                {% if item %}
+                <label class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Estado</span>
+                    <select x-model="estado" class="campo">
+                        <option value="activo">Activo</option>
+                        <option value="inactivo">Inactivo</option>
+                    </select>
+                    <p class="text-xs mt-1 text-dark-400" x-text="estado === 'activo'
+                        ? 'Se usa para todo.'
+                        : 'Se sigue viendo y conserva su historial, pero no entra en evaluaciones nuevas (ni en facturas o pedidos).'"></p>
+                    <p x-show="estado === 'inactivo' && estadoGuardado === 'activo'" class="text-xs mt-1 text-amber-700">Al guardar, si está pendiente en la evaluación activa, sale de ella.</p>
+                </label>
+                {% endif %}
+                <!-- Datos fiscales (como en Clientes), opcionales: los del exterior no tienen CUIT -->
+                <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                    <label data-campo="cuit" :class="errores.cuit && 'campo-con-error'" class="block">
+                        <span class="block text-sm font-medium text-dark-700 mb-1">CUIT</span>
+                        <input :value="datos.cuit" maxlength="13" inputmode="numeric" placeholder="XX-XXXXXXXX-X" title="Formato: XX-XXXXXXXX-X"
+                               @input="$event.target.setCustomValidity(''); $event.target.value = datos.cuit = mascaraCuit($event.target.value)"
+                               @blur="validarCuit($event.target)" class="campo font-mono">
+                        {{ error_campo('cuit') }}
+                    </label>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-dark-700 mb-1">Tipo de IVA</span>
+                        <select x-model="datos.responsabilidad_afip" class="campo">
+                            <option value="">Sin dato</option>
+                            {% for opcion in RESPONSABILIDADES_IVA %}<option value="{{ opcion }}">{{ opcion }}</option>{% endfor %}
+                        </select>
+                    </label>
+                    <label class="block">
+                        <span class="block text-sm font-medium text-dark-700 mb-1">Nro. Ingresos Brutos</span>
+                        <input x-model="datos.nro_ingresos_brutos" maxlength="50" class="campo">
+                    </label>
+                </div>
+                <div data-campo="referente" :class="errores.referente && 'campo-con-error'" class="md:col-span-2 relative" @click.outside="mostrarEmpleados = false">
+                    <label for="buscar-referente" class="block text-sm font-medium text-dark-700 mb-1">Usuario referente (empleado de la nómina) <span class="text-red-500">*</span></label>
+                    {{ referente_elegido('referente', 'cambiandoReferente', None, 'buscar-referente') }}
+                    <div x-show="!referente || cambiandoReferente" class="flex gap-2">
+                        <input id="buscar-referente" type="search" x-model="buscarEmpleado" autocomplete="off"
+                               @input.debounce.300ms="buscarEmpleados()" @focus="buscarEmpleados()"
+                               x-effect="$el.setCustomValidity(referente ? '' : 'Elegí el usuario referente de la nómina')"
+                               placeholder="Buscar por nombre o apellido..." class="campo">
+                        <button type="button" x-show="cambiandoReferente" @click="cambiandoReferente = false; mostrarEmpleados = false"
+                                class="px-3 rounded-xl border border-dark-200 text-dark-500 text-sm hover:bg-dark-50">Cancelar</button>
+                    </div>
+                    <p x-show="!referente" class="text-xs mt-1 text-amber-600">Obligatorio: es quien evalúa al proveedor</p>
+                    {{ error_campo('referente') }}
+                    <div x-show="mostrarEmpleados && empleados.length" x-cloak
+                         class="absolute left-0 right-0 z-20 mt-1 max-h-60 overflow-y-auto bg-white border border-dark-200 rounded-xl shadow-lg">
+                        <template x-for="e in empleados" :key="e.id">
+                            <button type="button" @click="elegirReferente(e)" class="block w-full text-left px-3 py-2 hover:bg-primary-50">
+                                <span class="text-sm text-dark-800" x-text="e.nombre"></span>
+                                <span class="text-xs text-dark-400 ml-2" x-text="e.email || ''"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+                <label data-campo="servicio_provisto" :class="errores.servicio_provisto && 'campo-con-error'" class="block md:col-span-2">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Servicio / bien provisto <span class="text-red-500">*</span></span>
+                    <textarea x-model="datos.servicio_provisto" required rows="2" maxlength="5000" class="campo"></textarea>
+                    {{ error_campo('servicio_provisto') }}
+                </label>
+                <label data-campo="tipo_informacion" :class="errores.tipo_informacion && 'campo-con-error'" class="block md:col-span-2">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Tipo de información que manejan <span class="text-red-500">*</span></span>
+                    <textarea x-model="datos.tipo_informacion" required rows="2" maxlength="5000" class="campo"></textarea>
+                    {{ error_campo('tipo_informacion') }}
+                </label>
+            </div>
+        </div>
+
+        <div data-tab="datos" x-show="tab === 'datos'" class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="message-square" class="w-5 h-5 mr-2 text-primary-500"></i>Observaciones</h2>
+            </div>
+            <div class="p-6">
+                <textarea x-model="datos.observaciones" rows="3" maxlength="5000" aria-label="Observaciones"
+                          placeholder="Notas internas sobre el proveedor" class="campo"></textarea>
+            </div>
+        </div>
+
+        <div data-tab="contacto" x-show="tab === 'contacto'" x-cloak class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="phone" class="w-5 h-5 mr-2 text-primary-500"></i>Contacto</h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                <label data-campo="email" :class="errores.email && 'campo-con-error'" class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Email</span>
+                    <input type="email" x-model="datos.email" maxlength="255" class="campo">
+                    {{ error_campo('email') }}
+                </label>
+                <label data-campo="telefono_whatsapp" :class="errores.telefono_whatsapp && 'campo-con-error'" class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">WhatsApp (con código de país)</span>
+                    <input type="tel" :value="datos.telefono_whatsapp" placeholder="+54 9 351 123 4567" autocomplete="off"
+                           @input="$event.target.setCustomValidity(''); $event.target.value = datos.telefono_whatsapp = formatearTelefono($event.target.value)"
+                           @blur="validarTelefono($event.target)" class="campo font-mono">
+                    {{ error_campo('telefono_whatsapp') }}
+                </label>
+                <label data-campo="pagina_web" :class="errores.pagina_web && 'campo-con-error'" class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Página web</span>
+                    <input x-model="datos.pagina_web" maxlength="500" placeholder="www.ejemplo.com" class="campo">
+                    {{ error_campo('pagina_web') }}
+                </label>
+            </div>
+        </div>
+
+        <div data-tab="seguridad" x-show="tab === 'seguridad'" x-cloak class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+            <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+                <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="shield-check" class="w-5 h-5 mr-2 text-primary-500"></i>Seguridad y acuerdos</h2>
+            </div>
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5">
+                <label data-campo="acuerdo_servicio" :class="errores.acuerdo_servicio && 'campo-con-error'" class="block">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">¿Hay acuerdo de servicio firmado? <span class="text-red-500">*</span></span>
+                    <select x-model="datos.acuerdo_servicio" required class="campo">
+                        <option value="">Elegí…</option>
+                        <option value="Si">Sí</option>
+                        <option value="No">No</option>
+                    </select>
+                    {{ error_campo('acuerdo_servicio') }}
+                </label>
+                <label data-campo="politica_nda" :class="errores.politica_nda && 'campo-con-error'" class="block md:col-span-2">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Política de seguridad / NDA (texto o enlace)
+                        <span x-show="datos.acuerdo_servicio === 'No'" class="text-red-500">*</span></span>
+                    <textarea x-model="datos.politica_nda" :required="datos.acuerdo_servicio === 'No'" rows="2" maxlength="5000" class="campo"></textarea>
+                    <p x-show="datos.acuerdo_servicio === 'No'" class="text-xs mt-1 text-dark-400">Sin acuerdo firmado es obligatoria.</p>
+                    {{ error_campo('politica_nda') }}
+                </label>
+                {% if not item %}
+                <!-- Alta con acuerdo firmado: el archivo viaja junto con los datos al crear -->
+                <label data-campo="adjunto" :class="errores.adjunto && 'campo-con-error'" x-show="datos.acuerdo_servicio === 'Si'" class="block md:col-span-3">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Archivo adjunto del acuerdo / NDA <span class="text-red-500">*</span></span>
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" :required="datos.acuerdo_servicio === 'Si'"
+                           @change="archivoNda = $event.target.files[0] || null"
+                           class="block w-full text-sm text-dark-600 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border file:border-primary-200 file:bg-primary-50 file:text-primary-600 file:text-xs file:font-medium">
+                    <p class="text-xs text-dark-400 mt-1">Con acuerdo firmado es obligatorio. PDF, JPG, PNG, DOC o DOCX. Máx 10 MB.</p>
+                    {{ error_campo('adjunto') }}
+                </label>
+                {% else %}
+                <!-- Adjunto en edición: se sube al elegirlo; con acuerdo firmado no se puede quitar -->
+                <div data-campo="adjunto" :class="errores.adjunto && 'campo-con-error'" class="md:col-span-3">
+                    <span class="block text-sm font-medium text-dark-700 mb-1">Archivo adjunto de política / NDA
+                        <span x-show="datos.acuerdo_servicio === 'Si'" class="text-red-500">*</span></span>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <a x-show="adjunto" :href="urlNda" class="inline-flex items-center text-primary-600 hover:text-primary-700 hover:underline font-medium">
+                            <i data-lucide="paperclip" class="w-4 h-4 mr-1"></i><span x-text="adjunto"></span>
+                        </a>
+                        <span x-show="!adjunto" class="text-sm text-dark-400">Sin archivo</span>
+                        <label class="flex items-center px-3 py-1.5 text-xs font-medium text-primary-600 bg-primary-50 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors cursor-pointer"
+                               :class="subiendo ? 'opacity-50 pointer-events-none' : ''">
+                            <i data-lucide="upload" class="w-3 h-3 mr-1"></i>
+                            <span x-text="subiendo ? 'Subiendo…' : (adjunto ? 'Reemplazar' : 'Adjuntar')"></span>
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" class="hidden" @change="subirNda($event)">
+                        </label>
+                        <button type="button" x-show="adjunto && acuerdoGuardado !== 'Si'" @click="quitarNda()"
+                                class="flex items-center px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors">
+                            <i data-lucide="trash-2" class="w-3 h-3 mr-1"></i>Quitar
+                        </button>
+                    </div>
+                    <p x-show="datos.acuerdo_servicio === 'Si' && !adjunto" class="text-xs mt-1 text-red-600">Con acuerdo firmado el adjunto es obligatorio: subilo antes de guardar.</p>
+                    <p class="text-xs text-dark-400 mt-1">PDF, JPG, PNG, DOC o DOCX. Máx 10 MB.</p>
+                    {{ error_campo('adjunto') }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="bg-white rounded-2xl border border-dark-100 px-6 py-4 flex items-center justify-between">
+            <a href="{{ url_for('administracion.proveedores_view', proveedor_id=item.id) if item else url_for('administracion.proveedores_list') }}"
+               class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+            <button type="submit" :disabled="guardando" @click="alPresionarGuardar()"
+                    class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center disabled:opacity-50">
+                <i data-lucide="check" class="w-4 h-4 mr-2"></i>
+                <span x-text="guardando ? 'Guardando…' : '{{ 'Guardar cambios' if item else 'Crear proveedor' }}'"></span>
+            </button>
+        </div>
+        {% if item %}
+        <div class="text-right">
+            <button type="button" @click="eliminar()" class="text-sm text-red-600 hover:text-red-700 hover:underline">Eliminar proveedor</button>
+            <p class="text-xs text-dark-400">Solo si nunca fue evaluado; si no, pasalo a Inactivo en el Estado.</p>
+        </div>
+        {% endif %}
+    </form>
+
+    {% if item %}
+    <!-- ═══ Oficinas: la lista; agregar y editar, en su propia página (como el domicilio en Clientes) ═══ -->
+    <div x-show="tab === 'oficinas'" x-cloak class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            {{ boton_agregar(url_for('administracion.proveedores_oficina_form', proveedor_id=item.id), 'Agregar oficina') }}
+            <div x-show="oficinas.length">{{ selector_vista() }}</div>
+        </div>
+        <div x-show="oficinas.length" class="space-y-4">
+            <div x-show="vista === 'tabla'" class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-dark-50 border-b border-dark-100">
+                            {% for columna in ['Oficina', 'Dirección', 'Localidad', 'Provincia', 'País', 'CP'] %}
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase whitespace-nowrap">{{ columna }}</th>
+                            {% endfor %}
+                            <th class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-dark-100">
+                        <template x-for="o in oficinas" :key="o.id">
+                            <tr class="hover:bg-dark-50/50">
+                                <td class="px-4 py-3">
+                                    <p class="font-semibold text-dark-900" x-text="o.nombre_oficina || 'Oficina'"></p>
+                                    <div x-show="o.es_legal" class="mt-1">{{ badge('Domicilio legal') }}</div>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-dark-700" x-text="direccion(o) || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-600" x-text="o.localidad || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-600" x-text="o.provincia || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-600" x-text="o.pais || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-600 whitespace-nowrap" x-text="o.codigo_postal || '-'"></td>
+                                <td class="px-4 py-2">{{ acciones('urlOficina(o)', "borrar('oficinas', o.id)", 'oficina') }}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="vista === 'cards'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <template x-for="o in oficinas" :key="o.id">
+                    <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-start gap-4">
+                        <div class="w-11 h-11 rounded-xl bg-primary-50 border border-primary-100 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="map-pin" class="w-5 h-5 text-primary-500"></i>
+                        </div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="font-semibold text-dark-900" x-text="o.nombre_oficina || 'Oficina'"></p>
+                                <span x-show="o.es_legal">{{ badge('Domicilio legal') }}</span>
+                            </div>
+                            <p class="text-sm text-dark-700 mt-1" x-text="direccion(o) || '-'"></p>
+                            <p class="text-sm text-dark-500" x-text="ubicacion(o) || '-'"></p>
+                        </div>
+                        {{ acciones('urlOficina(o)', "borrar('oficinas', o.id)", 'oficina') }}
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div x-show="!oficinas.length" class="bg-white rounded-2xl border border-dark-100">
+            <p class="px-6 py-8 text-center text-dark-500">No tiene oficinas cargadas.</p>
+        </div>
+    </div>
+
+    <!-- ═══ Contactos: la lista; agregar y editar, en su propia página ═══ -->
+    <div x-show="tab === 'contactos'" x-cloak class="space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            {{ boton_agregar(url_for('administracion.proveedores_contacto_form', proveedor_id=item.id), 'Agregar contacto') }}
+            <div x-show="contactos.length">{{ selector_vista() }}</div>
+        </div>
+        <div x-show="contactos.length" class="space-y-4">
+            <div x-show="vista === 'tabla'" class="bg-white rounded-2xl border border-dark-100 overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-dark-50 border-b border-dark-100">
+                            {% for columna in ['Contacto', 'Cargo', 'Oficina', 'Email', 'Teléfono'] %}
+                            <th class="px-4 py-3 text-left text-xs font-semibold text-dark-500 uppercase whitespace-nowrap">{{ columna }}</th>
+                            {% endfor %}
+                            <th class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-dark-100">
+                        <template x-for="c in contactos" :key="c.id">
+                            <tr class="hover:bg-dark-50/50">
+                                <td class="px-4 py-3">
+                                    <p class="font-semibold text-dark-900" x-text="nombreContacto(c)"></p>
+                                    <div x-show="c.es_principal" class="mt-1">{{ badge('Principal') }}</div>
+                                    <p x-show="c.notas" class="text-xs text-dark-400 mt-1" x-text="c.notas"></p>
+                                </td>
+                                <td class="px-4 py-3 text-sm text-dark-600" x-text="c.cargo || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-600" x-text="c.oficina || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-700 whitespace-nowrap" x-text="c.email || '-'"></td>
+                                <td class="px-4 py-3 text-sm text-dark-700 whitespace-nowrap" x-text="c.telefono || '-'"></td>
+                                <td class="px-4 py-2">{{ acciones('urlContacto(c)', "borrar('contactos', c.id)", 'contacto') }}</td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div x-show="vista === 'cards'" x-cloak class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <template x-for="c in contactos" :key="c.id">
+                    <div class="bg-white rounded-2xl border border-dark-100 p-5 flex items-start gap-4">
+                        <div class="w-11 h-11 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 text-white flex items-center justify-center font-semibold flex-shrink-0"
+                             x-text="iniciales(c)"></div>
+                        <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <p class="font-semibold text-dark-900" x-text="nombreContacto(c)"></p>
+                                <span x-show="c.es_principal">{{ badge('Principal') }}</span>
+                            </div>
+                            <p class="text-sm text-dark-500" x-text="[c.cargo, c.oficina].filter(Boolean).join(' · ') || '-'"></p>
+                            <div class="mt-3 space-y-1 text-sm text-dark-700">
+                                <p x-show="c.email" class="flex items-center gap-2"><i data-lucide="mail" class="w-4 h-4 text-dark-400 flex-shrink-0"></i><span class="break-all" x-text="c.email"></span></p>
+                                <p x-show="c.telefono" class="flex items-center gap-2"><i data-lucide="phone" class="w-4 h-4 text-dark-400 flex-shrink-0"></i><span x-text="c.telefono"></span></p>
+                            </div>
+                            <p x-show="c.notas" class="text-xs text-dark-400 mt-2" x-text="c.notas"></p>
+                        </div>
+                        {{ acciones('urlContacto(c)', "borrar('contactos', c.id)", 'contacto') }}
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div x-show="!contactos.length" class="bg-white rounded-2xl border border-dark-100">
+            <p class="px-6 py-8 text-center text-dark-500">No tiene contactos cargados.</p>
+        </div>
+    </div>
+
+    <!-- ═══ Documentos: se suben al elegirlos (varios a la vez), con miniatura; se descargan con su nombre ═══ -->
+    <div x-show="tab === 'documentos'" x-cloak class="space-y-4">
+        <label class="flex flex-col items-center justify-center gap-2 px-6 py-8 bg-white border-2 border-dashed rounded-2xl text-center transition-colors"
+               :class="[arrastrando ? 'border-primary-400 bg-primary-50' : 'border-dark-200 hover:border-primary-300',
+                        subiendoDocumentos ? 'opacity-60 pointer-events-none' : 'cursor-pointer']"
+               @dragover.prevent="arrastrando = true" @dragleave.prevent="arrastrando = false"
+               @drop.prevent="arrastrando = false; subirDocumentos($event.dataTransfer.files)">
+            <i data-lucide="upload-cloud" class="w-8 h-8 text-primary-500"></i>
+            <span class="text-sm font-medium text-dark-700" x-text="subiendoDocumentos ? 'Subiendo y armando las miniaturas…' : 'Arrastrá los archivos acá o hacé clic para elegirlos'"></span>
+            <span class="text-xs text-dark-400">{{ TEXTO_TIPOS_DOCUMENTOS }} · hasta 10 MB cada uno · varios a la vez</span>
+            <input type="file" multiple accept="{{ EXTENSIONES_DOCUMENTOS|join(',') }}" class="hidden"
+                   @change="subirDocumentos($event.target.files); $event.target.value = ''">
+        </label>
+        <p x-show="errorDocumentos" x-cloak class="p-3 rounded-xl bg-red-50 border border-red-200 text-sm text-red-800" x-text="errorDocumentos"></p>
+
+        <div x-show="documentos.length" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            <template x-for="d in documentos" :key="d.id">
+                <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden flex flex-col">
+                    <a :href="urlDocumento(d)" :title="`Descargar ${d.nombre}`"
+                       class="block aspect-[4/3] bg-dark-50 border-b border-dark-100 overflow-hidden">
+                        <img x-show="d.con_miniatura && !sinMiniatura[d.id]" :src="d.con_miniatura ? urlMiniatura(d) : ''" :alt="d.nombre"
+                             loading="lazy" @error="sinMiniatura[d.id] = true" class="w-full h-full object-cover object-top">
+                        <span x-show="!d.con_miniatura || sinMiniatura[d.id]" class="w-full h-full flex flex-col items-center justify-center gap-1">
+                            <i data-lucide="file" class="w-10 h-10 text-dark-300"></i>
+                            <span class="text-sm font-bold" :class="colorDocumento(d)" x-text="tipoDocumento(d)"></span>
+                        </span>
+                    </a>
+                    <div class="p-3 flex-1 min-w-0">
+                        <p class="text-sm font-medium text-dark-900 truncate" :title="d.nombre" x-text="d.nombre"></p>
+                        <p class="text-xs text-dark-400" x-text="`${tamanoLegible(d.tamano)} · ${fechaCorta(d.subido_at)}`"></p>
+                    </div>
+                    <div class="px-3 pb-3 flex items-center justify-between">
+                        <a :href="urlDocumento(d)" class="inline-flex items-center text-xs font-medium text-primary-600 hover:text-primary-700">
+                            <i data-lucide="download" class="w-3.5 h-3.5 mr-1"></i>Descargar
+                        </a>
+                        <button type="button" @click="eliminarDocumento(d)" :aria-label="`Eliminar ${d.nombre}`"
+                                class="p-1.5 text-dark-400 hover:text-red-600 hover:bg-red-50 rounded-lg" title="Eliminar">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+        <p x-show="!documentos.length" class="bg-white rounded-2xl border border-dark-100 px-4 py-8 text-center text-dark-500">Todavía no hay documentos.</p>
+    </div>
+    {% endif %}
+</div>
+
+<style>
+    .campo { width: 100%; padding: .625rem .75rem; background: rgb(248 250 252); border: 1px solid rgb(226 232 240); border-radius: .75rem; }
+    .campo:focus { outline: none; background: #fff; box-shadow: 0 0 0 2px rgb(99 102 241 / .35); }
+    /* Después de intentar guardar: lo que falta o tiene error, en rojo (y lo que marcó el servidor) */
+    .intentado .campo:invalid, .campo-con-error .campo { border-color: rgb(248 113 113); background: rgb(254 242 242); }
+    .intentado input[type=file]:invalid { color: rgb(220 38 38); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+{# Máscara de teléfonos internacionales: arma +54 9 351 123 4567 según el país #}
+<script src="https://unpkg.com/libphonenumber-js@1.13.14/bundle/libphonenumber-min.js"></script>
+<script>
+// CUIT como en Clientes: XX-XXXXXXXX-X y dígito verificador
+function mascaraCuit(valor) {
+    const d = String(valor || '').replace(/\D/g, '').slice(0, 11);
+    if (d.length > 10) return `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}`;
+    if (d.length > 2) return `${d.slice(0, 2)}-${d.slice(2)}`;
+    return d;
+}
+function cuitValido(valor) {
+    const d = String(valor || '').replace(/\D/g, '');
+    if (d.length !== 11) return false;
+    const suma = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2].reduce((total, c, i) => total + c * Number(d[i]), 0);
+    const resto = 11 - (suma % 11);
+    return Number(d[10]) === (resto === 11 ? 0 : resto === 10 ? 9 : resto);
+}
+// WhatsApp: dígitos con código de país, mostrados con el formato de cada país
+function formatearTelefono(valor) {
+    const d = String(valor || '').replace(/\D/g, '').slice(0, 15);
+    if (!d) return '';
+    const L = globalThis.libphonenumber;
+    return L ? new L.AsYouType().input(`+${d}`) : `+${d}`;
+}
+
+// Mensajes del servidor → el campo a marcar. «Faltan datos obligatorios: …» puede nombrar varios.
+const FALTANTES = {
+    'usuario referente': 'referente', 'servicio / bien provisto': 'servicio_provisto',
+    'tipo de información que manejan': 'tipo_informacion', '¿hay acuerdo de servicio firmado?': 'acuerdo_servicio',
+    'política de seguridad / nda': 'politica_nda',
+};
+const ERRORES_DE_CAMPO = [
+    [/^(ya existe (el|un) proveedor|nombre)/i, 'nombre'],
+    [/^cuit/i, 'cuit'],
+    [/referente/i, 'referente'],
+    [/^email/i, 'email'],
+    [/^(whatsapp|tel[eé]fono)/i, 'telefono_whatsapp'],
+    [/^p[aá]gina web/i, 'pagina_web'],
+    [/adjunt|archivo/i, 'adjunto'],
+];
+
+// {campo: mensaje} de un error del servidor (los errores de validación llegan unidos con «; »)
+function erroresPorCampo(mensaje) {
+    const errores = {};
+    for (const parte of String(mensaje || '').split('; ')) {
+        const texto = parte.toLowerCase();
+        if (texto.startsWith('faltan datos obligatorios:')) {
+            for (const [etiqueta, campo] of Object.entries(FALTANTES)) {
+                if (texto.includes(etiqueta)) errores[campo] = 'Completá este campo';
+            }
+            continue;
+        }
+        const regla = ERRORES_DE_CAMPO.find(([patron]) => patron.test(parte));
+        if (regla && !errores[regla[1]]) errores[regla[1]] = parte;
+    }
+    return errores;
+}
+
+// Documentos: lo mismo que acepta la API, para avisar antes de subir
+const EXTENSIONES_DOCUMENTOS = ['.pdf', '.xlsx', '.png', '.jpg', '.jpeg', '.doc', '.docx'];
+const TAMANO_MAXIMO_DOCUMENTO = 10 * 1024 * 1024;
+
+function formularioProveedor({api, lista, altaConAdjunto, tab = 'datos'}) {
+    const CAMPOS = ['nombre', 'razon_social', 'cuit', 'responsabilidad_afip', 'nro_ingresos_brutos', 'tipo',
+                    'servicio_provisto', 'tipo_informacion', 'email', 'telefono_whatsapp', 'pagina_web',
+                    'acuerdo_servicio', 'politica_nda', 'observaciones'];
+    let item = {};
+    try { item = JSON.parse(document.getElementById('proveedor-datos')?.textContent || '{}') || {}; } catch (e) { item = {}; }
+    const VISTA = 'proveedores_vista_listas';  // Tabla / Cards, compartida con la vista del proveedor
+    let vista = 'tabla';
+    try { vista = localStorage.getItem(VISTA) || vista; } catch (e) { /* sin storage */ }
+    const datos = Object.fromEntries(CAMPOS.map(c => [c, item[c] ?? '']));
+    datos.tipo = datos.tipo || 'sin_clasificar';
+    datos.referente_empleado_id = item.referente?.id || null;
+    datos.telefono_whatsapp = formatearTelefono(item.telefono_whatsapp);
+
+    return {
+        id: item.id || null,
+        tab,
+        vista,
+        PESTANAS_FORM: ['datos', 'contacto', 'seguridad'],
+        datos,
+        referente: item.referente || null,
+        adjunto: item.politica_nda_archivo_nombre || null,
+        archivoNda: null,  // alta con acuerdo firmado: se manda junto con los datos
+        acuerdoGuardado: item.acuerdo_servicio || null,  // con Sí guardado, el adjunto no se puede quitar
+        estado: item.activo === false ? 'inactivo' : 'activo',
+        estadoGuardado: item.activo === false ? 'inactivo' : 'activo',
+        documentos: item.documentos || [],
+        sinMiniatura: {},  // las que no cargaron: se muestra el tipo
+        arrastrando: false,
+        subiendoDocumentos: false,
+        errorDocumentos: null,
+        urlNda: item.id ? `${lista}/${item.id}/nda` : null,
+        oficinas: item.oficinas || [],
+        contactos: item.contactos || [],
+        buscarEmpleado: '',
+        empleados: [],
+        mostrarEmpleados: false,
+        cambiandoReferente: false,
+        guardando: false,
+        subiendo: false,
+        error: null,
+        errores: {},  // campo → mensaje del servidor, debajo del campo
+        intentado: false,  // ya se intentó guardar: lo inválido se ve en rojo
+        pestanasConError: [],  // con punto rojo en la pestaña
+        avisoPendiente: false,
+        mostrandoAviso: false,
+
+        init() {
+            this.$watch('vista', valor => { try { localStorage.setItem(VISTA, valor); } catch (e) { /* sin storage */ } });
+        },
+
+        async pedir(url, opciones = {}) {
+            const r = await fetch(url, {headers: {'Content-Type': 'application/json', 'Accept': 'application/json'}, ...opciones});
+            const cuerpo = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(cuerpo.detail || 'Error en la operación');
+            return cuerpo;
+        },
+        async intentar(funcion) {
+            this.error = null;
+            try { return await funcion(); } catch (e) { this.error = e.message; window.scrollTo({top: 0, behavior: 'smooth'}); }
+        },
+
+        // ─── Datos del proveedor ───
+        async buscarEmpleados() {
+            try {
+                this.empleados = await this.pedir(`${api}/empleados?buscar=${encodeURIComponent(this.buscarEmpleado)}`);
+                this.mostrarEmpleados = true;
+            } catch (e) { this.error = e.message; }
+        },
+        elegirReferente(empleado) {
+            this.referente = empleado;
+            this.datos.referente_empleado_id = empleado.id;
+            this.buscarEmpleado = '';
+            this.mostrarEmpleados = false;
+            this.cambiandoReferente = false;
+            delete this.errores.referente;
+            if (this.intentado) this.$nextTick(() => this.actualizarPestanasConError());
+        },
+        mascaraCuit,
+        formatearTelefono,
+        erroresPorCampo,
+        validarCuit(campo) {
+            const d = campo.value.replace(/\D/g, '');
+            const mensaje = !d ? '' : d.length !== 11 ? 'El CUIT tiene 11 dígitos (XX-XXXXXXXX-X)'
+                : !cuitValido(d) ? 'CUIT inválido: el dígito verificador no es correcto' : '';
+            campo.setCustomValidity(mensaje);
+            if (mensaje) campo.reportValidity();
+        },
+        validarTelefono(campo) {
+            const d = campo.value.replace(/\D/g, '');
+            const L = globalThis.libphonenumber;
+            const posible = !d || (L ? L.isPossiblePhoneNumber(`+${d}`) : d.length >= 8 && d.length <= 15);
+            campo.setCustomValidity(posible ? '' : 'Revisá el número: va con código de país, ej. +54 9 351 123 4567');
+            if (!posible) campo.reportValidity();
+        },
+        cuerpo() {
+            // El WhatsApp viaja solo con dígitos, como se guarda; el estado, solo en la edición
+            const cuerpo = {...this.datos, acuerdo_servicio: this.datos.acuerdo_servicio || null,
+                            responsabilidad_afip: this.datos.responsabilidad_afip || null,
+                            telefono_whatsapp: (this.datos.telefono_whatsapp || '').replace(/\D/g, '') || null};
+            if (this.id) cuerpo.activo = this.estado === 'activo';
+            return cuerpo;
+        },
+        // ─── Campos que faltan o tienen error ───
+        pestanaDe(elemento) {
+            return elemento?.closest?.('[data-tab]')?.dataset.tab || null;
+        },
+        pestanaConError(pestana) {
+            return this.pestanasConError.includes(pestana);
+        },
+        contenedor(campo) {
+            return this.$refs.form?.querySelector(`[data-campo="${campo}"]`) || null;
+        },
+        // Lo que el navegador marca inválido: obligatorios vacíos, CUIT, WhatsApp, email…
+        invalidos() {
+            return [...(this.$refs.form?.querySelectorAll(':invalid') || [])].filter(c => c.willValidate);
+        },
+        actualizarPestanasConError() {
+            const pestanas = this.invalidos().map(c => this.pestanaDe(c));
+            for (const campo of Object.keys(this.errores)) pestanas.push(this.pestanaDe(this.contenedor(campo)));
+            this.pestanasConError = [...new Set(pestanas.filter(Boolean))];
+        },
+        // Al corregir un campo se le saca la marca del servidor y se recalculan las pestañas
+        revisar(evento) {
+            const campo = evento?.target?.closest?.('[data-campo]')?.dataset.campo;
+            if (campo && this.errores[campo]) delete this.errores[campo];
+            if (this.intentado) this.$nextTick(() => this.actualizarPestanasConError());
+        },
+        // Antes de que valide el navegador: un obligatorio con solo espacios cuenta como vacío
+        alPresionarGuardar() {
+            this.intentado = true;
+            this.errores = {};
+            for (const campo of this.$refs.form?.querySelectorAll('input[required], textarea[required]') || []) {
+                if (campo.type !== 'file' && campo.value && !campo.value.trim()) {
+                    campo.value = '';
+                    campo.dispatchEvent(new Event('input', {bubbles: true}));
+                }
+            }
+            this.actualizarPestanasConError();
+        },
+        // El navegador no puede mostrar el aviso de un campo de una pestaña oculta: se elige el
+        // campo (el primero de la pestaña abierta o, si no hay, el primero del formulario), se abre
+        // su pestaña y el aviso se muestra ahí
+        alInvalido(evento) {
+            if (this.mostrandoAviso) return;  // es el aviso que pide irACampo
+            evento.preventDefault();
+            if (this.avisoPendiente) return;
+            this.avisoPendiente = true;
+            setTimeout(() => {  // cuando el navegador ya marcó todos los inválidos
+                this.avisoPendiente = false;
+                const invalidos = this.invalidos();
+                const campo = invalidos.find(c => this.pestanaDe(c) === this.tab) || invalidos[0];
+                if (campo) this.irACampo(campo, true);
+            });
+        },
+        // Abre la pestaña del campo y lo lleva a la vista: con el aviso del navegador o, si lo
+        // marcó el servidor, con el foco en su control
+        irACampo(elemento, conAviso = false) {
+            const pestana = this.pestanaDe(elemento);
+            if (pestana && pestana !== this.tab) this.tab = pestana;
+            this.$nextTick(() => {
+                if (conAviso) {
+                    this.mostrandoAviso = true;
+                    try { elemento.reportValidity(); } finally { this.mostrandoAviso = false; }
+                    return;
+                }
+                elemento.scrollIntoView?.({behavior: 'smooth', block: 'center'});
+                elemento.querySelector?.('input:not([type=hidden]), select, textarea, button')?.focus({preventScroll: true});
+            });
+        },
+        // Marca los campos de un error del servidor y lleva al primero (de la pestaña abierta si hay)
+        marcarErrores(errores) {
+            this.errores = errores;
+            this.actualizarPestanasConError();
+            const contenedores = Object.keys(errores).map(c => this.contenedor(c)).filter(Boolean);
+            const primero = contenedores.find(c => this.pestanaDe(c) === this.tab) || contenedores[0];
+            if (primero) this.irACampo(primero);
+        },
+        // Con acuerdo firmado y sin adjunto no se puede guardar: el archivo se sube desde Seguridad
+        faltaAdjunto() {
+            return Boolean(this.id) && this.datos.acuerdo_servicio === 'Si' && !this.adjunto;
+        },
+        async crearConAdjunto() {
+            const cuerpo = new FormData();
+            cuerpo.append('datos', JSON.stringify(this.cuerpo()));
+            cuerpo.append('archivo', this.archivoNda);
+            const r = await fetch(altaConAdjunto, {method: 'POST', headers: {'Accept': 'application/json'}, body: cuerpo});
+            const respuesta = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error(respuesta.detail || 'No se pudo crear el proveedor');
+            return respuesta;
+        },
+        async guardar() {
+            this.error = null;
+            if (this.faltaAdjunto()) {
+                this.marcarErrores({adjunto: 'Con acuerdo firmado el adjunto es obligatorio: subilo antes de guardar'});
+                return;
+            }
+            this.guardando = true;
+            try {
+                const guardado = !this.id && this.datos.acuerdo_servicio === 'Si'
+                    ? await this.crearConAdjunto()
+                    : await this.pedir(this.id ? `${api}/${this.id}` : api,
+                                       {method: this.id ? 'PUT' : 'POST', body: JSON.stringify(this.cuerpo())});
+                // Alta → a la edición (para cargar oficinas/contactos); edición → a la vista
+                window.location.href = this.id ? `${lista}/${guardado.id}?ok=guardado` : `${lista}/${guardado.id}/editar?ok=creado`;
+            } catch (e) {
+                // Si el error es de un campo, se marca y se lleva ahí; si no, el aviso de arriba
+                const errores = erroresPorCampo(e.message);
+                if (Object.keys(errores).length) {
+                    this.marcarErrores(errores);
+                } else {
+                    this.error = e.message;
+                    window.scrollTo({top: 0, behavior: 'smooth'});
+                }
+            }
+            this.guardando = false;
+        },
+        async eliminar() {
+            if (!confirm(`¿Eliminar «${this.datos.nombre}» del registro? Solo se puede si nunca fue evaluado.`)) return;
+            await this.intentar(async () => {
+                await this.pedir(`${api}/${this.id}`, {method: 'DELETE'});
+                window.location.href = lista;
+            });
+        },
+
+        // ─── Adjunto de política/NDA ───
+        async subirNda(evento) {
+            const archivo = evento.target.files[0];
+            if (!archivo) return;
+            this.subiendo = true;
+            const datos = new FormData();
+            datos.append('archivo', archivo);
+            await this.intentar(async () => {
+                const r = await fetch(this.urlNda, {method: 'POST', body: datos});
+                const cuerpo = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(cuerpo.detail || 'No se pudo subir el archivo');
+                this.adjunto = cuerpo.politica_nda_archivo_nombre;
+                Alpine.store('toasts').success('Adjunto guardado');
+            });
+            evento.target.value = '';
+            this.subiendo = false;
+        },
+        async quitarNda() {
+            if (!confirm('¿Quitar el adjunto de política/NDA?')) return;
+            await this.intentar(async () => {
+                await this.pedir(`${api}/${this.id}/nda`, {method: 'DELETE'});
+                this.adjunto = null;
+                Alpine.store('toasts').success('Adjunto quitado');
+            });
+        },
+
+        // ─── Documentos ───
+        urlDocumento(d) {
+            return `${lista}/${this.id}/documentos/${d.id}`;
+        },
+        urlMiniatura(d) {
+            return `${lista}/${this.id}/documentos/${d.id}/miniatura`;
+        },
+        tipoDocumento(d) {
+            return (d.extension || '').replace('.', '').toUpperCase() || 'ARCHIVO';
+        },
+        colorDocumento(d) {
+            return {'.pdf': 'text-red-600', '.xlsx': 'text-emerald-600', '.doc': 'text-blue-600', '.docx': 'text-blue-600'}[d.extension]
+                || 'text-dark-500';
+        },
+        tamanoLegible(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+            return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+        },
+        fechaCorta(valor) {
+            if (!valor) return '';
+            const [a, m, d] = String(valor).slice(0, 10).split('-');
+            return `${d}/${m}/${a}`;
+        },
+        // Lo que la API va a rechazar, avisado antes de subir (el tipo real lo valida la API)
+        problemaDe(archivo) {
+            const punto = archivo.name.lastIndexOf('.');
+            const extension = punto >= 0 ? archivo.name.slice(punto).toLowerCase() : '';
+            if (!EXTENSIONES_DOCUMENTOS.includes(extension)) return `«${archivo.name}»: solo se aceptan PDF, XLSX, PNG, JPG, DOC o DOCX`;
+            if (archivo.size > TAMANO_MAXIMO_DOCUMENTO) return `«${archivo.name}»: supera los 10 MB`;
+            if (!archivo.size) return `«${archivo.name}»: está vacío`;
+            return null;
+        },
+        async subirDocumentos(elegidos) {
+            const archivos = [...(elegidos || [])];
+            if (!archivos.length || this.subiendoDocumentos) return;
+            this.errorDocumentos = archivos.map(a => this.problemaDe(a)).find(Boolean) || null;
+            if (this.errorDocumentos) return;
+            this.subiendoDocumentos = true;
+            const cuerpo = new FormData();
+            archivos.forEach(a => cuerpo.append('archivos', a));
+            try {
+                const r = await fetch(`${lista}/${this.id}/documentos`, {method: 'POST', headers: {'Accept': 'application/json'}, body: cuerpo});
+                const subidos = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(subidos.detail || 'No se pudieron subir los documentos');
+                this.documentos = [...subidos, ...this.documentos];
+                Alpine.store('toasts').success(subidos.length === 1 ? 'Documento subido' : `${subidos.length} documentos subidos`);
+                this.$nextTick(() => lucide.createIcons());
+            } catch (e) {
+                this.errorDocumentos = e.message;
+            }
+            this.subiendoDocumentos = false;
+        },
+        async eliminarDocumento(d) {
+            if (!confirm(`¿Eliminar «${d.nombre}»?`)) return;
+            this.errorDocumentos = null;
+            try {
+                await this.pedir(`${api}/${this.id}/documentos/${d.id}`, {method: 'DELETE'});
+                this.documentos = this.documentos.filter(x => x.id !== d.id);
+                Alpine.store('toasts').success('Documento eliminado');
+            } catch (e) {
+                this.errorDocumentos = e.message;
+            }
+        },
+
+        // ─── Oficinas y contactos ───
+        async recargarHijos() {
+            const ficha = await this.pedir(`${api}/${this.id}`);
+            this.oficinas = ficha.oficinas;
+            this.contactos = ficha.contactos;
+            this.$nextTick(() => lucide.createIcons());
+        },
+        // Agregar y editar van en su propia página
+        urlOficina(o) {
+            return `${lista}/${this.id}/oficinas/${o.id}/editar`;
+        },
+        urlContacto(c) {
+            return `${lista}/${this.id}/contactos/${c.id}/editar`;
+        },
+        async borrar(tipo, id) {
+            if (!confirm(tipo === 'oficinas' ? '¿Eliminar esta oficina?' : '¿Eliminar este contacto?')) return;
+            await this.intentar(async () => {
+                await this.pedir(`${api}/${this.id}/${tipo}/${id}`, {method: 'DELETE'});
+                await this.recargarHijos();
+            });
+        },
+
+        direccion(o) {
+            const calle = [o.calle, o.numero].filter(Boolean).join(' ');
+            const piso = [o.piso && `piso ${o.piso}`, o.departamento && `depto ${o.departamento}`].filter(Boolean).join(' ');
+            return [calle, piso].filter(Boolean).join(', ');
+        },
+        ubicacion(o) {
+            return [o.localidad, o.provincia, o.pais, o.codigo_postal && `CP ${o.codigo_postal}`].filter(Boolean).join(', ');
+        },
+        domicilio(o) {
+            return [this.direccion(o), this.ubicacion(o)].filter(Boolean).join(', ');
+        },
+        nombreContacto(c) {
+            return [c.nombre, c.apellido].filter(Boolean).join(' ');
+        },
+        iniciales(c) {
+            return ((c.nombre || '?').slice(0, 1) + (c.apellido || '').slice(0, 1)).toUpperCase();
+        },
+    };
+}
+</script>
+{% endblock %}

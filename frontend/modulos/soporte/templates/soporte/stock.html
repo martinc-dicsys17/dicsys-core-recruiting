@@ -1,0 +1,1015 @@
+{% extends "core/base.html" %}
+
+{% block title %}Stock - Soporte Técnico - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div x-data="stockManager()" class="animate-fade-in bg-[#f8f9fa] min-h-screen p-6 rounded-2xl border border-dark-100">
+    <!-- Header -->
+    {% set stock_function = 'soporte.stock_list' %}
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+        <div>
+            <div class="flex items-center space-x-2 mb-1">
+                <a href="{{ url_for('soporte.dashboard') }}"
+                    class="text-dark-400 hover:text-primary-500 transition-colors">
+                    <i data-lucide="layout-dashboard" class="w-5 h-5"></i>
+                </a>
+                <i data-lucide="chevron-right" class="w-4 h-4 text-dark-300"></i>
+                <span class="text-sm font-medium text-dark-500">Stock</span>
+            </div>
+            <h1 class="text-3xl font-bold text-dark-900 tracking-tight">Activos 💻</h1>
+        </div>
+        <div class="flex items-center space-x-3 mt-4 md:mt-0">
+            <div class="flex bg-white p-1 rounded-xl border border-dark-100 items-center">
+                <a href="{{ url_for('soporte.stock_list') }}"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all bg-primary-50 text-primary-600 shadow-sm">Activos</a>
+                <a href="{{ url_for('soporte.insumos_list') }}"
+                    class="px-4 py-2 rounded-lg text-sm font-semibold transition-all text-dark-400 hover:text-dark-700">Insumos</a>
+            </div>
+            <button @click="openTiposModal()"
+                class="p-2.5 bg-white border border-dark-200 text-dark-600 rounded-xl hover:bg-dark-50 transition-all shadow-sm active:scale-95"
+                title="Gestionar Tipos de Activos">
+                <i data-lucide="settings-2" class="w-5 h-5"></i>
+            </button>
+            <button @click="openMarcasModal()"
+                class="p-2.5 bg-white border border-dark-200 text-dark-600 rounded-xl hover:bg-dark-50 transition-all shadow-sm active:scale-95"
+                title="Gestionar Marcas">
+                <i data-lucide="tag" class="w-5 h-5"></i>
+            </button>
+            <button @click="openCreateModal()"
+                class="flex items-center px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-all shadow-md active:scale-95">
+                <i data-lucide="plus" class="w-4 h-4 mr-2"></i>
+                <span>Nuevo Item</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Buscador y Filtros -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <!-- Buscador -->
+        <form action="{{ url_for(stock_function) }}" method="GET" class="relative group w-full md:max-w-md">
+            {% if filtro_estado %}<input type="hidden" name="estado" value="{{ filtro_estado }}">{% endif %}
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <i data-lucide="search"
+                    class="w-4 h-4 text-dark-400 group-focus-within:text-primary-500 transition-colors"></i>
+            </div>
+            <input type="text" name="buscar" value="{{ buscar or '' }}"
+                placeholder="Buscar por serie, modelo, marca o persona..."
+                class="w-full pl-11 pr-4 py-2.5 bg-white border border-dark-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-primary-500/10 focus:border-primary-500 transition-all shadow-sm">
+            {% if buscar %}
+            <a href="{{ url_for(stock_function, estado=filtro_estado) }}"
+                class="absolute inset-y-0 right-0 pr-4 flex items-center text-dark-400 hover:text-red-500 transition-colors">
+                <i data-lucide="x-circle" class="w-4 h-4"></i>
+            </a>
+            {% endif %}
+        </form>
+
+        <!-- Filtros de Estado -->
+        <div class="flex items-center space-x-2 overflow-x-auto pb-1 no-scrollbar">
+            <a href="{{ url_for(stock_function, buscar=buscar) }}"
+                class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border {{ 'bg-white text-primary-600 border-primary-200 shadow-sm' if not filtro_estado else 'bg-dark-50 text-dark-400 border-transparent hover:bg-dark-100' }}">Todos</a>
+            <a href="{{ url_for(stock_function, estado='disponible', buscar=buscar) }}"
+                class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border {{ 'bg-emerald-50 text-emerald-600 border-emerald-200' if filtro_estado == 'disponible' else 'bg-dark-50 text-dark-400 border-transparent hover:bg-dark-100' }}">Disponibles</a>
+            <a href="{{ url_for(stock_function, estado='asignado', buscar=buscar) }}"
+                class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border {{ 'bg-blue-50 text-blue-600 border-blue-200' if filtro_estado == 'asignado' else 'bg-dark-50 text-dark-400 border-transparent hover:bg-dark-100' }}">Asignados</a>
+            <a href="{{ url_for(stock_function, estado='en_reparacion', buscar=buscar) }}"
+                class="px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all border {{ 'bg-amber-50 text-amber-600 border-amber-200' if filtro_estado == 'en_reparacion' else 'bg-dark-50 text-dark-400 border-transparent hover:bg-dark-100' }}">En
+                Reparación</a>
+        </div>
+    </div>
+
+    <!-- Lista de Items -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="stock-grid">
+        {% for item in items %}
+
+        <!-- CARD DE EQUIPO (SERIALIZED) -->
+        <div
+            class="group relative bg-white border border-dark-100 rounded-3xl p-5 hover:shadow-xl hover:shadow-primary-600/5 hover:-translate-y-1 transition-all duration-300 flex flex-col">
+            <!-- Badges Superior -->
+            <div class="flex justify-between items-start mb-4">
+                <span
+                    class="px-2.5 py-1 bg-primary-50 text-primary-700 text-[10px] font-bold uppercase tracking-widest rounded-lg border border-primary-200">
+                    {{ item.numero_inventario or 'N/A' }}
+                </span>
+                <span class="px-3 py-1 text-[10px] font-black uppercase tracking-tighter rounded-full
+                    {% if item.estado == 'disponible' %}bg-emerald-100 text-emerald-700
+                    {% elif item.estado == 'asignado' %}bg-blue-100 text-blue-700
+                    {% elif item.estado == 'en_reparacion' %}bg-amber-100 text-amber-700
+                    {% else %}bg-dark-100 text-dark-600{% endif %}">
+                    {{ item.estado|replace('_', ' ') }}
+                </span>
+            </div>
+
+            <!-- Header Info -->
+            <div class="mb-4">
+                <div class="flex items-center space-x-2 mb-1.5">
+                    <span class="text-[10px] font-bold text-primary-600 bg-primary-50 px-2 py-0.5 rounded-lg border border-primary-100">
+                        {{ item.tipo_rel.nombre if item.tipo_rel else '📦 Equipo' }}
+                    </span>
+                </div>
+                <h3
+                    class="font-bold text-dark-900 leading-tight group-hover:text-primary-600 transition-colors line-clamp-2">
+                    {{ item.nombre }}
+                </h3>
+                <p class="text-[11px] text-dark-500 mt-1 font-mono tracking-wide">
+                    <span class="font-semibold text-primary-600">{{ item.numero_inventario or 'N/A' }}</span>
+                    {% if item.numero_serie %} <span class="text-dark-400">· S/N: {{ item.numero_serie }}</span>{% endif %}
+                </p>
+                <p class="text-xs text-dark-400 font-medium mt-1">{{ item.marca_rel.nombre if item.marca_rel else 'Generico' }} {{ item.modelo or '' }}</p>
+            </div>
+
+            <!-- Specs Grid -->
+            {% if item.tipo_rel and item.tipo_rel.requiere_especificaciones %}
+            <div class="grid grid-cols-2 gap-3 mb-5 p-3 bg-dark-50/50 rounded-2xl">
+                <div class="flex items-center">
+                    <i data-lucide="cpu" class="w-3.5 h-3.5 text-primary-500 mr-2"></i>
+                    <span class="text-[11px] font-semibold text-dark-700 truncate">{{ item.procesador or 'N/A' }}</span>
+                </div>
+                <div class="flex items-center">
+                    <i data-lucide="memory-stick" class="w-3.5 h-3.5 text-accent-purple mr-2"></i>
+                    <span class="text-[11px] font-semibold text-dark-700">{{ item.memoria or 'N/A' }}</span>
+                </div>
+                <div class="flex items-center">
+                    <i data-lucide="hard-drive" class="w-3.5 h-3.5 text-accent-green mr-2"></i>
+                    <span class="text-[11px] font-semibold text-dark-700 truncate">{{ item.disco_principal or 'N/A'
+                        }}</span>
+                </div>
+                <div class="flex items-center">
+                    <i data-lucide="calendar" class="w-3.5 h-3.5 text-dark-400 mr-2"></i>
+                    <span class="text-[11px] font-semibold text-dark-700">{{ item.created_at[:10] if item.created_at
+                        else 'Reciente' }}</span>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Asignación -->
+            <div class="flex items-center mb-6 px-1 mt-auto">
+                <div
+                    class="w-8 h-8 rounded-full bg-gradient-to-br from-dark-100 to-dark-200 flex items-center justify-center mr-3 shadow-inner">
+                    {% if item.asignado_a %}
+                    <span class="text-[10px] font-bold text-dark-700">{{ item.asignado_a[0]|upper }}</span>
+                    {% else %}
+                    <i data-lucide="user" class="w-3 h-3 text-dark-400"></i>
+                    {% endif %}
+                </div>
+                <div class="flex flex-col">
+                    <span
+                        class="text-[10px] text-dark-400 font-bold uppercase tracking-wider leading-none mb-1">Responsable</span>
+                    <span class="text-xs font-semibold text-dark-800">{{ item.asignado_rel.nombre + ' ' + item.asignado_rel.apellido if item.asignado_rel else 'Sin asignar' }}</span>
+                </div>
+            </div>
+
+            <!-- Acciones Pie de Card -->
+            <div class="relative z-10 flex items-center justify-between border-t border-dark-50 pt-4 mt-auto">
+                <div class="flex items-center space-x-1">
+                    <button @click="openEditModal({{ item | tojson | forceescape }})"
+                        class="p-2 text-dark-400 hover:text-primary-500 hover:bg-primary-50 rounded-xl transition-all"
+                        title="Editar">
+                        <i data-lucide="edit-3" class="w-4 h-4"></i>
+                    </button>
+                    {% if item.id %}
+                    <a href="{{ url_for('soporte.stock_detalle', item_id=item.id|string) }}"
+                        class="p-2 text-dark-400 hover:text-accent-purple hover:bg-purple-50 rounded-xl transition-all"
+                        title="Historial (ID: {{ item.id }})">
+                        <i data-lucide="history" class="w-4 h-4"></i>
+                    </a>
+                    {% else %}
+                    <button disabled
+                        class="p-2 text-dark-300 bg-dark-50 rounded-xl cursor-not-allowed opacity-50"
+                        title="ID no disponible">
+                        <i data-lucide="history" class="w-4 h-4"></i>
+                    </button>
+                    {% endif %}
+                </div>
+
+                <div class="flex items-center space-x-1">
+                    <button
+                        @click="openDeleteModal('{{ item.id }}', '{{ item.nombre|e }}')"
+                        class="p-2 text-dark-500 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        title="Eliminar">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Empty State -->
+        {% if not items %}
+        <div
+            class="col-span-full py-20 flex flex-col items-center justify-center bg-white rounded-3xl border border-dashed border-dark-200">
+            <div class="w-20 h-20 bg-dark-50 rounded-2xl flex items-center justify-center mb-4">
+                <i data-lucide="package-search" class="w-10 h-10 text-dark-300"></i>
+            </div>
+            <p class="text-lg font-bold text-dark-900 mb-1">No hay items registrados</p>
+            <p class="text-dark-500 mb-6">Empezá agregando el primer elemento a tu inventario</p>
+            <button @click="openCreateModal()"
+                class="px-6 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-all font-semibold">
+                Registrar primer item
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- MODALES EXTRACÍDOS -->
+
+    <!-- Modal Crear/Editar -->
+    <div x-show="showModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        <div class="bg-white rounded-2xl shadow-soft z-10 w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+
+            <div class="p-6 border-b border-dark-100 flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center mr-3">
+                        <i data-lucide="package" class="w-5 h-5 text-primary-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-dark-900" x-text="editMode ? 'Editar Item' : 'Nuevo Item'"></h3>
+                </div>
+                <button @click="showModal = false"
+                    class="p-2 rounded-lg hover:bg-dark-50 text-dark-400 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="overflow-y-auto p-6">
+                {% include 'soporte/partials/modal_stock_item.html' %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Eliminar -->
+    <div x-show="showDeleteModal" x-cloak class="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        <div class="bg-white rounded-2xl shadow-soft z-10 max-w-sm w-full p-6"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">Eliminar Item</h3>
+                <p class="text-dark-500">¿Estás seguro de eliminar <span class="font-semibold text-dark-700"
+                        x-text="deleteName"></span>?</p>
+                <p class="text-dark-400 text-sm mt-1">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteModal = false"
+                    class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">No</button>
+                <form :action="'/soporte/stock/' + deleteId + '/eliminar'" method="POST" class="flex-1">
+                    <button type="submit"
+                        class="w-full px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">Sí,
+                        eliminar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gestión de Tipos (ABM) -->
+    <div x-show="showTiposModal" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showTiposModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        
+        <div class="bg-white rounded-2xl shadow-2xl z-20 max-w-2xl w-full flex flex-col max-h-[90vh]"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            
+            <div class="p-6 border-b border-dark-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-30">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center mr-3">
+                        <i data-lucide="settings-2" class="w-5 h-5 text-primary-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-dark-900">Gestionar Tipos de Activos</h3>
+                </div>
+                <button type="button" @click="showTiposModal = false" @keydown.escape.window="showTiposModal = false"
+                    class="p-2 rounded-lg hover:bg-dark-50 text-dark-400 hover:text-dark-600 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-5 overflow-y-auto">
+                <!-- Success Message -->
+                <div x-show="successMessage" x-cloak 
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="p-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        <span x-text="successMessage"></span>
+                    </div>
+                    <button @click="successMessage = ''" class="text-emerald-600 hover:text-emerald-800">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                
+                <!-- Error -->
+                <div x-show="tipoError" x-cloak class="p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 text-sm" x-text="tipoError"></div>
+                <!-- Agregar nuevo tipo: input + checkbox + botón -->
+                <form @submit.prevent="guardarTipo()" class="flex flex-col gap-3 bg-dark-50 p-4 rounded-xl border border-dark-100">
+                    <div class="flex items-center gap-3">
+                        <input type="text" x-model="tipoForm.nombre" required placeholder="Nombre del nuevo tipo (ej: Notebook)"
+                            class="flex-1 px-4 py-2.5 bg-white border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all">
+                        <button type="submit"
+                            class="px-5 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition-all shadow-sm whitespace-nowrap">
+                            <i data-lucide="plus" class="w-4 h-4 inline-block -mt-0.5 mr-1"></i> Agregar
+                        </button>
+                    </div>
+                    <label class="flex items-center space-x-2 text-sm text-dark-700 cursor-pointer">
+                        <input type="checkbox" x-model="tipoForm.requiere_especificaciones" class="rounded text-primary-600 focus:ring-primary-500 bg-white border-dark-300">
+                        <span>Requiere Especificaciones Técnicas (RAM, Procesador, Discos)</span>
+                    </label>
+                </form>
+
+                <!-- Lista de tipos existentes -->
+                <div class="space-y-2">
+                    <template x-for="tipo in tipos_activos" :key="tipo.id">
+                        <div class="flex items-center justify-between px-4 py-3 bg-white border border-dark-200 rounded-xl hover:border-red-200 transition-all group">
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-bold text-dark-800" x-text="tipo.nombre"></span>
+                                <span x-show="tipo.requiere_especificaciones" class="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 font-semibold rounded uppercase tracking-wider">Con Specs</span>
+                            </div>
+                            <button @click="eliminarTipo(tipo.id)"
+                                class="p-1.5 text-dark-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                title="Eliminar tipo">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+
+                    <template x-if="tipos_activos.length === 0">
+                        <div class="text-center py-8 bg-dark-50 rounded-xl border border-dashed border-dark-200">
+                            <p class="text-sm text-dark-500">No hay tipos registrados.</p>
+                            <button @click="seedTiposBasicos()" class="mt-3 text-xs px-4 py-1.5 bg-primary-50 text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors font-medium">
+                                Cargar tipos básicos
+                            </button>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gestión de Marcas (ABM) -->
+    <div x-show="showMarcasModal" x-cloak class="fixed inset-0 z-[70] flex items-center justify-center p-4 overflow-y-auto">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showMarcasModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        
+        <div class="bg-white rounded-2xl shadow-2xl z-20 max-w-2xl w-full flex flex-col max-h-[90vh]"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            
+            <div class="p-6 border-b border-dark-100 flex items-center justify-between sticky top-0 bg-white rounded-t-2xl z-30">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center mr-3">
+                        <i data-lucide="tag" class="w-5 h-5 text-primary-600"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-dark-900">Gestionar Marcas</h3>
+                </div>
+                <button type="button" @click="showMarcasModal = false" @keydown.escape.window="showMarcasModal = false"
+                    class="p-2 rounded-lg hover:bg-dark-50 text-dark-400 hover:text-dark-600 transition-colors">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="p-6 space-y-5 overflow-y-auto">
+                <!-- Success Message -->
+                <div x-show="successMessage" x-cloak 
+                     x-transition:enter="transition ease-out duration-200"
+                     x-transition:enter-start="opacity-0 translate-y-1"
+                     x-transition:enter-end="opacity-100 translate-y-0"
+                     class="p-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-sm flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <i data-lucide="check-circle" class="w-4 h-4"></i>
+                        <span x-text="successMessage"></span>
+                    </div>
+                    <button @click="successMessage = ''" class="text-emerald-600 hover:text-emerald-800">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                
+                <!-- Error -->
+                <div x-show="marcaError" x-cloak class="p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 text-sm" x-text="marcaError"></div>
+                
+                <!-- Sugerencia de marca similar -->
+                <div x-show="marcaSimilar" x-cloak class="p-4 rounded-xl bg-amber-50 text-amber-800 border border-amber-200 text-sm">
+                    <div class="flex items-start space-x-2">
+                        <i data-lucide="alert-circle" class="w-4 h-4 mt-0.5 flex-shrink-0"></i>
+                        <div>
+                            <p class="font-semibold">Marca similar encontrada</p>
+                            <p class="text-xs mt-1">Ya existe la marca "<span class="font-bold" x-text="marcaSimilar"></span>". ¿Es la que buscás?</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Agregar nueva marca -->
+                <form @submit.prevent="guardarMarca()" class="flex items-center gap-3 bg-dark-50 p-4 rounded-xl border border-dark-100">
+                    <input type="text" 
+                        x-model="marcaForm.nombre" 
+                        @input.debounce.300ms="verificarMarcaSimilar()"
+                        required 
+                        placeholder="Nombre de la marca (ej: Dell, HP, Lenovo)"
+                        class="flex-1 px-4 py-2.5 bg-white border border-dark-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all">
+                    <button type="submit"
+                        class="px-5 py-2.5 bg-primary-600 text-white rounded-xl text-sm font-semibold hover:bg-primary-700 transition-all shadow-sm whitespace-nowrap">
+                        <i data-lucide="plus" class="w-4 h-4 inline-block -mt-0.5 mr-1"></i> Agregar
+                    </button>
+                </form>
+
+                <!-- Lista de marcas existentes -->
+                <div class="space-y-2">
+                    <template x-for="marca in marcas_lista" :key="marca.id">
+                        <div class="flex items-center justify-between px-4 py-3 bg-white border border-dark-200 rounded-xl hover:border-red-200 transition-all group">
+                            <span class="text-sm font-bold text-dark-800" x-text="marca.nombre"></span>
+                            <button @click="eliminarMarca(marca.id, marca.nombre)"
+                                class="p-1.5 text-dark-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                title="Eliminar marca">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </template>
+
+                    <template x-if="marcas_lista.length === 0">
+                        <div class="text-center py-8 bg-dark-50 rounded-xl border border-dashed border-dark-200">
+                            <p class="text-sm text-dark-500 mb-2">No hay marcas registradas.</p>
+                            {% if user and user.rol == 'admin' %}
+                            <button @click="ejecutarSeedMarcas()" 
+                                class="mt-3 text-xs px-4 py-1.5 bg-primary-50 text-primary-600 border border-primary-200 rounded-lg hover:bg-primary-100 transition-colors font-medium">
+                                🏷️ Cargar marcas predeterminadas
+                            </button>
+                            {% else %}
+                            <p class="text-xs text-dark-400 mt-2">Contactá al administrador para cargar las marcas iniciales.</p>
+                            {% endif %}
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmar Eliminar Tipo -->
+    <div x-show="showDeleteTipoModal" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteTipoModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        <div class="bg-white rounded-2xl shadow-soft z-10 max-w-md w-full p-6"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar tipo?</h3>
+                <p class="text-dark-500">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteTipoModal = false"
+                    class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+                <button @click="confirmarEliminarTipo()"
+                    class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmar Eliminar Marca -->
+    <div x-show="showDeleteMarcaModal" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showDeleteMarcaModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        <div class="bg-white rounded-2xl shadow-soft z-10 max-w-md w-full p-6"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="alert-triangle" class="w-8 h-8 text-red-500"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Eliminar marca?</h3>
+                <p class="text-dark-500">¿Estás seguro de eliminar la marca <span class="font-semibold text-dark-700" x-text="deleteMarcaNombre"></span>?</p>
+                <p class="text-dark-400 text-sm mt-1">Esta acción no se puede deshacer.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showDeleteMarcaModal = false"
+                    class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+                <button @click="confirmarEliminarMarca()"
+                    class="flex-1 px-5 py-2.5 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors font-medium">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmar Seed Marcas -->
+    <div x-show="showSeedMarcasModal" x-cloak class="fixed inset-0 z-[80] flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-sm" @click="showSeedMarcasModal = false"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0"
+            x-transition:enter-end="opacity-100"></div>
+        <div class="bg-white rounded-2xl shadow-soft z-10 max-w-md w-full p-6"
+            x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 scale-95"
+            x-transition:enter-end="opacity-100 scale-100">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-primary-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="tag" class="w-8 h-8 text-primary-600"></i>
+                </div>
+                <h3 class="text-xl font-bold text-dark-900 mb-2">¿Cargar marcas predeterminadas?</h3>
+                <p class="text-dark-500">Se cargarán 57 marcas de laptops, celulares y servidores.</p>
+            </div>
+            <div class="flex space-x-3">
+                <button @click="showSeedMarcasModal = false"
+                    class="flex-1 px-5 py-2.5 border border-dark-200 text-dark-700 rounded-xl hover:bg-dark-50 transition-colors font-medium">Cancelar</button>
+                <button @click="confirmarSeedMarcas()"
+                    class="flex-1 px-5 py-2.5 bg-primary-600 text-white rounded-xl hover:bg-primary-700 transition-colors font-medium">Sí, cargar</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script id="notebooks-data"
+    type="application/json">{{ (notebooks_lista | tojson) if notebooks_lista else '[]' }}</script>
+
+<script>
+    function stockManager() {
+        return {
+            showModal: false,
+            showDeleteModal: false,
+            showTiposModal: false,
+            showMarcasModal: false,
+            showDeleteTipoModal: false,
+            showDeleteMarcaModal: false,
+            showSeedMarcasModal: false,
+            deleteTipoId: null,
+            deleteMarcaId: null,
+            deleteMarcaNombre: '',
+            successMessage: '',
+            usuarios_lista: [],
+            notebooks_lista: [],
+            tipos_activos: [],
+            marcas_lista: [],
+            marcas_busqueda: [],
+            searchNotebook: '',
+            searchEmpleadoQuery: '',
+            searchMarcaQuery: '',
+            dropdownNbOpen: false,
+            openSearchEmpleados: false,
+            openSearchMarcas: false,
+            empleados_lista: [],
+            isLoadingEmpleados: false,
+            isLoadingMarcas: false,
+            tipoForm: { id: null, nombre: '', clave: '', requiere_especificaciones: false, activo: true },
+            marcaForm: { id: null, nombre: '' },
+            editTipoMode: false,
+            tipoError: '',
+            marcaError: '',
+            marcaSimilar: '',
+
+            get filteredNotebooks() {
+                // El filtrado ahora se hace en el backend via /api/v1/soporte/activos/buscar
+                // Este getter solo devuelve la lista cargada (ya filtrada por el backend)
+                return this.notebooks_lista;
+            },
+            
+            async buscarNotebooks() {
+                const term = this.searchNotebook.trim();
+                if (term.length < 2) {
+                    this.notebooks_lista = [];
+                    return;
+                }
+                
+                try {
+                    const res = await fetch(`/api/v1/soporte/activos/buscar?q=${encodeURIComponent(term)}&tipo=notebook`);
+                    if (res.ok) {
+                        this.notebooks_lista = await res.json();
+                    } else {
+                        this.notebooks_lista = [];
+                    }
+                } catch (e) {
+                    this.notebooks_lista = [];
+                }
+            },
+            
+            get filteredEmpleados() {
+                return this.empleados_lista;
+            },
+            
+            async buscarEmpleados() {
+                const query = this.searchEmpleadoQuery.trim();
+                // El backend valida longitud mínima, solo enviamos la query
+                if (query.length < 2) {
+                    this.empleados_lista = [];
+                    this.openSearchEmpleados = false;
+                    return;
+                }
+                
+                this.isLoadingEmpleados = true;
+                this.openSearchEmpleados = true;
+                try {
+                    const res = await fetch(`/soporte/buscar-empleado?q=${encodeURIComponent(query)}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        // v28.0 backend returns {items: [...]}
+                        this.empleados_lista = data.items || data;
+                    } else {
+                        this.empleados_lista = [];
+                    }
+                } catch (e) {
+                    this.empleados_lista = [];
+                } finally {
+                    this.isLoadingEmpleados = false;
+                }
+            },
+            
+            selectEmpleado(emp) {
+                this.form.asignado_id = emp.id;
+                this.form.asignado_a = emp.nombre;
+                this.searchEmpleadoQuery = emp.nombre;
+                this.openSearchEmpleados = false;
+                this.empleados_lista = [];
+            },
+
+            async buscarMarcas() {
+                const query = this.searchMarcaQuery.trim();
+                if (query.length < 1) {
+                    this.marcas_busqueda = [];
+                    this.openSearchMarcas = false;
+                    return;
+                }
+                
+                this.isLoadingMarcas = true;
+                this.openSearchMarcas = true;
+                try {
+                    const res = await fetch(`/api/v1/soporte/marcas/buscar?q=${encodeURIComponent(query)}`);
+                    if (res.ok) {
+                        this.marcas_busqueda = await res.json();
+                    } else {
+                        this.marcas_busqueda = [];
+                    }
+                } catch (e) {
+                    this.marcas_busqueda = [];
+                } finally {
+                    this.isLoadingMarcas = false;
+                }
+            },
+            
+            selectMarca(marca) {
+                this.form.marca_id = marca.id;
+                this.form.marca = marca.nombre;
+                this.searchMarcaQuery = marca.nombre;
+                this.openSearchMarcas = false;
+                this.marcas_busqueda = [];
+            },
+
+            selectNotebook(nombre) {
+                this.form.asignado_a = nombre;
+                this.dropdownNbOpen = false;
+                this.searchNotebook = '';
+            },
+
+            editMode: false,
+            editId: null,
+            deleteId: null,
+            deleteName: '',
+            form: {
+                nombre: '',
+                tipo_id: '',
+                marca_id: '',
+                marca: '', 
+                modelo: '', 
+                numero_serie: '', 
+                numero_inventario: '', 
+                procesador: '', 
+                memoria: '', 
+                disco_principal: '', 
+                disco_secundario: '',
+                estado: 'disponible', 
+                asignado_id: '', 
+                asignado_a: '', 
+                notas: '', 
+                cantidad: 1
+            },
+
+            async init() {
+                try {
+                    const el = document.getElementById('notebooks-data');
+                    if (el) this.notebooks_lista = JSON.parse(el.textContent || '[]');
+                } catch (e) {
+                }
+                await this.cargarTiposActivo();
+            },
+
+            async cargarTiposActivo() {
+                try {
+                    const res = await fetch('/api/v1/soporte/tipos-activos?activos_solo=true&por_pagina=100');
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.tipos_activos = data.items || [];
+                        this.$nextTick(() => lucide.createIcons());
+                    }
+                } catch (e) {
+                    console.error('Error cargando tipos:', e);
+                }
+            },
+
+
+            openCreateModal() {
+                this.editMode = false;
+                this.editId = null;
+                this.searchEmpleadoQuery = '';
+                this.searchMarcaQuery = '';
+                this.form = {
+                    nombre: '',
+                    tipo_id: '',
+                    marca_id: '',
+                    marca: '', 
+                    modelo: '', 
+                    numero_serie: '', 
+                    numero_inventario: '', 
+                    procesador: '', 
+                    memoria: '', 
+                    disco_principal: '', 
+                    disco_secundario: '',
+                    estado: 'disponible', 
+                    asignado_id: '', 
+                    asignado_a: '', 
+                    notas: '', 
+                    cantidad: 1
+                };
+                this.showModal = true;
+                this.cargarEmpleadosSiEsNecesario();
+                this.$nextTick(() => lucide.createIcons());
+            },
+
+            openEditModal(item) {
+                this.editMode = true;
+                this.editId = item.id;
+                // Copiar item y asegurar que los campos de asignación estén correctos
+                this.form = { 
+                    ...item,
+                    tipo_id: item.tipo_rel?.id || item.tipo_id || '',
+                    marca_id: item.marca_rel?.id || item.marca_id || '',
+                    marca: item.marca_rel?.nombre || item.marca || '',
+                    modelo: item.modelo || '',
+                    numero_serie: item.numero_serie || '',
+                    numero_inventario: item.numero_inventario || '',
+                    procesador: item.procesador || '',
+                    memoria: item.memoria || '',
+                    disco_principal: item.disco_principal || '',
+                    disco_secundario: item.disco_secundario || '',
+                    mac_ethernet: item.mac_ethernet || '',
+                    mac_wifi: item.mac_wifi || '',
+                    estado: item.estado || 'disponible',
+                    asignado_id: item.asignado_id || '',
+                    asignado_a: item.asignado_a || item.asignado_nombre || '',
+                    notas: item.notas || ''
+                };
+                // Inicializar el campo de búsqueda con el nombre del empleado asignado
+                this.searchEmpleadoQuery = this.form.asignado_a;
+                this.searchMarcaQuery = this.form.marca;
+                this.showModal = true;
+                this.cargarEmpleadosSiEsNecesario();
+                this.$nextTick(() => lucide.createIcons());
+            },
+
+            async cargarEmpleadosSiEsNecesario() {
+                if (!window.empleados_lista || window.empleados_lista.length === 0) {
+                    try {
+                        const res = await fetch('/soporte/empleados-lista');
+                        if (res.ok) {
+                            const data = await res.json();
+                            this.usuarios_lista = data.empleados || [];
+                            window.empleados_lista = data.empleados || [];
+                        }
+                    } catch (e) {
+                    }
+                }
+            },
+
+            openDeleteModal(id, name) {
+                this.deleteId = id;
+                this.deleteName = name;
+                this.showDeleteModal = true;
+                this.$nextTick(() => lucide.createIcons());
+            },
+
+            openTiposModal() {
+                this.showTiposModal = true;
+                this.resetTipoForm();
+                this.$nextTick(() => lucide.createIcons());
+            },
+
+            openMarcasModal() {
+                this.showMarcasModal = true;
+                this.resetMarcaForm();
+                this.cargarMarcas();
+                this.$nextTick(() => lucide.createIcons());
+            },
+
+            resetTipoForm() {
+                this.tipoForm = { id: null, nombre: '', clave: '', requiere_especificaciones: false, activo: true };
+                this.editTipoMode = false;
+                this.tipoError = '';
+            },
+
+            resetMarcaForm() {
+                this.marcaForm = { id: null, nombre: '' };
+                this.marcaError = '';
+                this.marcaSimilar = '';
+            },
+
+            async verificarMarcaSimilar() {
+                const nombre = this.marcaForm.nombre.trim();
+                if (nombre.length < 2) {
+                    this.marcaSimilar = '';
+                    return;
+                }
+                
+                // Buscar marcas similares (case-insensitive)
+                const nombreLower = nombre.toLowerCase();
+                const similar = this.marcas_lista.find(m => 
+                    m.nombre.toLowerCase() === nombreLower ||
+                    m.nombre.toLowerCase().includes(nombreLower) ||
+                    nombreLower.includes(m.nombre.toLowerCase())
+                );
+                
+                this.marcaSimilar = similar ? similar.nombre : '';
+            },
+
+            async guardarTipo() {
+                const nombre = this.tipoForm.nombre.trim();
+                if (!nombre) return;
+
+                // El backend genera la clave automáticamente
+                try {
+                    const res = await fetch('/api/v1/soporte/tipos-activos', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            nombre, 
+                            requiere_especificaciones: this.tipoForm.requiere_especificaciones,
+                            activo: true 
+                        })
+                    });
+
+                    if (res.ok) {
+                        await this.cargarTiposActivo();
+                        this.tipoForm.nombre = '';
+                        this.tipoForm.requiere_especificaciones = false;
+                        this.tipoError = '';
+                    } else {
+                        const err = await res.json();
+                        this.tipoError = err.detail || 'No se pudo agregar el tipo';
+                    }
+                } catch (e) {
+                    console.error('Error guardando tipo:', e);
+                }
+            },
+
+            async eliminarTipo(id) {
+                this.deleteTipoId = id;
+                this.showDeleteTipoModal = true;
+            },
+
+            async confirmarEliminarTipo() {
+                if (!this.deleteTipoId) return;
+                try {
+                    const res = await fetch(`/api/v1/soporte/tipos-activos/${this.deleteTipoId}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        await this.cargarTiposActivo();
+                        this.successMessage = 'Tipo eliminado correctamente';
+                        setTimeout(() => { this.successMessage = ''; }, 3000);
+                    }
+                } catch (e) {
+                    console.error('Error eliminando tipo:', e);
+                } finally {
+                    this.showDeleteTipoModal = false;
+                    this.deleteTipoId = null;
+                }
+            },
+
+            async seedTiposBasicos() {
+                const basicos = [
+                    { nombre: 'Notebook', clave: 'notebook', requiere_especificaciones: true },
+                    { nombre: 'Desktop', clave: 'desktop', requiere_especificaciones: true },
+                    { nombre: 'Servidor', clave: 'servidor', requiere_especificaciones: true },
+                    { nombre: 'Monitor', clave: 'monitor', requiere_especificaciones: false },
+                    { nombre: 'Smartphone', clave: 'phone', requiere_especificaciones: false },
+                    { nombre: 'Periférico', clave: 'periferico', requiere_especificaciones: false }
+                ];
+
+                for (const t of basicos) {
+                    try {
+                        await fetch('/api/v1/soporte/tipos-activos', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(t)
+                        });
+                    } catch (e) {}
+                }
+                await this.cargarTiposActivo();
+            },
+
+            async cargarMarcas() {
+                try {
+                    const res = await fetch('/api/v1/soporte/marcas');
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.marcas_lista = data.items || [];
+                        this.$nextTick(() => lucide.createIcons());
+                    }
+                } catch (e) {
+                    console.error('Error cargando marcas:', e);
+                }
+            },
+
+            async guardarMarca() {
+                const nombre = this.marcaForm.nombre.trim();
+                if (!nombre) return;
+
+                // Capitalizar primera letra de cada palabra antes de enviar
+                const nombreCapitalizado = nombre.split(' ').map(word => 
+                    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join(' ');
+
+                try {
+                    const res = await fetch('/api/v1/soporte/marcas', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nombre: nombreCapitalizado })
+                    });
+
+                    if (res.ok) {
+                        await this.cargarMarcas();
+                        this.marcaForm.nombre = '';
+                        this.marcaError = '';
+                    } else {
+                        const err = await res.json();
+                        this.marcaError = err.detail || 'No se pudo agregar la marca';
+                    }
+                } catch (e) {
+                    console.error('Error guardando marca:', e);
+                    this.marcaError = 'Error al guardar la marca';
+                }
+            },
+
+            async eliminarMarca(id, nombre) {
+                this.deleteMarcaId = id;
+                this.deleteMarcaNombre = nombre;
+                this.showDeleteMarcaModal = true;
+            },
+
+            async confirmarEliminarMarca() {
+                if (!this.deleteMarcaId) return;
+                try {
+                    const res = await fetch(`/api/v1/soporte/marcas/${this.deleteMarcaId}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        await this.cargarMarcas();
+                        this.marcaError = '';
+                        this.successMessage = 'Marca eliminada correctamente';
+                        setTimeout(() => { this.successMessage = ''; }, 3000);
+                    } else {
+                        const err = await res.json();
+                        this.marcaError = err.detail || 'No se pudo eliminar la marca';
+                    }
+                } catch (e) {
+                    console.error('Error eliminando marca:', e);
+                    this.marcaError = 'Error al eliminar la marca';
+                } finally {
+                    this.showDeleteMarcaModal = false;
+                    this.deleteMarcaId = null;
+                    this.deleteMarcaNombre = '';
+                }
+            },
+
+            async ejecutarSeedMarcas() {
+                this.showSeedMarcasModal = true;
+            },
+
+            async confirmarSeedMarcas() {
+                this.marcaError = '';
+                this.showSeedMarcasModal = false;
+                
+                try {
+                    const res = await fetch('/api/v1/soporte/marcas/seed', { method: 'POST' });
+                    if (res.ok) {
+                        const data = await res.json();
+                        await this.cargarMarcas();
+                        this.successMessage = data.message || 'Marcas cargadas exitosamente';
+                        setTimeout(() => { this.successMessage = ''; }, 4000);
+                    } else {
+                        const err = await res.json();
+                        this.marcaError = err.detail || 'No se pudo ejecutar el seed';
+                    }
+                } catch (e) {
+                    console.error('Error ejecutando seed:', e);
+                    this.marcaError = 'Error al ejecutar el seed de marcas';
+                }
+            }
+        }
+    }
+</script>
+{% endblock %}

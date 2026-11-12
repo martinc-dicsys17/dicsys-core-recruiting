@@ -1,0 +1,102 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ 'Editar' if oficina else 'Agregar' }} oficina - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+{# Alta y edición de una oficina en su propia página, como el domicilio en Clientes. #}
+<script type="application/json" id="oficina-datos">{{ (oficina or {})|tojson }}</script>
+<div class="max-w-3xl mx-auto animate-fade-in"
+     x-data="formularioOficina({url: '{{ url_for('administracion.proveedores_api', ruta=item.id ~ '/oficinas') }}', volver: '{{ volver }}'})">
+    <div class="flex items-center mb-6">
+        <a href="{{ volver }}" class="p-2 rounded-xl hover:bg-dark-100 mr-3 text-dark-500" aria-label="Volver a las oficinas">
+            <i data-lucide="arrow-left" class="w-5 h-5"></i>
+        </a>
+        <div>
+            <h1 class="text-2xl font-bold text-dark-900">{{ 'Editar oficina' if oficina else 'Agregar oficina' }}</h1>
+            <p class="text-dark-500 text-sm">{{ item.nombre }}</p>
+        </div>
+    </div>
+
+    <div x-show="error" x-cloak class="p-4 mb-6 rounded-xl bg-red-50 text-red-800 border border-red-200" x-text="error"></div>
+
+    <form @submit.prevent="guardar()" class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+        <div class="px-6 py-4 border-b border-dark-100 bg-dark-50">
+            <h2 class="text-lg font-semibold text-dark-900 flex items-center"><i data-lucide="map-pin" class="w-5 h-5 mr-2 text-primary-500"></i>Domicilio</h2>
+        </div>
+        <div class="p-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <label class="block md:col-span-2"><span class="block text-sm font-medium text-dark-700 mb-1">Nombre de la oficina</span>
+                <input x-model="datos.nombre_oficina" placeholder="Casa central, Sucursal Córdoba…" maxlength="100" class="campo"></label>
+            <label class="block md:col-span-2"><span class="block text-sm font-medium text-dark-700 mb-1">Calle <span class="text-red-500">*</span></span>
+                <input x-model="datos.calle" required maxlength="200" class="campo"></label>
+            <label class="block"><span class="block text-sm font-medium text-dark-700 mb-1">Número</span><input x-model="datos.numero" maxlength="20" class="campo"></label>
+            <label class="block"><span class="block text-sm font-medium text-dark-700 mb-1">Piso</span><input x-model="datos.piso" maxlength="20" class="campo"></label>
+            <label class="block"><span class="block text-sm font-medium text-dark-700 mb-1">Depto</span><input x-model="datos.departamento" maxlength="20" class="campo"></label>
+            <label class="block"><span class="block text-sm font-medium text-dark-700 mb-1">Código postal</span><input x-model="datos.codigo_postal" maxlength="10" class="campo"></label>
+            <label class="block md:col-span-2"><span class="block text-sm font-medium text-dark-700 mb-1">Localidad <span class="text-red-500">*</span></span>
+                <input x-model="datos.localidad" required maxlength="100" class="campo"></label>
+            <label class="block"><span class="block text-sm font-medium text-dark-700 mb-1">Provincia</span><input x-model="datos.provincia" maxlength="100" class="campo"></label>
+            <label class="block"><span class="block text-sm font-medium text-dark-700 mb-1">País</span><input x-model="datos.pais" maxlength="100" class="campo"></label>
+            <label class="flex items-center gap-2 text-sm text-dark-700 md:col-span-4">
+                <input type="checkbox" x-model="datos.es_legal" class="w-4 h-4 rounded border-dark-300 text-primary-600"> Domicilio legal (uno por proveedor: marcarlo acá se lo quita a la otra oficina)
+            </label>
+        </div>
+        <div class="px-6 py-4 border-t border-dark-100 flex items-center justify-between">
+            <a href="{{ volver }}" class="text-dark-500 hover:text-dark-700 font-medium">Cancelar</a>
+            <button type="submit" :disabled="guardando"
+                    class="px-6 py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-xl hover:from-primary-600 hover:to-primary-700 shadow-soft font-semibold flex items-center disabled:opacity-50">
+                <i data-lucide="check" class="w-4 h-4 mr-2"></i><span x-text="guardando ? 'Guardando…' : 'Guardar oficina'"></span>
+            </button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .campo { width: 100%; padding: .625rem .75rem; background: rgb(248 250 252); border: 1px solid rgb(226 232 240); border-radius: .75rem; }
+    .campo:focus { outline: none; background: #fff; box-shadow: 0 0 0 2px rgb(99 102 241 / .35); }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Mensaje de error de la API: texto, o la lista de errores de validación
+function detalleError(cuerpo, porDefecto) {
+    const d = cuerpo && cuerpo.detail;
+    if (Array.isArray(d)) return d.map(e => e.msg || String(e)).join(' · ');
+    return d || porDefecto;
+}
+
+function formularioOficina({url, volver}) {
+    const CAMPOS = ['nombre_oficina', 'calle', 'numero', 'piso', 'departamento', 'localidad', 'provincia', 'pais', 'codigo_postal'];
+    let oficina = {};
+    try { oficina = JSON.parse(document.getElementById('oficina-datos')?.textContent || '{}') || {}; } catch (e) { oficina = {}; }
+    const datos = Object.fromEntries(CAMPOS.map(c => [c, oficina[c] ?? '']));
+    datos.pais = datos.pais || 'Argentina';
+    datos.es_legal = Boolean(oficina.es_legal);
+    return {
+        id: oficina.id || null,
+        datos,
+        guardando: false,
+        error: null,
+
+        async guardar() {
+            this.error = null;
+            this.guardando = true;
+            try {
+                const r = await fetch(this.id ? `${url}/${this.id}` : url, {
+                    method: this.id ? 'PUT' : 'POST',
+                    headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
+                    body: JSON.stringify(this.datos),
+                });
+                const cuerpo = await r.json().catch(() => ({}));
+                if (!r.ok) throw new Error(detalleError(cuerpo, 'No se pudo guardar la oficina'));
+                window.location.href = `${volver}&ok=oficina`;
+            } catch (e) {
+                this.error = e.message;
+                this.guardando = false;
+                window.scrollTo({top: 0, behavior: 'smooth'});
+            }
+        },
+    };
+}
+</script>
+{% endblock %}
