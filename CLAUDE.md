@@ -29,43 +29,19 @@
   `backend/tests/integration/test_migraciones.py` prueba la cadena.
 - Runbook (release, expand/contract, adopción de bases de antes de Alembic, vuelta atrás): `docs/Migraciones.md`.
 
-## QA: cada cambio inyecta sus tests en la tool de QA
+## Validación de los cambios
 
-Regla del proyecto (decisión D-26 en `director`):
-
-- **Todo cambio** (pendiente de construcción, fix, refactor, migración) **inyecta sus casos de prueba en la
-  tool de QA**, el repo `innovacion-qa-engine`. No se da por terminado sin esos casos, la matriz regenerada y
-  una corrida verde.
-- **QA cubre solo lo que cambiamos**: los casos son para las operaciones de API y las rutas que el cambio
-  toca. No hay meta de cobertura global ni backlog por módulo; lo que nadie toca entra a QA el día que un
-  cambio lo toque.
-- Los casos de QA **no se escriben en este repo**. `backend/tests` y `frontend/tests` son los tests propios de
-  los devs (unitarios e integración) y siguen acá; no reemplazan a los casos de QA.
-- Al cerrar el pendiente en `director`, el as-built lleva los ids de los casos (`BE-...`, `FE-...`) y la
-  evidencia, la corrida de `qa run`.
-
-## QA engine (`innovacion-qa-engine`)
-
-- Dónde: `D:/Repos/innovacion-qa-engine`, clonado al lado de este repo. Encuentra la app con `QA_APP_ROOT`
-  o, sin la variable, en la carpeta hermana `ops-sistema-gestion`, y prueba la rama que esté en ese checkout.
-- Qué tiene: casos en caja negra (`backend/<modulo>/` con pytest + httpx, `frontend/<modulo>/` con
-  Playwright), CLI `qa` (motor único en local, en la consola y en CI), consola web en `:7000`, MCP `qa`,
-  seed determinista y stack de QA (frontend 8090, backend 6011, postgres 6010) armado con las imágenes de
-  producción de esta app.
-- Cómo se inyecta un caso: desde ese repo, con la skill `qa-casos` (vive ahí) o directamente:
-
-  ```bash
-  qa impacto --desde main                             # qué operaciones y rutas toca el cambio y qué casos las cubren
-  qa caso faltantes --desde main                      # las tocadas sin caso: cada una necesita uno
-  qa caso nuevo --lado BE --modulo <modulo> --titulo "..." --endpoint "POST /api/v1/..." --origen <pendiente> --autor "<quién>"
-  qa run --suite all --seed --gate                    # corrida completa contra esta app
-  ```
-
-  Nunca a mano: `qa caso nuevo` acuña el id, escribe el caso y su esqueleto y valida contra el inventario.
-- Lo que toca un cambio lo dice `qa impacto`, no el criterio de quien cierra: `qa impacto --desde main --gate`
-  en verde es condición para cerrar el pendiente.
-- El gate de la matriz falla si aparece una operación o ruta nueva sin caso o si alguna deja de estar
-  cubierta. La corrida además falla por señales de la app (5xx, tracebacks, errores de JS) y por fallas nuevas
-  del recorrido del frontend o del contrato de la API; los bugs que encuentra se registran como pendientes
-  globales (PG-NN) antes de permitirlos en la política de QA.
-- Los comandos `director ...` se corren en este repo; los `qa ...`, en el de QA.
+- **Todo cambio** (pendiente de construcción, fix, refactor, migración) **se valida con las pruebas propias del
+  proyecto**; no se da por terminado sin una corrida verde de lo que toca:
+  - Tests unitarios y de integración de backend (`backend/tests`).
+  - Tests de frontend (`frontend/tests`).
+  - Playwright E2E cuando el cambio afecta un recorrido de pantalla.
+  - Verificación funcional en Docker, con el stack del compose.
+- **Se prueba lo que cambiamos**: los tests nuevos cubren las operaciones de API y las rutas que el cambio toca. No hay
+  meta de cobertura global ni backlog por módulo; lo que nadie toca se prueba el día que un cambio lo toque.
+- Los tests se escriben en este repo, junto al código. Las pruebas no modifican datos reales: los tests usan su base
+  propia (compose de tests) y las verificaciones en Docker no crean ni borran datos de la base habitual sin
+  autorización.
+- Al cerrar el pendiente en `director`, el as-built lleva la evidencia: los tests agregados y el resultado de las
+  corridas.
+- Los comandos `director ...` se corren en este repo.
