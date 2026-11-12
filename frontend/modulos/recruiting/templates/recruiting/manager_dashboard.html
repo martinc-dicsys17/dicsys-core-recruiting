@@ -1,0 +1,640 @@
+{% extends "core/base.html" %}
+
+{% block title %}Manager Dashboard - Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{#
+  Manager Dashboard (migrado del módulo original, solo administradores). Los datos salen de
+  GET /api/v1/recruiting/manager-dashboard a través del proxy de esta pantalla. Los nombres de candidatos y búsquedas
+  eran enlaces a Candidatos y Búsquedas: hasta que esas pantallas se migren se muestran como texto.
+#}
+
+{% block content %}
+<div class="animate-fade-in" data-testid="recruiting-manager-dashboard" x-data="managerDashboard()" x-init="iniciar()">
+
+    <!-- Encabezado -->
+    <div class="mb-6 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+        <div>
+            <h1 class="text-3xl font-bold text-dark-900">Manager Dashboard</h1>
+            <p class="text-dark-500 text-[15px] mt-1">Desempeño de usuarios externos. Todas las métricas se calculan sobre la fecha de presentación del candidato.</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-white rounded-2xl border border-dark-100 p-5 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
+            <div>
+                <label class="block text-sm font-semibold text-dark-500 mb-1">Desde (fecha de presentación)</label>
+                <input type="date" x-model="filtros.fecha_desde" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-dark-500 mb-1">Hasta</label>
+                <input type="date" x-model="filtros.fecha_hasta" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]">
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-dark-500 mb-1">Tipo de proveedor</label>
+                <select disabled title="El sistema no registra si un usuario externo es Freelance o Consultora" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px] bg-dark-50 text-dark-400 cursor-not-allowed">
+                    <option>Todos</option>
+                </select>
+                <p class="text-xs text-dark-400 mt-1 leading-tight">No disponible: el sistema aún no distingue Freelance de Consultora.</p>
+            </div>
+            <div class="relative" @click.outside="abiertoUsuarios = false" @keydown.escape="abiertoUsuarios = false">
+                <label class="block text-sm font-semibold text-dark-500 mb-1">Usuarios externos</label>
+                <button type="button" @click="abiertoUsuarios = !abiertoUsuarios" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px] text-left flex items-center justify-between gap-2 bg-white" :aria-expanded="abiertoUsuarios">
+                    <span class="truncate" x-text="resumenUsuarios()"></span>
+                    <i data-lucide="chevron-down" class="w-4 h-4 text-dark-400 shrink-0"></i>
+                </button>
+                <div x-show="abiertoUsuarios" x-cloak class="absolute z-30 mt-1 w-full min-w-[16rem] max-h-64 overflow-auto bg-white border border-dark-200 rounded-xl shadow-lg p-2">
+                    <p x-show="opciones.usuarios.length === 0" class="text-sm text-dark-500 p-2">No hay usuarios externos.</p>
+                    <template x-for="u in opciones.usuarios" :key="u.id">
+                        <label class="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-dark-50 text-[15px] cursor-pointer">
+                            <input type="checkbox" :value="u.id" x-model="filtros.usuario_ids" class="rounded border-dark-300">
+                            <span class="truncate" x-text="u.nombre"></span>
+                        </label>
+                    </template>
+                    <button type="button" x-show="filtros.usuario_ids.length > 0" @click="filtros.usuario_ids = []" class="mt-1 w-full text-sm text-primary-700 font-medium py-1 hover:underline">Quitar selección</button>
+                </div>
+            </div>
+            <div>
+                <label class="block text-sm font-semibold text-dark-500 mb-1">Búsqueda laboral</label>
+                <select x-model="filtros.oportunidad_id" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]">
+                    <option value="">Todas las búsquedas</option>
+                    <template x-for="b in opciones.busquedas" :key="b.id">
+                        <option :value="b.id" x-text="b.titulo + (b.cliente ? ' - ' + b.cliente : '')"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+        <div class="mt-4 flex flex-wrap items-center gap-3">
+            <button type="button" @click="cargar()" class="px-4 py-2 rounded-xl bg-primary-600 text-white text-[15px] font-semibold hover:bg-primary-700 transition-all">Aplicar filtros</button>
+            <button type="button" @click="limpiar()" class="px-4 py-2 rounded-xl border border-dark-200 text-dark-700 text-[15px] font-medium hover:bg-dark-50 transition-all">Restablecer</button>
+            <button type="button" @click="mostrarUmbrales = !mostrarUmbrales" class="text-[15px] text-primary-700 font-medium inline-flex items-center gap-1" :aria-expanded="mostrarUmbrales">
+                <i data-lucide="sliders-horizontal" class="w-4 h-4"></i> Umbrales de alertas (provisionales)
+            </button>
+        </div>
+        <div x-show="mostrarUmbrales" x-cloak id="umbrales" class="mt-4 pt-4 border-t border-dark-100">
+            <p class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mb-3">Valores provisionales: el sistema no define objetivos propios. Se aplican a las alertas y a la clasificación por volumen y tasa de avance. Cambiá los valores y presioná "Aplicar filtros".</p>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
+                <div><label class="block text-sm font-semibold text-dark-500 mb-1">Alto volumen (desde, en postulaciones)</label><input type="number" min="1" x-model.number="filtros.umbral_volumen" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]"></div>
+                <div><label class="block text-sm font-semibold text-dark-500 mb-1">Tasa de avance baja (menor a, en %)</label><input type="number" min="0" max="100" x-model.number="filtros.umbral_tasa_avance" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]"></div>
+                <div><label class="block text-sm font-semibold text-dark-500 mb-1">Actividad mínima (postulaciones)</label><input type="number" min="1" x-model.number="filtros.umbral_actividad" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]"></div>
+                <div><label class="block text-sm font-semibold text-dark-500 mb-1">Días sin movimiento</label><input type="number" min="1" x-model.number="filtros.dias_estancado" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]"></div>
+                <div><label class="block text-sm font-semibold text-dark-500 mb-1">Demora de revisión (días)</label><input type="number" min="0" step="0.5" x-model.number="filtros.umbral_demora_dias" class="w-full px-3 py-2 rounded-xl border border-dark-200 text-[15px]"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estados de carga y error -->
+    <div x-show="cargando" x-cloak class="flex items-center gap-2 text-[15px] text-dark-500 mb-4"><i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Cargando indicadores...</div>
+    <div x-show="error && !cargando" x-cloak role="alert" class="p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <span><span x-text="error"></span><span x-show="data"> Se muestran los últimos datos cargados correctamente.</span></span>
+        <button type="button" @click="cargar()" class="text-[15px] font-semibold underline whitespace-nowrap">Reintentar</button>
+    </div>
+
+    <template x-if="data">
+    <div :class="cargando ? 'opacity-60 pointer-events-none' : ''">
+
+        <!-- Sin datos -->
+        <div x-show="data.resumen.postulaciones === 0" class="p-4 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 mb-6 text-[15px]">
+            No hay candidatos presentados por usuarios externos con los filtros seleccionados. Los valores de abajo son ceros reales o "sin datos", no resultados.
+        </div>
+
+        <!-- Tarjetas principales -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-2xl p-5 border border-dark-100">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-600 rounded-xl flex items-center justify-center shadow-soft"><i data-lucide="users" class="w-5 h-5 text-white"></i></div>
+                    <span class="text-sm font-semibold px-2 py-0.5 rounded-md bg-primary-50 text-primary-700 border border-primary-100/60">Presentados</span>
+                </div>
+                <p class="text-4xl font-bold text-dark-900 leading-tight" x-text="data.resumen.candidatos_unicos"></p>
+                <p class="text-dark-600 text-[15px]">Candidatos únicos presentados</p>
+                <p class="text-dark-400 text-sm mt-1"><span x-text="data.resumen.postulaciones"></span> postulaciones a búsquedas</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-dark-100">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="w-10 h-10 bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-soft"><i data-lucide="trending-up" class="w-5 h-5 text-white"></i></div>
+                    <span class="text-sm font-semibold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100/60">Avance</span>
+                </div>
+                <p class="text-4xl font-bold text-dark-900 leading-tight" x-text="pct(data.resumen.tasa_avance)"></p>
+                <p class="text-dark-600 text-[15px]">Tasa de avance</p>
+                <p class="text-dark-400 text-sm mt-1"><span x-text="data.resumen.avanzaron"></span> de <span x-text="data.resumen.postulaciones"></span> postulaciones pasaron de la etapa Candidato</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-dark-100">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="w-10 h-10 bg-gradient-to-br from-purple-600 to-indigo-700 rounded-xl flex items-center justify-center shadow-soft"><i data-lucide="flag" class="w-5 h-5 text-white"></i></div>
+                    <span class="text-sm font-semibold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100/60">Resultados</span>
+                </div>
+                <p class="text-4xl font-bold text-dark-900 leading-tight" x-text="data.resumen.finales"></p>
+                <p class="text-dark-600 text-[15px]">Resultados finales (<span x-text="pct(data.resumen.tasa_finales)"></span>)</p>
+                <p class="text-dark-400 text-sm mt-1">Oferta, examen médico o ingreso. Contratados: <b x-text="data.resumen.contratados"></b> (<span x-text="pct(data.resumen.tasa_contratados)"></span>)</p>
+            </div>
+            <div class="bg-white rounded-2xl p-5 border border-dark-100">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-600 rounded-xl flex items-center justify-center shadow-soft"><i data-lucide="clock" class="w-5 h-5 text-white"></i></div>
+                    <span class="text-sm font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-100/60">Tiempo</span>
+                </div>
+                <p class="text-4xl font-bold text-dark-900 leading-tight" x-text="dias(data.resumen.revision.promedio_dias)"></p>
+                <p class="text-dark-600 text-[15px]">Hasta la primera revisión (promedio)</p>
+                <p class="text-dark-400 text-sm mt-1">Mediana <span x-text="dias(data.resumen.revision.mediana_dias)"></span> · <span x-text="data.resumen.revision.cantidad"></span> postulaciones con fecha válida</p>
+            </div>
+        </div>
+
+        <!-- Alertas de gestión -->
+        <section class="bg-white rounded-2xl border border-dark-100 p-5 mb-6" aria-labelledby="titulo-alertas">
+            <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-3">
+                <div>
+                    <h2 id="titulo-alertas" class="text-xl font-bold text-dark-900">Alertas de gestión <span class="text-[15px] font-medium text-dark-400" x-text="'(' + data.alertas.length + ')'"></span></h2>
+                    <p class="text-sm text-dark-500">Calculadas con umbrales provisionales (volumen ≥ <b x-text="data.umbrales.umbral_volumen"></b>, tasa de avance &lt; <b x-text="data.umbrales.umbral_tasa_avance + '%'"></b>, <b x-text="data.umbrales.dias_estancado"></b> días sin movimiento, demora &gt; <b x-text="data.umbrales.umbral_demora_dias"></b> días). Cada alerta abre el detalle del usuario.</p>
+                </div>
+                <button type="button" @click="editarUmbrales()" class="text-[15px] text-primary-700 font-medium whitespace-nowrap hover:underline">Editar umbrales</button>
+            </div>
+            <p x-show="data.alertas.length === 0" class="text-[15px] text-dark-500">No hay alertas con los umbrales y filtros actuales.</p>
+            <div class="space-y-2">
+                <template x-for="(a, i) in alertasVisibles()" :key="a.tipo + a.usuario_id">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl border"
+                         :class="a.severidad === 'alta' ? 'border-red-200 bg-red-50' : (a.severidad === 'media' ? 'border-amber-200 bg-amber-50' : 'border-dark-200 bg-dark-50')">
+                        <div class="text-[15px] flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span class="text-xs uppercase font-bold px-1.5 py-0.5 rounded"
+                                  :class="a.severidad === 'alta' ? 'bg-red-600 text-white' : (a.severidad === 'media' ? 'bg-amber-500 text-white' : 'bg-dark-400 text-white')" x-text="a.severidad"></span>
+                            <span class="font-semibold text-dark-900" x-text="a.externo"></span>
+                            <span class="text-dark-700" x-text="a.mensaje"></span>
+                        </div>
+                        <button type="button" @click="abrirDetalle(a.usuario_id)" class="text-[15px] font-semibold text-primary-700 hover:underline whitespace-nowrap self-start sm:self-auto">Ver detalle</button>
+                    </div>
+                </template>
+            </div>
+            <button type="button" x-show="data.alertas.length > 5" @click="verTodasAlertas = !verTodasAlertas" class="mt-3 text-[15px] font-semibold text-primary-700 hover:underline"
+                    x-text="verTodasAlertas ? 'Mostrar menos' : 'Ver las ' + data.alertas.length + ' alertas'"></button>
+        </section>
+
+        <!-- Calidad de candidatos -->
+        <section class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6" aria-label="Calidad de candidatos">
+            <div class="bg-white rounded-2xl border border-dark-100 p-5">
+                <h2 class="text-xl font-bold text-dark-900">Embudo del proceso</h2>
+                <p class="text-sm text-dark-500 mb-4">Postulaciones que alcanzaron cada etapa real del pipeline (cantidad y % sobre las presentadas).</p>
+                <template x-for="e in data.resumen.embudo" :key="e.etapa">
+                    <div class="mb-2">
+                        <div class="flex justify-between gap-2 text-sm text-dark-600 mb-0.5"><span x-text="e.etapa"></span><span class="whitespace-nowrap"><b x-text="e.cantidad"></b> (<span x-text="pct(e.porcentaje)"></span>)</span></div>
+                        <div class="h-3 bg-dark-100 rounded-full overflow-hidden"><div class="h-3 bg-primary-500 rounded-full" :style="'width:' + anchoEmbudo(e.cantidad, data.resumen.embudo) + '%'"></div></div>
+                    </div>
+                </template>
+                <h3 class="text-[15px] font-semibold text-dark-800 mt-5 mb-2">Descartes (<span x-text="data.resumen.descartados"></span>)</h3>
+                <p x-show="data.resumen.motivos_descarte.length === 0" class="text-sm text-dark-500" x-text="data.resumen.descartados > 0 ? 'Los descartes no tienen motivo registrado.' : 'No hay descartes.'"></p>
+                <template x-for="m in data.resumen.motivos_descarte" :key="m.motivo">
+                    <div class="flex justify-between gap-2 text-sm py-1 border-b border-dark-100"><span class="text-dark-700" x-text="m.motivo"></span><b x-text="m.cantidad"></b></div>
+                </template>
+            </div>
+            <div class="xl:col-span-2 bg-white rounded-2xl border border-dark-100 p-5">
+                <h2 class="text-xl font-bold text-dark-900">Calidad por usuario externo</h2>
+                <p class="text-sm text-dark-500 mb-3">Porcentaje sobre las postulaciones presentadas y, entre paréntesis, la cantidad. Complementa a la comparativa (volumen y velocidad) con la calidad por etapa y el motivo de descarte. Click en una fila para ver el detalle.</p>
+                <div class="overflow-x-auto">
+                <table class="w-full text-[15px] min-w-[760px]">
+                    <thead><tr class="text-left text-sm text-dark-500 border-b border-dark-100">
+                        <th class="py-2 pr-4 font-semibold">Usuario</th><th class="pr-4 font-semibold">Avanzaron</th><th class="pr-4 font-semibold">Entrevista</th><th class="pr-4 font-semibold">Finales</th><th class="pr-4 font-semibold">Contratados</th><th class="pr-4 font-semibold">Descartados</th><th class="font-semibold">Motivo principal de descarte</th>
+                    </tr></thead>
+                    <tbody>
+                        <template x-for="e in data.externos" :key="e.usuario_id">
+                            <tr class="border-b border-dark-50 hover:bg-dark-50 cursor-pointer" @click="abrirDetalle(e.usuario_id)">
+                                <td class="py-2 pr-4 font-medium text-dark-900" x-text="e.nombre"></td>
+                                <td class="pr-4 whitespace-nowrap"><b x-text="pct(e.tasa_avance)"></b> <span class="text-dark-400 text-sm" x-text="'(' + e.avanzaron + ')'"></span></td>
+                                <td class="pr-4 whitespace-nowrap"><b x-text="pct(e.tasa_entrevista)"></b> <span class="text-dark-400 text-sm" x-text="'(' + e.entrevista + ')'"></span></td>
+                                <td class="pr-4 whitespace-nowrap"><b x-text="pct(e.tasa_finales)"></b> <span class="text-dark-400 text-sm" x-text="'(' + e.finales + ')'"></span></td>
+                                <td class="pr-4 whitespace-nowrap"><b x-text="pct(e.tasa_contratados)"></b> <span class="text-dark-400 text-sm" x-text="'(' + e.contratados + ')'"></span></td>
+                                <td class="pr-4 whitespace-nowrap"><b x-text="pct(e.tasa_descartados)"></b> <span class="text-dark-400 text-sm" x-text="'(' + e.descartados + ')'"></span></td>
+                                <td class="text-dark-600" x-text="motivoPrincipal(e)"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+                </div>
+                <p x-show="data.externos.length === 0" class="text-[15px] text-dark-500 py-4">Sin usuarios externos para los filtros seleccionados.</p>
+                <p class="text-sm text-dark-400 mt-2">"-" significa que no hay postulaciones sobre las que calcular el porcentaje; no es un cero.</p>
+            </div>
+        </section>
+
+        <!-- Productividad: volumen frente a resultados -->
+        <section class="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6" aria-label="Productividad">
+            <div class="bg-white rounded-2xl border border-dark-100 p-5">
+                <h2 class="text-xl font-bold text-dark-900">Volumen frente a tasa de avance</h2>
+                <p class="text-sm text-dark-500 mb-3">Cada punto es un usuario externo (click para ver el detalle). Las líneas punteadas marcan los umbrales provisionales; no implican que uno sea mejor que otro: el detalle muestra las búsquedas asignadas.</p>
+                <svg viewBox="0 0 600 360" class="w-full h-auto" role="img" aria-label="Candidatos presentados frente a tasa de avance por usuario externo" x-html="svgDispersion()" @click="clicSvg($event)"></svg>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm text-dark-600 mt-3">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-emerald-500"></span>Alto volumen, alta tasa</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-red-500"></span>Alto volumen, baja tasa</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-sky-500"></span>Bajo volumen, alta tasa</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-3 h-3 rounded-full bg-amber-500"></span>Bajo volumen, baja tasa</span>
+                </div>
+                <p class="text-sm text-dark-500 mt-2" x-show="notaDispersion()" x-text="notaDispersion()"></p>
+            </div>
+            <div class="bg-white rounded-2xl border border-dark-100 p-5">
+                <h2 class="text-xl font-bold text-dark-900">Evolución de la productividad</h2>
+                <p class="text-sm text-dark-500 mb-3">Candidatos presentados y que avanzaron, por <span x-text="data.granularidad_evolucion"></span> de presentación<span x-show="data.granularidad_evolucion === 'semana'"> (cada semana se indica por la fecha de su lunes, día/mes)</span>.</p>
+                <p x-show="data.resumen.evolucion.length === 0" class="text-[15px] text-dark-500 py-12 text-center">Sin datos en el período.</p>
+                <p class="text-sm text-dark-500 mb-2" x-show="notaEvolucion(data.resumen.evolucion)" x-text="notaEvolucion(data.resumen.evolucion)"></p>
+                <svg x-show="data.resumen.evolucion.length > 0" viewBox="0 0 600 300" class="w-full h-auto" role="img" aria-label="Evolución de candidatos presentados y avanzados" x-html="svgEvolucion(data.resumen.evolucion)"></svg>
+                <div class="flex gap-4 text-sm text-dark-600 mt-3">
+                    <span class="inline-flex items-center gap-1.5"><span class="w-4 h-1 bg-primary-600 rounded"></span>Presentados</span>
+                    <span class="inline-flex items-center gap-1.5"><span class="w-4 h-1 bg-emerald-500 rounded"></span>Avanzaron</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tiempos y demoras -->
+        <section class="bg-white rounded-2xl border border-dark-100 p-5 mb-6" aria-labelledby="titulo-tiempos">
+            <h2 id="titulo-tiempos" class="text-xl font-bold text-dark-900">Tiempos y demoras</h2>
+            <p class="text-sm text-dark-500 mb-4" x-text="data.tiempos.atribucion"></p>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                <template x-for="t in tarjetasTiempo()" :key="t.titulo">
+                    <div class="rounded-xl border border-dark-100 p-3">
+                        <p class="text-sm text-dark-500" x-text="t.titulo"></p>
+                        <p class="text-3xl font-bold text-dark-900" x-text="dias(t.est.promedio_dias)"></p>
+                        <p class="text-sm text-dark-400">Mediana <span x-text="dias(t.est.mediana_dias)"></span> · <span x-text="t.est.cantidad"></span> casos</p>
+                    </div>
+                </template>
+            </div>
+            <p x-show="data.tiempos.revision_sin_fecha > 0" class="text-sm text-amber-700 mb-4">
+                <span x-text="data.tiempos.revision_sin_fecha"></span> postulaciones tienen fechas incoherentes y se excluyeron del cálculo de la primera revisión.
+            </p>
+            <div class="grid grid-cols-1 gap-6">
+                <div>
+                    <h3 class="text-[15px] font-semibold text-dark-800 mb-2">Tiempo entre etapas</h3>
+                    <p x-show="data.tiempos.entre_etapas.length === 0" class="text-sm text-dark-500">No hay movimientos de etapa registrados.</p>
+                    <div class="overflow-x-auto">
+                    <table x-show="data.tiempos.entre_etapas.length > 0" class="w-full text-[15px] min-w-[600px]">
+                        <thead><tr class="text-left text-sm text-dark-500 border-b border-dark-100"><th class="py-2 font-semibold">Transición</th><th class="font-semibold">Casos</th><th class="font-semibold">Promedio</th><th class="font-semibold">Mediana</th></tr></thead>
+                        <tbody>
+                            <template x-for="t in data.tiempos.entre_etapas" :key="t.desde + t.hasta">
+                                <tr class="border-b border-dark-50"><td class="py-2 pr-2" x-text="t.desde + ' → ' + t.hasta"></td><td x-text="t.cantidad"></td><td class="whitespace-nowrap" x-text="dias(t.promedio_dias)"></td><td class="whitespace-nowrap" x-text="dias(t.mediana_dias)"></td></tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+                <div id="estancados">
+                    <h3 class="text-[15px] font-semibold text-dark-800 mb-2">Candidatos sin movimiento (<span x-text="data.resumen.estancados"></span>, desde <span x-text="data.umbrales.dias_estancado"></span> días)</h3>
+                    <p x-show="data.tiempos.estancados.length === 0" class="text-sm text-dark-500">No hay candidatos estancados.</p>
+                    <div x-show="data.tiempos.estancados.length > 0" class="overflow-auto border border-dark-100 rounded-xl" :class="verTodosEstancados ? 'max-h-[28rem]' : ''">
+                    <table class="w-full text-[15px] min-w-[780px]">
+                        <thead class="bg-dark-50 sticky top-0"><tr class="text-left text-sm text-dark-500"><th class="py-2 px-3 font-semibold">Candidato</th><th class="font-semibold">Búsqueda</th><th class="font-semibold">Responsable externo</th><th class="font-semibold">Etapa actual</th><th class="pr-4 font-semibold text-right">Días</th></tr></thead>
+                        <tbody>
+                            <template x-for="s in estancadosVisibles()" :key="s.candidato_id + s.oportunidad_id">
+                                <tr class="border-t border-dark-50">
+                                    <td class="py-2 px-3 whitespace-nowrap"><span x-text="s.candidato"></span></td>
+                                    <td class="pr-2"><span x-text="s.busqueda"></span></td>
+                                    <td class="pr-2 whitespace-nowrap" x-text="s.externo"></td><td class="pr-2 whitespace-nowrap" x-text="s.etapa_actual"></td><td class="pr-4 font-semibold text-right" x-text="s.dias_sin_movimiento"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                    </div>
+                    <button type="button" x-show="data.tiempos.estancados.length > 10" @click="verTodosEstancados = !verTodosEstancados" class="mt-2 text-[15px] font-semibold text-primary-700 hover:underline"
+                            x-text="verTodosEstancados ? 'Mostrar menos' : 'Ver los ' + data.tiempos.estancados.length + ' candidatos'"></button>
+                    <p x-show="data.resumen.estancados > data.tiempos.estancados.length" class="text-sm text-dark-400 mt-1">Se listan los <span x-text="data.tiempos.estancados.length"></span> con más días sin movimiento.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tabla comparativa -->
+        <section class="bg-white rounded-2xl border border-dark-100 p-5 mb-6" aria-labelledby="titulo-comparativa">
+            <h2 id="titulo-comparativa" class="text-xl font-bold text-dark-900">Comparativa de usuarios externos</h2>
+            <p class="text-sm text-dark-500 mb-3">Ordená por cualquier columna; click en un usuario para ver su detalle. Colores de columna: <span class="font-semibold text-primary-700">volumen</span>, <span class="font-semibold text-emerald-700">calidad</span>, <span class="font-semibold text-amber-700">velocidad</span>.</p>
+            <div class="overflow-x-auto">
+            <table class="w-full text-[15px] min-w-[1040px]">
+                <thead><tr class="text-left text-sm text-dark-500">
+                    <template x-for="c in columnas" :key="c.key">
+                        <th class="py-2 pr-4 cursor-pointer select-none hover:text-dark-800 align-bottom leading-tight border-b-2" :class="c.borde" @click="ordenarPor(c.key)" :aria-sort="orden.col === c.key ? (orden.dir === 'asc' ? 'ascending' : 'descending') : 'none'">
+                            <span x-text="c.label"></span><span x-show="orden.col === c.key" x-text="orden.dir === 'asc' ? ' ▲' : ' ▼'"></span>
+                        </th>
+                    </template>
+                </tr></thead>
+                <tbody>
+                    <template x-for="e in externosOrdenados()" :key="e.usuario_id">
+                        <tr class="border-b border-dark-50 hover:bg-dark-50 cursor-pointer" @click="abrirDetalle(e.usuario_id)">
+                            <td class="py-2 pr-4 font-medium text-dark-900"><span x-text="e.nombre"></span></td>
+                            <td class="pr-4 whitespace-nowrap"><span class="text-xs px-1.5 py-0.5 rounded bg-dark-100 text-dark-600" x-text="e.tipo"></span></td>
+                            <td class="pr-4" x-text="e.busquedas_asignadas"></td>
+                            <td class="pr-4 whitespace-nowrap"><b x-text="e.postulaciones"></b> <span class="text-dark-400 text-sm" x-text="'(' + e.candidatos_unicos + ' únicos)'"></span></td>
+                            <td class="pr-4" x-text="e.avanzaron"></td>
+                            <td class="pr-4 font-semibold" x-text="pct(e.tasa_avance)"></td>
+                            <td class="pr-4" x-text="e.entrevista"></td>
+                            <td class="pr-4 whitespace-nowrap"><span x-text="e.finales"></span> / <span x-text="e.contratados"></span></td>
+                            <td class="pr-4 whitespace-nowrap" x-text="dias(e.revision.promedio_dias)"></td>
+                            <td class="pr-4" x-text="e.estancados"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+            </div>
+            <p x-show="data.externos.length === 0" class="text-[15px] text-dark-500 py-4">Sin usuarios externos para los filtros seleccionados.</p>
+            <p class="text-sm text-dark-400 mt-3">Finales / contratados. Las tasas usan postulaciones (un candidato en una búsqueda) como base. "-" indica dato no disponible; 0 es un cero real.</p>
+        </section>
+
+    </div>
+    </template>
+
+    <!-- Detalle de un usuario externo -->
+    <div x-show="detalleAbierto" x-cloak class="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-3 sm:p-4 overflow-y-auto" @click.self="detalleAbierto = false" @keydown.escape.window="detalleAbierto = false" role="dialog" aria-modal="true" aria-label="Detalle del usuario externo">
+        <div class="bg-white rounded-2xl w-full max-w-4xl my-4 sm:my-8 p-4 sm:p-6">
+            <template x-if="detalleAbierto && detalle">
+                <div>
+                    <div class="flex items-start justify-between gap-3 mb-4">
+                        <div class="min-w-0">
+                            <h2 class="text-xl font-bold text-dark-900 break-words" x-text="detalle.nombre"></h2>
+                            <p class="text-[15px] text-dark-500 break-words"><span x-text="detalle.tipo"></span> · <span x-text="detalle.email"></span> · <span x-text="detalle.busquedas_asignadas"></span> búsquedas asignadas</p>
+                        </div>
+                        <button type="button" @click="detalleAbierto = false" class="p-2 rounded-lg hover:bg-dark-100 shrink-0" aria-label="Cerrar"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <p x-show="detalle.postulaciones === 0" class="p-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-[15px] mb-4">No presentó candidatos en el período seleccionado.</p>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                        <div class="rounded-xl border border-dark-100 p-3"><p class="text-sm text-dark-500">Postulaciones</p><p class="text-xl font-bold" x-text="detalle.postulaciones"></p><p class="text-sm text-dark-400"><span x-text="detalle.candidatos_unicos"></span> candidatos únicos</p></div>
+                        <div class="rounded-xl border border-dark-100 p-3"><p class="text-sm text-dark-500">Tasa de avance</p><p class="text-xl font-bold" x-text="pct(detalle.tasa_avance)"></p><p class="text-sm text-dark-400"><span x-text="detalle.avanzaron"></span> avanzaron</p></div>
+                        <div class="rounded-xl border border-dark-100 p-3"><p class="text-sm text-dark-500">Finales / contratados</p><p class="text-xl font-bold"><span x-text="detalle.finales"></span> / <span x-text="detalle.contratados"></span></p><p class="text-sm text-dark-400"><span x-text="detalle.entrevista"></span> llegaron a entrevista</p></div>
+                        <div class="rounded-xl border border-dark-100 p-3"><p class="text-sm text-dark-500">Primera revisión</p><p class="text-xl font-bold" x-text="dias(detalle.revision.promedio_dias)"></p><p class="text-sm text-dark-400">Mediana <span x-text="dias(detalle.revision.mediana_dias)"></span></p></div>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        <div>
+                            <h3 class="text-[15px] font-semibold text-dark-800 mb-2">Embudo de etapas</h3>
+                            <template x-for="e in detalle.embudo" :key="e.etapa">
+                                <div class="mb-1.5">
+                                    <div class="flex justify-between gap-2 text-sm text-dark-600"><span x-text="e.etapa"></span><span class="whitespace-nowrap"><b x-text="e.cantidad"></b> (<span x-text="pct(e.porcentaje)"></span>)</span></div>
+                                    <div class="h-2.5 bg-dark-100 rounded-full overflow-hidden"><div class="h-2.5 bg-primary-500 rounded-full" :style="'width:' + anchoEmbudo(e.cantidad, detalle.embudo) + '%'"></div></div>
+                                </div>
+                            </template>
+                        </div>
+                        <div>
+                            <h3 class="text-[15px] font-semibold text-dark-800 mb-2">Evolución (por <span x-text="data.granularidad_evolucion"></span>)</h3>
+                            <p x-show="detalle.evolucion.length === 0" class="text-sm text-dark-500">Sin datos en el período.</p>
+                            <svg x-show="detalle.evolucion.length > 0" viewBox="0 0 600 300" class="w-full h-auto" x-html="svgEvolucion(detalle.evolucion)"></svg>
+                            <h3 class="text-[15px] font-semibold text-dark-800 mt-4 mb-1">Descartes (<span x-text="detalle.descartados"></span>)</h3>
+                            <p x-show="detalle.motivos_descarte.length === 0" class="text-sm text-dark-500" x-text="detalle.descartados > 0 ? 'Los descartes no tienen motivo registrado.' : 'No hay descartes.'"></p>
+                            <template x-for="m in detalle.motivos_descarte" :key="m.motivo"><div class="flex justify-between text-sm py-0.5"><span x-text="m.motivo"></span><b x-text="m.cantidad"></b></div></template>
+                        </div>
+                    </div>
+                    <h3 class="text-[15px] font-semibold text-dark-800 mb-2">Resultados por búsqueda</h3>
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-[15px] min-w-[760px]">
+                            <thead><tr class="text-left text-sm text-dark-500 border-b border-dark-100"><th class="py-2 font-semibold">Búsqueda</th><th class="font-semibold">Presentados</th><th class="font-semibold">Avanzaron</th><th class="font-semibold">Entrevista</th><th class="font-semibold">Finales</th><th class="font-semibold">Contratados</th><th class="font-semibold">Descartados</th></tr></thead>
+                            <tbody>
+                                <template x-for="b in detalle.por_busqueda" :key="b.oportunidad_id">
+                                    <tr class="border-b border-dark-50"><td class="py-2 pr-2"><span x-text="b.titulo"></span></td>
+                                        <td x-text="b.presentados"></td><td x-text="b.avanzaron"></td><td x-text="b.entrevista"></td><td x-text="b.finales"></td><td x-text="b.contratados"></td><td x-text="b.descartados"></td></tr>
+                                </template>
+                            </tbody>
+                        </table>
+                        <p x-show="detalle.por_busqueda.length === 0" class="text-sm text-dark-500 py-2">Sin resultados por búsqueda en el período.</p>
+                    </div>
+                    <h3 class="text-[15px] font-semibold text-dark-800 mb-2">Candidatos sin movimiento (<span x-text="detalle.estancados"></span>)</h3>
+                    <p x-show="estancadosDe(detalle.usuario_id).length === 0" class="text-sm text-dark-500">No hay candidatos estancados.</p>
+                    <div class="overflow-auto max-h-64 border border-dark-100 rounded-xl" x-show="estancadosDe(detalle.usuario_id).length > 0">
+                        <table class="w-full text-[15px] min-w-[600px]"><thead class="bg-dark-50 sticky top-0"><tr class="text-left text-sm text-dark-500"><th class="py-2 px-3 font-semibold">Candidato</th><th class="font-semibold">Búsqueda</th><th class="font-semibold">Etapa actual</th><th class="pr-4 font-semibold text-right">Días</th></tr></thead>
+                            <tbody><template x-for="s in estancadosDe(detalle.usuario_id)" :key="s.candidato_id + s.oportunidad_id">
+                                <tr class="border-t border-dark-50"><td class="py-2 px-3" x-text="s.candidato"></td><td class="pr-2" x-text="s.busqueda"></td><td class="pr-2" x-text="s.etapa_actual"></td><td class="pr-4 font-semibold text-right" x-text="s.dias_sin_movimiento"></td></tr>
+                            </template></tbody></table>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+
+<script>
+function managerDashboard() {
+    const hoy = new Date();
+    const fmtFecha = (d) => d.toISOString().slice(0, 10);
+    const porDefecto = () => ({
+        fecha_desde: fmtFecha(new Date(hoy.getTime() - 90 * 86400000)),
+        fecha_hasta: fmtFecha(hoy),
+        usuario_ids: [],
+        oportunidad_id: '',
+        umbral_volumen: 10,
+        umbral_tasa_avance: 20,
+        umbral_actividad: 1,
+        dias_estancado: 7,
+        umbral_demora_dias: 3,
+    });
+    const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const corto = (t, n) => (String(t).length > n ? String(t).slice(0, n - 1) + '…' : String(t));
+    return {
+        filtros: porDefecto(),
+        data: null,
+        opciones: { usuarios: [], busquedas: [] },
+        cargando: false,
+        error: '',
+        mostrarUmbrales: false,
+        abiertoUsuarios: false,
+        verTodasAlertas: false,
+        verTodosEstancados: false,
+        detalle: null,
+        detalleAbierto: false,
+        orden: { col: 'postulaciones', dir: 'desc' },
+        columnas: [
+            { key: 'nombre', label: 'Usuario', borde: 'border-transparent' },
+            { key: 'tipo', label: 'Tipo', borde: 'border-transparent' },
+            { key: 'busquedas_asignadas', label: 'Búsquedas asignadas', borde: 'border-primary-400' },
+            { key: 'postulaciones', label: 'Presentados', borde: 'border-primary-400' },
+            { key: 'avanzaron', label: 'Avanzaron', borde: 'border-emerald-400' },
+            { key: 'tasa_avance', label: 'Tasa de avance', borde: 'border-emerald-400' },
+            { key: 'entrevista', label: 'Entrevista', borde: 'border-emerald-400' },
+            { key: 'finales', label: 'Finales / contratados', borde: 'border-emerald-400' },
+            { key: 'revision', label: '1.ª revisión', borde: 'border-amber-400' },
+            { key: 'estancados', label: 'Estancados', borde: 'border-amber-400' },
+        ],
+        iniciar() { this.cargar(); },
+        limpiar() { this.filtros = porDefecto(); this.cargar(); },
+        refrescarIconos() { this.$nextTick(() => { if (window.lucide) lucide.createIcons(); }); },
+        resumenUsuarios() {
+            const ids = this.filtros.usuario_ids;
+            if (!ids.length) return 'Todos los usuarios';
+            if (ids.length === 1) return (this.opciones.usuarios.find((u) => u.id === ids[0]) || { nombre: '1 usuario' }).nombre;
+            return ids.length + ' usuarios seleccionados';
+        },
+        editarUmbrales() {
+            this.mostrarUmbrales = true;
+            this.$nextTick(() => { const el = document.getElementById('umbrales'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
+        },
+        async cargar() {
+            this.cargando = true;
+            this.error = '';
+            const p = new URLSearchParams();
+            const f = this.filtros;
+            ['fecha_desde', 'fecha_hasta', 'oportunidad_id'].forEach((k) => { if (f[k]) p.append(k, f[k]); });
+            (f.usuario_ids || []).forEach((u) => p.append('usuario_ids', u));
+            ['umbral_volumen', 'umbral_tasa_avance', 'umbral_actividad', 'dias_estancado', 'umbral_demora_dias'].forEach((k) => {
+                if (f[k] !== '' && f[k] !== null && f[k] !== undefined) p.append(k, f[k]);
+            });
+            try {
+                const r = await fetch('{{ url_for("recruiting.manager_dashboard_datos") }}?' + p.toString(), { headers: { Accept: 'application/json' } });
+                const cuerpo = await r.json().catch(() => ({}));
+                if (!r.ok) {
+                    this.error = cuerpo.error || cuerpo.detail || 'No se pudieron cargar los indicadores.';
+                } else {
+                    this.data = cuerpo;
+                    this.opciones = { usuarios: cuerpo.opciones_usuarios, busquedas: cuerpo.opciones_busquedas };
+                    if (this.detalle) {
+                        this.detalle = cuerpo.externos.find((e) => e.usuario_id === this.detalle.usuario_id) || this.detalle;
+                        if (!cuerpo.externos.some((e) => e.usuario_id === this.detalle.usuario_id)) this.detalleAbierto = false;
+                    }
+                }
+            } catch (e) {
+                this.error = 'Error de comunicación con el servidor.';
+            } finally {
+                this.cargando = false;
+                this.refrescarIconos();
+            }
+        },
+        pct(v) { return v === null || v === undefined ? '-' : v.toFixed(1) + '%'; },
+        dias(v) { return v === null || v === undefined ? '-' : v.toFixed(1) + ' d'; },
+        anchoEmbudo(cantidad, embudo) {
+            const maximo = Math.max(...embudo.map((e) => e.cantidad), 0);
+            return maximo ? Math.round((cantidad * 100) / maximo) : 0;
+        },
+        tarjetasTiempo() {
+            const t = this.data.tiempos;
+            return [
+                { titulo: 'Presentación a primera revisión', est: t.revision },
+                { titulo: 'Presentación a descarte', est: t.hasta_descarte },
+                { titulo: 'Presentación a oferta', est: t.hasta_oferta },
+                { titulo: 'Presentación a ingreso', est: t.hasta_ingreso },
+            ];
+        },
+        alertasVisibles() { return this.verTodasAlertas ? this.data.alertas : this.data.alertas.slice(0, 5); },
+        estancadosVisibles() { return this.verTodosEstancados ? this.data.tiempos.estancados : this.data.tiempos.estancados.slice(0, 10); },
+        estancadosDe(id) { return this.data.tiempos.estancados.filter((s) => s.usuario_id === id); },
+        ordenarPor(col) {
+            this.orden = { col, dir: this.orden.col === col && this.orden.dir === 'desc' ? 'asc' : 'desc' };
+        },
+        valorOrden(e, col) {
+            if (col === 'revision') return e.revision.promedio_dias;
+            return e[col];
+        },
+        externosOrdenados() {
+            const { col, dir } = this.orden;
+            const factor = dir === 'asc' ? 1 : -1;
+            return [...this.data.externos].sort((a, b) => {
+                const x = this.valorOrden(a, col), y = this.valorOrden(b, col);
+                if (x === null || x === undefined) return 1;   // sin dato siempre al final
+                if (y === null || y === undefined) return -1;
+                if (typeof x === 'string') return factor * x.localeCompare(y);
+                return factor * (x - y);
+            });
+        },
+        abrirDetalle(id) {
+            const e = this.data.externos.find((x) => x.usuario_id === id);
+            if (!e) return;
+            this.detalle = e;
+            this.detalleAbierto = true;
+            this.refrescarIconos();
+        },
+        clicSvg(ev) {
+            const nodo = ev.target.closest('[data-uid]');
+            if (nodo) this.abrirDetalle(nodo.getAttribute('data-uid'));
+        },
+        motivoPrincipal(e) {
+            const m = e.motivos_descarte[0];
+            if (m) return m.motivo + ' (' + m.cantidad + ')';
+            return e.descartados > 0 ? 'Sin motivo registrado' : '-';
+        },
+        paso(maximo, objetivo) {
+            const bruto = Math.max(maximo, 1) / objetivo;
+            const base = Math.pow(10, Math.floor(Math.log10(bruto)));
+            const f = bruto / base;
+            return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * base;
+        },
+        fechaCorta(periodo) { const [, m, d] = periodo.split('-'); return d + '/' + m; },
+        notaDispersion() {
+            const n = this.data.externos.filter((e) => e.tasa_avance !== null).length;
+            const sin = this.data.externos.length - n;
+            let nota = '';
+            if (n === 0) nota = 'Ningún usuario externo tiene postulaciones con los filtros actuales: no hay tasa de avance que graficar.';
+            else if (n < 3) nota = 'Solo ' + n + (n === 1 ? ' usuario tiene' : ' usuarios tienen') + ' postulaciones: la comparación es limitada.';
+            if (n > 0 && sin > 0) nota += (nota ? ' ' : '') + sin + (sin === 1 ? ' usuario sin postulaciones no se grafica' : ' usuarios sin postulaciones no se grafican') + ' (no hay tasa que calcular).';
+            return nota;
+        },
+        notaEvolucion(serie) {
+            if (!serie || !serie.length) return '';
+            if (serie.length < 3) return 'Hay datos de solo ' + serie.length + (serie.length === 1 ? ' período' : ' períodos') + ': no alcanzan para ver una tendencia.';
+            return '';
+        },
+        svgDispersion() {
+            if (!this.data) return '';
+            const W = 600, H = 360, L = 56, R = 20, T = 20, B = 52;
+            const u = this.data.umbrales;
+            const puntos = this.data.externos.filter((e) => e.tasa_avance !== null);
+            const maxX = Math.max(u.umbral_volumen * 1.4, ...puntos.map((e) => e.postulaciones * 1.15), 4);
+            const pasoX = this.paso(maxX, 4);
+            const xmax = Math.ceil(maxX / pasoX) * pasoX;
+            const px = (v) => L + (v / xmax) * (W - L - R);
+            const py = (v) => T + (1 - v / 100) * (H - T - B);
+            const color = { alto_volumen_alta_tasa: '#10b981', alto_volumen_baja_tasa: '#ef4444', bajo_volumen_alta_tasa: '#0ea5e9', bajo_volumen_baja_tasa: '#f59e0b' };
+            let s = '';
+            [0, 25, 50, 75, 100].forEach((v) => {
+                s += `<line x1="${L}" y1="${py(v)}" x2="${W - R}" y2="${py(v)}" stroke="#eef2f7"/>`;
+                s += `<text x="${L - 8}" y="${py(v) + 5}" font-size="13" text-anchor="end" fill="#475569">${v}%</text>`;
+            });
+            for (let v = 0; v <= xmax + 0.001; v += pasoX) {
+                s += `<line x1="${px(v)}" y1="${T}" x2="${px(v)}" y2="${H - B}" stroke="#eef2f7"/>`;
+                s += `<text x="${px(v)}" y="${H - B + 18}" font-size="13" text-anchor="middle" fill="#475569">${v}</text>`;
+            }
+            s += `<rect x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="none" stroke="#cbd5e1"/>`;
+            s += `<line x1="${px(u.umbral_volumen)}" y1="${T}" x2="${px(u.umbral_volumen)}" y2="${H - B}" stroke="#64748b" stroke-dasharray="5 4"/>`;
+            s += `<line x1="${L}" y1="${py(u.umbral_tasa_avance)}" x2="${W - R}" y2="${py(u.umbral_tasa_avance)}" stroke="#64748b" stroke-dasharray="5 4"/>`;
+            const hq = 'stroke="#ffffff" stroke-width="3" paint-order="stroke"';
+            const yq = py(u.umbral_tasa_avance) + 17;
+            s += `<text x="${L + 8}" y="${T + 16}" font-size="12" fill="#64748b" ${hq}>Bajo volumen · alta tasa</text><text x="${W - R - 8}" y="${T + 16}" font-size="12" fill="#64748b" ${hq} text-anchor="end">Alto volumen · alta tasa</text>`;
+            s += `<text x="${L + 8}" y="${yq}" font-size="12" fill="#64748b" ${hq}>Bajo volumen · baja tasa</text><text x="${W - R - 8}" y="${yq}" font-size="12" fill="#64748b" ${hq} text-anchor="end">Alto volumen · baja tasa</text>`;
+            s += `<text x="${(L + W - R) / 2}" y="${H - 10}" font-size="13" text-anchor="middle" fill="#334155">Candidatos presentados (postulaciones)</text>`;
+            s += `<text x="14" y="${H / 2 - 10}" font-size="13" text-anchor="middle" fill="#334155" transform="rotate(-90 14 ${H / 2 - 10})">Tasa de avance (%)</text>`;
+            puntos.forEach((e) => {
+                const cx = px(e.postulaciones), cy = py(e.tasa_avance);
+                const derecha = cx < W - 230;
+                const tx = derecha ? cx + 14 : cx - 14;
+                const abajo = cy > H - B - 46;
+                const ny = abajo ? cy - 22 : cy - 1;
+                const halo = 'stroke="#ffffff" stroke-width="4" stroke-linejoin="round" paint-order="stroke"';
+                s += `<g data-uid="${esc(e.usuario_id)}" style="cursor:pointer"><circle cx="${cx}" cy="${cy}" r="9" fill="${color[e.cuadrante] || '#64748b'}" fill-opacity="0.92" stroke="#fff" stroke-width="2"/>` +
+                    `<text x="${tx}" y="${ny}" font-size="13" font-weight="600" fill="#1e293b" ${halo} text-anchor="${derecha ? 'start' : 'end'}">${esc(corto(e.nombre, 22))}</text>` +
+                    `<text x="${tx}" y="${ny + 15}" font-size="12" fill="#475569" ${halo} text-anchor="${derecha ? 'start' : 'end'}">${e.postulaciones} post. · ${e.tasa_avance.toFixed(1)}%</text>` +
+                    `<title>${esc(e.nombre)}: ${e.postulaciones} postulaciones, ${e.tasa_avance}% de avance, ${e.busquedas_asignadas} búsquedas asignadas</title></g>`;
+            });
+            if (!puntos.length) s += `<text x="${W / 2}" y="${H / 2}" font-size="15" text-anchor="middle" fill="#64748b">Sin datos para mostrar</text>`;
+            return s;
+        },
+        svgEvolucion(serie) {
+            const W = 600, H = 300, L = 52, R = 20, T = 20, B = 64;
+            if (!serie || !serie.length) return '';
+            const maxY = Math.max(...serie.map((p) => p.presentados), 1);
+            const pasoY = Math.max(1, Math.ceil(this.paso(maxY, 4)));
+            const ymax = Math.ceil(maxY / pasoY) * pasoY;
+            const n = serie.length;
+            const px = (i) => (n === 1 ? (L + W - R) / 2 : L + 14 + (i / (n - 1)) * (W - L - R - 28));
+            const py = (v) => T + (1 - v / ymax) * (H - T - B);
+            const semanal = this.data.granularidad_evolucion === 'semana';
+            const etiquetas = n <= 4;
+            const linea = (clave, col, arriba) => {
+                const pts = serie.map((p, i) => `${px(i)},${py(p[clave])}`).join(' ');
+                let g = n > 1 ? `<polyline fill="none" stroke="${col}" stroke-width="3" stroke-linejoin="round" points="${pts}"/>` : '';
+                g += serie.map((p, i) => `<circle cx="${px(i)}" cy="${py(p[clave])}" r="${n > 12 ? 3.5 : 5}" fill="${col}" stroke="#fff" stroke-width="1.5"><title>${esc(this.fechaCorta(p.periodo))}: ${p[clave]} ${clave}</title></circle>`).join('');
+                if (etiquetas) {
+                    g += serie.map((p, i) => {
+                        const cy = py(p[clave]);
+                        if (!arriba && p.avanzaron === p.presentados) return '';  // mismo valor: ya lo muestra la serie azul
+                        const debajo = !arriba && cy + 24 <= H - B - 4;
+                        return `<text x="${px(i)}" y="${debajo ? cy + 21 : cy - 11}" font-size="13" font-weight="600" text-anchor="middle" fill="${col}" stroke="#ffffff" stroke-width="3" paint-order="stroke">${p[clave]}</text>`;
+                    }).join('');
+                }
+                return g;
+            };
+            let s = '';
+            for (let v = 0; v <= ymax; v += pasoY) {
+                s += `<line x1="${L}" y1="${py(v)}" x2="${W - R}" y2="${py(v)}" stroke="${v === 0 ? '#cbd5e1' : '#eef2f7'}"/>`;
+                s += `<text x="${L - 8}" y="${py(v) + 5}" font-size="13" text-anchor="end" fill="#475569">${v}</text>`;
+            }
+            const cada = Math.max(1, Math.ceil(n / 8));
+            serie.forEach((p, i) => { if (i % cada === 0) s += `<text x="${px(i)}" y="${H - B + 20}" font-size="12" text-anchor="middle" fill="#475569">${this.fechaCorta(p.periodo)}</text>`; });
+            s += `<text x="${(L + W - R) / 2}" y="${H - 22}" font-size="13" text-anchor="middle" fill="#334155">${semanal ? 'Semana de presentación (fecha del lunes, día/mes)' : 'Día de presentación (día/mes)'}</text>`;
+            s += `<text x="14" y="${(T + H - B) / 2}" font-size="13" text-anchor="middle" fill="#334155" transform="rotate(-90 14 ${(T + H - B) / 2})">Candidatos</text>`;
+            return s + linea('presentados', '#2563eb', true) + linea('avanzaron', '#10b981', false);
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -54,6 +54,7 @@ from backend.modules.recibos.routers import (
     public_router as recibos_public_router,
     router as recibos_router,
 )
+from backend.modules.recruiting.routers import router as recruiting_router
 from backend.modules.sincronizacion.routers import router as sincronizacion_router
 from backend.modules.soporte.routers import router as soporte_router
 from backend.modules.starmiles.routers import public_router as starmiles_public_router, router as starmiles_router
@@ -560,6 +561,11 @@ application_router.include_router(
 # LLM Usage: registro de uso de modelos de lenguaje (Configuración)
 application_router.include_router(
     llm_router, prefix=settings.api_v1_prefix, dependencies=[Depends(require_submodulo("configuracion", "llm"))]
+)
+
+# Recruiting: el módulo exige 'recruiting' y cada endpoint, el permiso de su ítem ('recruiting.<codigo>')
+application_router.include_router(
+    recruiting_router, prefix=settings.api_v1_prefix, dependencies=[Depends(require_modulo("recruiting"))]
 )
 
 # Parámetros del sistema (Configuración)

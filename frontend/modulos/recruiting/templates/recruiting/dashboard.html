@@ -1,0 +1,191 @@
+{% extends "core/base.html" %}
+
+{% block title %}Dashboard - Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{#
+  Dashboard de Recruiting (migrado del módulo original). Los datos salen de GET /api/v1/recruiting/dashboard.
+  Las tarjetas, las acciones rápidas y los avisos remitían a Candidatos, Búsquedas, Pipeline y Parámetros: hasta que
+  esas pantallas se migren no son enlaces, y las acciones quedan como "Próx." (igual que el menú).
+#}
+
+{% block content %}
+<div class="animate-fade-in" data-testid="recruiting-dashboard">
+
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-dark-900">Dashboard Recruiting</h1>
+    </div>
+
+    {% if error %}
+    <div class="p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 flex items-center gap-3" data-testid="dashboard-error">
+        <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0"></i>
+        <span>{{ error }}</span>
+    </div>
+    {% else %}
+    {% set kpis = dashboard.kpis %}
+    {% set resumen = dashboard.resumen_operativo %}
+    {% set avisos = dashboard.avisos %}
+
+    <!-- ==================== TARJETAS KPI ==================== -->
+    <div class="grid grid-cols-5 gap-5 mb-8">
+        {% set tarjetas = [
+            ("busquedas_activas", "Búsquedas Abiertas", "Activas", "briefcase", "from-primary-500 to-primary-600", "bg-primary-50 text-primary-700 border-primary-100/60"),
+            ("total_candidatos", "Candidatos Registrados", "Talentos", "users", "from-emerald-500 to-emerald-600", "bg-emerald-50 text-emerald-700 border-emerald-100/60"),
+            ("postulaciones_en_proceso", "En Proceso / Entrevistas", "Pipeline", "layers", "from-purple-600 to-indigo-700", "bg-purple-50 text-purple-700 border-purple-100/60"),
+            ("skills_catalogo", "Skills Activas en BD", "Catálogo", "cpu", "from-amber-500 to-orange-600", "bg-amber-50 text-amber-700 border-amber-100/60"),
+            ("habilidades_catalogo", "Habilidades en BD", "Catálogo", "award", "from-amber-500 to-orange-600", "bg-amber-50 text-amber-700 border-amber-100/60"),
+        ] %}
+        {% for clave, rotulo, etiqueta, icono, degrade, insignia in tarjetas %}
+        <div class="bg-white rounded-2xl p-6 border border-dark-100" data-testid="kpi-{{ clave }}">
+            <div class="flex items-center justify-between mb-4">
+                <div class="w-12 h-12 bg-gradient-to-br {{ degrade }} rounded-xl flex items-center justify-center shadow-soft">
+                    <i data-lucide="{{ icono }}" class="w-6 h-6 text-white"></i>
+                </div>
+                <span class="text-xs font-semibold px-2 py-0.5 rounded-md border {{ insignia }}">{{ etiqueta }}</span>
+            </div>
+            <p class="text-3xl font-bold text-dark-900 mb-1" data-testid="kpi-{{ clave }}-valor">{{ kpis[clave] }}</p>
+            <p class="text-dark-500 text-sm">{{ rotulo }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="grid grid-cols-3 gap-6">
+
+        <!-- ==================== COLUMNA IZQUIERDA (2/3) ==================== -->
+        <div class="col-span-2 space-y-6">
+
+            <!-- Acciones Rápidas -->
+            <div class="bg-white rounded-2xl border border-dark-100 overflow-hidden">
+                <div class="px-6 py-4 border-b border-dark-100 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center gap-2">
+                        <i data-lucide="zap" class="w-5 h-5 text-primary-600"></i>
+                        <span>Acciones Rápidas</span>
+                    </h2>
+                    <span class="text-xs text-dark-400">Atajos frecuentes del reclutador</span>
+                </div>
+                <div class="p-6 grid grid-cols-4 gap-3" data-testid="acciones-rapidas">
+                    {% for titulo, detalle, icono in [
+                        ("Nueva Búsqueda", "Crear posición", "briefcase-business"),
+                        ("Carga CV Individual", "Parser inteligente", "file-up"),
+                        ("Base Candidatos", "Banco de talentos", "users"),
+                        ("Pipeline Búsquedas", "Embudo de selección", "columns-3"),
+                    ] %}
+                    <div class="flex flex-col items-center p-4 bg-dark-50 rounded-xl text-center cursor-not-allowed opacity-70"
+                         title="Disponible cuando se migre la pantalla correspondiente">
+                        <div class="w-11 h-11 bg-white rounded-xl flex items-center justify-center mb-2.5 shadow-sm">
+                            <i data-lucide="{{ icono }}" class="w-5 h-5 text-dark-400"></i>
+                        </div>
+                        <span class="text-xs font-semibold text-dark-600">{{ titulo }}</span>
+                        <span class="text-[10px] text-dark-400 mt-0.5">{{ detalle }}</span>
+                        <span class="mt-2 text-[10px] bg-dark-100 text-dark-500 px-1.5 py-0.5 rounded">Próx.</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Eficiencia y Dinámica de Procesos -->
+            <div class="bg-white rounded-2xl border border-dark-100 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-base font-bold text-dark-900 flex items-center gap-2">
+                        <i data-lucide="activity" class="w-4 h-4 text-emerald-600"></i>
+                        <span>Eficiencia y Dinámica de Procesos</span>
+                    </h2>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div class="p-4 rounded-xl bg-dark-50 border border-dark-100">
+                        <p class="text-xs text-dark-500 font-medium">Tasa Candidatos en Proceso</p>
+                        <p class="text-2xl font-bold text-dark-900 mt-1" data-testid="resumen-tasa">{{ resumen.tasa_candidatos_proceso }}%</p>
+                        <p class="text-[11px] text-dark-400 mt-0.5">Sobre el total de perfiles</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-dark-50 border border-dark-100">
+                        <p class="text-xs text-dark-500 font-medium">Búsquedas Totales Históricas</p>
+                        <p class="text-2xl font-bold text-dark-900 mt-1" data-testid="resumen-busquedas-totales">{{ resumen.busquedas_totales }}</p>
+                        <p class="text-[11px] text-dark-400 mt-0.5">Abiertas, ganadas y cerradas</p>
+                    </div>
+                    <div class="p-4 rounded-xl bg-dark-50 border border-dark-100">
+                        <p class="text-xs text-dark-500 font-medium">Parámetros Smart Match</p>
+                        <p class="text-2xl font-bold text-dark-400 mt-1">Pendiente</p>
+                        <p class="text-[11px] text-dark-400 mt-0.5">Se configura en Parámetros (sin migrar)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== COLUMNA DERECHA (1/3) ==================== -->
+        <div class="space-y-6">
+
+            <!-- Avisos & Novedades -->
+            <div class="bg-white rounded-2xl border border-dark-100 p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold text-dark-900 flex items-center gap-2">
+                        <i data-lucide="bell" class="w-5 h-5 text-amber-500"></i>
+                        <span>Avisos & Novedades</span>
+                    </h2>
+                    <span class="text-xs px-2 py-0.5 bg-amber-50 text-amber-700 rounded-full font-medium" data-testid="avisos-contador">
+                        {{ avisos|length }} alertas
+                    </span>
+                </div>
+
+                {% if avisos %}
+                <div class="space-y-3" data-testid="avisos-lista">
+                    {% set colores = {"amber": "bg-amber-100 text-amber-700", "primary": "bg-primary-100 text-primary-700", "emerald": "bg-emerald-100 text-emerald-700"} %}
+                    {% for aviso in avisos %}
+                    <div class="block p-3.5 rounded-xl border border-dark-100" data-testid="aviso" data-tipo="{{ aviso.tipo }}">
+                        <div class="flex items-start gap-3">
+                            <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5 {{ colores.get(aviso.color, 'bg-dark-100 text-dark-700') }}">
+                                <i data-lucide="{{ 'alert-circle' if aviso.icono == 'alert-triangle' else aviso.icono }}" class="w-4 h-4"></i>
+                            </div>
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center justify-between gap-1">
+                                    <p class="text-xs font-bold text-dark-900 truncate">{{ aviso.titulo }}</p>
+                                    <span class="text-[10px] text-dark-400 whitespace-nowrap">{{ aviso.tiempo or '' }}</span>
+                                </div>
+                                <p class="text-[11px] text-dark-500 mt-0.5 line-clamp-2">{{ aviso.descripcion }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="py-8 text-center text-dark-400 space-y-2" data-testid="avisos-vacio">
+                    <div class="w-10 h-10 mx-auto rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                        <i data-lucide="check-check" class="w-5 h-5"></i>
+                    </div>
+                    <p class="text-xs font-semibold text-dark-700">Sin alertas pendientes</p>
+                    <p class="text-[11px]">Todas las búsquedas tienen postulantes asignados y seguimiento al día.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Estado del Módulo -->
+            <div class="bg-white rounded-2xl border border-dark-100 p-6">
+                <h2 class="text-lg font-semibold text-dark-900 mb-4 flex items-center gap-2">
+                    <i data-lucide="info" class="w-5 h-5 text-dark-500"></i>
+                    <span>Estado del Módulo</span>
+                </h2>
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between items-center pb-2 border-b border-dark-100">
+                        <span class="text-dark-500 text-xs">Módulo</span>
+                        <span class="text-dark-900 font-semibold text-xs">Recruiting & Talent</span>
+                    </div>
+                    <div class="flex justify-between items-center pb-2 border-b border-dark-100">
+                        <span class="text-dark-500 text-xs">Motor de Parsing</span>
+                        <span class="inline-flex items-center gap-1 text-dark-500 font-semibold text-xs">
+                            <span class="w-2 h-2 rounded-full bg-dark-300"></span>
+                            Pendiente de migración
+                        </span>
+                    </div>
+                    <div class="flex justify-between items-center pb-2 border-b border-dark-100">
+                        <span class="text-dark-500 text-xs">Catálogo Tecnológico</span>
+                        <span class="text-dark-900 font-semibold text-xs">{{ kpis.skills_catalogo }} skills en BD</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-dark-500 text-xs">Empresa Activa</span>
+                        <span class="text-dark-900 font-semibold text-xs truncate max-w-[150px]">{{ empresa_nombre or '-' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
