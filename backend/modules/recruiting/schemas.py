@@ -1259,6 +1259,18 @@ class ProvinciaUpdate(BaseModel):
     limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
 
 
+class MotivoBlacklistCreate(BaseModel):
+    motivo: str = Field(..., min_length=1, max_length=150)
+
+    limpiar_motivo = field_validator("motivo")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class MotivoBlacklistUpdate(BaseModel):
+    motivo: Optional[str] = Field(None, min_length=1, max_length=150)
+
+    limpiar_motivo = field_validator("motivo")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
 class CiudadCreate(BaseModel):
     nombre: str = Field(..., min_length=1, max_length=150)
     provincia_id: int = Field(..., ge=1)

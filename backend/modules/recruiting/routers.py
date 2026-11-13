@@ -34,6 +34,7 @@ from backend.modules.recruiting.parametros_services import (
     HistorialCargasConsultaService,
     LideresAbm,
     LimpiezaRecruitingService,
+    MotivoBlacklistAbmService,
     PerfilesPuestoAbm,
     ProvinciaService,
     ReclutadoresAbm,
@@ -91,6 +92,8 @@ from backend.modules.recruiting.schemas import (
     NombreCatalogoCreate,
     NombreCatalogoUpdate,
     PerfilPuestoResponse,
+    MotivoBlacklistCreate,
+    MotivoBlacklistUpdate,
     ProvinciaCreate,
     ProvinciaUpdate,
     ContadoresEtapas,
@@ -1694,6 +1697,54 @@ async def eliminar_provincia(provincia_id: int, db: Session = Depends(get_db)):
     """Borrado de una provincia sin ciudades (409 si tiene ciudades o está en uso)."""
     ProvinciaService.eliminar(db, provincia_id)
     return MensajeResponse(message="Provincia eliminada correctamente.")
+
+
+@router.get(
+    "/parametros/motivos-blacklist",
+    response_model=List[MotivoBlacklistResponse],
+    operation_id="recruiting_parametros_motivos_blacklist_listar",
+    dependencies=[acceso_parametros],
+)
+async def listar_motivos_blacklist_parametros(db: Session = Depends(get_db)):
+    """Motivos de Blacklist del catálogo."""
+    return MotivoBlacklistAbmService.listar(db)
+
+
+@router.post(
+    "/parametros/motivos-blacklist",
+    response_model=MotivoBlacklistResponse,
+    status_code=201,
+    operation_id="recruiting_parametros_motivos_blacklist_crear",
+    responses=responde(400, 409, 422),
+    dependencies=[acceso_parametros],
+)
+async def crear_motivo_blacklist(datos: MotivoBlacklistCreate, db: Session = Depends(get_db)):
+    """Alta de un motivo (409 si ya existe uno equivalente, sin distinguir tildes ni mayúsculas)."""
+    return MotivoBlacklistAbmService.crear(db, datos)
+
+
+@router.put(
+    "/parametros/motivos-blacklist/{motivo_id}",
+    response_model=MotivoBlacklistResponse,
+    operation_id="recruiting_parametros_motivos_blacklist_actualizar",
+    responses=responde(404, 409, 422),
+    dependencies=[acceso_parametros],
+)
+async def actualizar_motivo_blacklist(motivo_id: int, datos: MotivoBlacklistUpdate, db: Session = Depends(get_db)):
+    return MotivoBlacklistAbmService.actualizar(db, motivo_id, datos)
+
+
+@router.delete(
+    "/parametros/motivos-blacklist/{motivo_id}",
+    response_model=MensajeResponse,
+    operation_id="recruiting_parametros_motivos_blacklist_eliminar",
+    responses=responde(404, 409),
+    dependencies=[acceso_parametros],
+)
+async def eliminar_motivo_blacklist(motivo_id: int, db: Session = Depends(get_db)):
+    """Borrado de un motivo (409 si está en uso)."""
+    MotivoBlacklistAbmService.eliminar(db, motivo_id)
+    return MensajeResponse(message="Motivo eliminado correctamente.")
 
 
 @router.get(

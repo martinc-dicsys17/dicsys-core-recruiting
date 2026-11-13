@@ -1550,10 +1550,10 @@ def candidatos_duplicados_proxy(caso_id=None, resolver=False):
 
 
 # === PARÁMETROS (ítem «parametros») ===
-# Configuración de Smart Matching, catálogos (skills, habilidades, provincias, ciudades, líderes, reclutadores y perfiles
-# profesionales), Archivos de CV e Historial de cargas de CV. Cada pantalla exige 'recruiting.parametros'; el backend valida
-# el permiso y las restricciones (EXTERNOS fuera de todo Parámetros; administradores para limpiar, respaldar, importar y
-# el historial) en cada llamada: esta capa solo orienta la interfaz.
+# Configuración de Smart Matching, catálogos (skills, habilidades, provincias, ciudades, líderes, reclutadores, perfiles
+# profesionales y motivos de Blacklist), Archivos de CV e Historial de cargas de CV. Cada pantalla exige
+# 'recruiting.parametros'; el backend valida el permiso y las restricciones (EXTERNOS fuera de todo Parámetros;
+# administradores para limpiar, respaldar, importar y el historial) en cada llamada: esta capa solo orienta la interfaz.
 
 BASE_PARAMETROS = "/recruiting/parametros"
 
@@ -1658,11 +1658,12 @@ _registrar_abm_parametros(
 
 
 def _registrar_abm_ubicacion(ruta, clave_lista, clave_item, singular):
-    """Provincias y ciudades: no hay baja lógica, el DELETE elimina."""
+    """Provincias, ciudades y motivos de Blacklist: no hay baja lógica, el DELETE elimina."""
+    nombre = ruta.replace("-", "_")  # plantilla y endpoints: `parametros_<nombre>_vista`...
     permiso = require_permiso("recruiting.parametros")
 
     def vista():
-        return render_template(f"recruiting/{ruta}.html")
+        return render_template(f"recruiting/{nombre}.html")
 
     def listar():
         provincia_id = request.args.get("provincia_id", type=int)
@@ -1682,19 +1683,20 @@ def _registrar_abm_ubicacion(ruta, clave_lista, clave_item, singular):
     def eliminar(registro_id):
         return _proxy_parametros("DELETE", f"/{ruta}/{registro_id}", "resultado", f"Error al eliminar {singular}.")
 
-    recruiting_bp.add_url_rule(f"/parametros/{ruta}", f"parametros_{ruta}_vista", permiso(vista), methods=["GET"])
-    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_listar_{ruta}", permiso(listar), methods=["GET"])
-    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_crear_{ruta}", permiso(crear), methods=["POST"])
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}", f"parametros_{nombre}_vista", permiso(vista), methods=["GET"])
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_listar_{nombre}", permiso(listar), methods=["GET"])
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_crear_{nombre}", permiso(crear), methods=["POST"])
     recruiting_bp.add_url_rule(
-        f"/parametros/{ruta}/api/<int:registro_id>", f"parametros_actualizar_{ruta}", permiso(actualizar), methods=["PUT"]
+        f"/parametros/{ruta}/api/<int:registro_id>", f"parametros_actualizar_{nombre}", permiso(actualizar), methods=["PUT"]
     )
     recruiting_bp.add_url_rule(
-        f"/parametros/{ruta}/api/<int:registro_id>", f"parametros_eliminar_{ruta}", permiso(eliminar), methods=["DELETE"]
+        f"/parametros/{ruta}/api/<int:registro_id>", f"parametros_eliminar_{nombre}", permiso(eliminar), methods=["DELETE"]
     )
 
 
 _registrar_abm_ubicacion("provincias", "provincias", "provincia", "la provincia")
 _registrar_abm_ubicacion("ciudades", "ciudades", "ciudad", "la ciudad")
+_registrar_abm_ubicacion("motivos-blacklist", "motivos", "motivo", "el motivo")
 
 
 # ---- Archivos de CV ----------------------------------------------------------------------------------------------------

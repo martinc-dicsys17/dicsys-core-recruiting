@@ -34,6 +34,7 @@ from backend.modules.recruiting.models import (
     Provincia,
     RecruitingHabilidad,
     RecruitingLider,
+    RecruitingMotivoBlacklist,
     RecruitingPerfilPuesto,
     RecruitingReclutador,
     RecruitingSkill,
@@ -275,6 +276,67 @@ class ProvinciaService:
             raise HTTPException(
                 status_code=409, detail=f"No se puede eliminar la provincia '{nombre}' porque está siendo utilizada."
             )
+
+
+class MotivoBlacklistAbmService:
+    """ABM de motivos de Blacklist (recruiting_motivos_blacklist): catálogo global, borrado físico."""
+
+    @staticmethod
+    def listar(db: Session) -> List[RecruitingMotivoBlacklist]:
+        return db.query(RecruitingMotivoBlacklist).order_by(RecruitingMotivoBlacklist.id.asc()).all()
+
+    @staticmethod
+    def _obtener(db: Session, motivo_id: int) -> RecruitingMotivoBlacklist:
+        motivo = db.query(RecruitingMotivoBlacklist).filter(RecruitingMotivoBlacklist.id == motivo_id).first()
+        if not motivo:
+            raise HTTPException(status_code=404, detail="Motivo no encontrado.")
+        return motivo
+
+    @staticmethod
+    def _validar_motivo(db: Session, texto: Optional[str], excluir_id: Optional[int] = None) -> str:
+        motivo = _nombre_nuevo(texto, "del motivo")
+        clave = _clave_ubicacion(motivo)
+        for existente in db.query(RecruitingMotivoBlacklist).all():
+            if existente.id != excluir_id and _clave_ubicacion(existente.motivo) == clave:
+                raise HTTPException(status_code=409, detail=f"Ya existe un motivo con el nombre '{existente.motivo}'.")
+        return motivo
+
+    @staticmethod
+    def _guardar(db: Session) -> None:
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="No se pudo guardar el motivo porque ya existe uno con ese nombre.")
+
+    @staticmethod
+    def crear(db: Session, datos) -> RecruitingMotivoBlacklist:
+        motivo = RecruitingMotivoBlacklist(motivo=MotivoBlacklistAbmService._validar_motivo(db, datos.motivo))
+        db.add(motivo)
+        MotivoBlacklistAbmService._guardar(db)
+        db.refresh(motivo)
+        return motivo
+
+    @staticmethod
+    def actualizar(db: Session, motivo_id: int, datos) -> RecruitingMotivoBlacklist:
+        motivo = MotivoBlacklistAbmService._obtener(db, motivo_id)
+        if datos.motivo is not None and " ".join(datos.motivo.split()) != motivo.motivo:
+            motivo.motivo = MotivoBlacklistAbmService._validar_motivo(db, datos.motivo, excluir_id=motivo.id)
+        MotivoBlacklistAbmService._guardar(db)
+        db.refresh(motivo)
+        return motivo
+
+    @staticmethod
+    def eliminar(db: Session, motivo_id: int) -> None:
+        """Borrado físico; 409 si el motivo está siendo utilizado."""
+        motivo = MotivoBlacklistAbmService._obtener(db, motivo_id)
+        texto = motivo.motivo
+        try:
+            db.delete(motivo)
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=f"No se puede eliminar el motivo '{texto}' porque está siendo utilizado.")
 
 
 class CiudadService:
