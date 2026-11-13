@@ -214,7 +214,9 @@ class PipelineService:
         if condicion is not None:
             query = query.filter(condicion)
         por_etapa = {etapa: cantidad for etapa, cantidad in query.group_by(GestionBusqueda.etapa_actual).all()}
-        return {"total": sum(por_etapa.values()), "por_etapa": por_etapa}
+        # «total» son los que siguen en proceso: los descartados salen del embudo (se ven en su propia etapa)
+        en_proceso = sum(n for etapa, n in por_etapa.items() if PipelineService.normalizar_nombre_etapa(etapa) != ETAPA_DESCARTADOS)
+        return {"total": en_proceso, "por_etapa": por_etapa}
 
     @staticmethod
     def candidatos_por_columna(
@@ -487,6 +489,23 @@ class PipelineService:
 
     @staticmethod
     def cambiar_etapa(
+        db: Session,
+        empresa_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
+        candidato_id: uuid.UUID,
+        datos: CambiarEtapaRequest,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> GestionBusqueda:
+        """Mueve, descarta o reingresa a un candidato (ver `_mover`) y deja actualizados los contadores de la búsqueda."""
+        registro = PipelineService._mover(db, empresa_id, oportunidad_id, candidato_id, datos, usuario, current_user)
+        solicitud = db.query(Solicitud).filter(Solicitud.id == oportunidad_id, Solicitud.empresa_id == empresa_id).first()
+        if solicitud:
+            CandidatosDeBusquedaService.recalcular_metricas(db, solicitud)
+        return registro
+
+    @staticmethod
+    def _mover(
         db: Session,
         empresa_id: uuid.UUID,
         oportunidad_id: uuid.UUID,

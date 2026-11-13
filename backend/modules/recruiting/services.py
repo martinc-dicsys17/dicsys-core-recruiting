@@ -5178,21 +5178,64 @@ class OportunidadService:
         if current_user and usuario_es_grupo_externos(db, current_user, empresa_id):
             if solicitud.externo_id != current_user.id:
                 raise HTTPException(status_code=403, detail="No tenés acceso a esta búsqueda: no la tenés asignada.")
-        # Valor de la respuesta: no se marca como cambio para que un commit posterior no lo guarde
-        q_activos = (
-            db.query(func.count(GestionBusqueda.id))
+        OportunidadService.aplicar_contadores_pipeline(db, empresa_id, [solicitud])
+        return solicitud
+
+    # ---- contadores del embudo ---------------------------------------------------
+
+    # Cada contador del listado cuenta los candidatos de una o más etapas del Pipeline (nombres canónicos y los legados,
+    # sin tildes ni mayúsculas). Los descartados no cuentan en ninguno. «Candidatos en Pipeline» y «Q Activos» son todos
+    # los vigentes que no están descartados.
+    ETAPAS_DE_CONTADOR = {
+        "coordinando_entrevista": ("candidato", "postulado", "coordinando entrevista", "screening"),
+        "entrevistados_rrhh": ("entrevista rrhh",),
+        "presentacion_lider": ("entrevista lider dicsys", "entrevista tecnica"),
+        "feedback_lider": ("validacion administracion",),
+        "presentacion_cliente": ("entrevista cliente",),
+    }
+
+    @staticmethod
+    def contadores_pipeline(db: Session, empresa_id: uuid.UUID, solicitud_ids: List[uuid.UUID]) -> Dict[uuid.UUID, Dict[str, int]]:
+        """Contadores del embudo de cada búsqueda, calculados sobre el Pipeline real (recruiting_gestionBusqueda) y con una
+        sola consulta: no dependen de quién consulta."""
+        resultado = {i: {"candidatos_pipeline": 0, "q_activos": 0, **{c: 0 for c in OportunidadService.ETAPAS_DE_CONTADOR}} for i in solicitud_ids}
+        if not solicitud_ids:
+            return resultado
+        filas = (
+            db.query(
+                GestionBusqueda.oportunidad_id, GestionBusqueda.etapa_actual, GestionBusqueda.estado, func.count(GestionBusqueda.id)
+            )
+            .join(Candidato, GestionBusqueda.candidato_id == Candidato.id)
             .filter(
                 GestionBusqueda.empresa_id == empresa_id,
-                GestionBusqueda.oportunidad_id == solicitud.id,
+                GestionBusqueda.oportunidad_id.in_(solicitud_ids),
                 GestionBusqueda.activo.is_(True),
                 GestionBusqueda.deleted_at.is_(None),
-                or_(GestionBusqueda.estado != "Descartado", GestionBusqueda.estado.is_(None)),
+                Candidato.deleted_at.is_(None),
             )
-            .scalar()
-            or 0
+            .group_by(GestionBusqueda.oportunidad_id, GestionBusqueda.etapa_actual, GestionBusqueda.estado)
+            .all()
         )
-        set_committed_value(solicitud, "q_activos", q_activos)
-        return solicitud
+        for oportunidad_id, etapa, estado, cantidad in filas:
+            clave = _clave_ubicacion(etapa)
+            if clave in ("descartados", "descartado") or _clave_ubicacion(estado) == "descartado":
+                continue
+            fila = resultado[oportunidad_id]
+            fila["candidatos_pipeline"] += cantidad
+            fila["q_activos"] += cantidad
+            for contador, etapas in OportunidadService.ETAPAS_DE_CONTADOR.items():
+                if clave in etapas:
+                    fila[contador] += cantidad
+        return resultado
+
+    @staticmethod
+    def aplicar_contadores_pipeline(db: Session, empresa_id: uuid.UUID, solicitudes: list) -> None:
+        """Deja en cada búsqueda sus contadores reales para la respuesta. No se marcan como cambio, así que un commit
+        posterior no los guarda (los persiste `CandidatosDeBusquedaService.recalcular_metricas`)."""
+        contadores = OportunidadService.contadores_pipeline(db, empresa_id, [s.id for s in solicitudes])
+        for solicitud in solicitudes:
+            for campo, valor in contadores[solicitud.id].items():
+                set_committed_value(solicitud, campo, valor)
 
     # ---- alta y edición ----------------------------------------------------
 
@@ -5776,41 +5819,10 @@ class CandidatosDeBusquedaService:
 
     @staticmethod
     def recalcular_metricas(db: Session, solicitud: Solicitud) -> None:
-        """Deja en la búsqueda los contadores del embudo (los que muestra el listado), calculados sobre todas sus
-        postulaciones vigentes: no dependen de quién consulta."""
-        filas = (
-            db.query(Postulacion.etapa, Postulacion.estado)
-            .join(Candidato, Postulacion.candidato_id == Candidato.id)
-            .filter(
-                Postulacion.empresa_id == solicitud.empresa_id,
-                Postulacion.solicitud_id == solicitud.id,
-                Postulacion.deleted_at.is_(None),
-                Candidato.deleted_at.is_(None),
-            )
-            .all()
-        )
-        contadores = {"coordinando": 0, "rrhh": 0, "lider": 0, "feedback": 0, "cliente": 0, "activos": 0}
-        for etapa, estado in filas:
-            etapa = (etapa or "").lower()
-            if "coordinando" in etapa:
-                contadores["coordinando"] += 1
-            elif "rrhh" in etapa:
-                contadores["rrhh"] += 1
-            elif "presentacion lider" in etapa or "presentación líder" in etapa:
-                contadores["lider"] += 1
-            elif "feedback" in etapa:
-                contadores["feedback"] += 1
-            elif "cliente" in etapa:
-                contadores["cliente"] += 1
-            if (estado or "").lower() == "en proceso":
-                contadores["activos"] += 1
-        solicitud.candidatos_pipeline = len(filas)
-        solicitud.coordinando_entrevista = contadores["coordinando"]
-        solicitud.entrevistados_rrhh = contadores["rrhh"]
-        solicitud.presentacion_lider = contadores["lider"]
-        solicitud.feedback_lider = contadores["feedback"]
-        solicitud.presentacion_cliente = contadores["cliente"]
-        solicitud.q_activos = contadores["activos"]
+        """Deja en la búsqueda los contadores del embudo (los que persiste el listado), calculados sobre el Pipeline real:
+        se recalculan al sumar o quitar un candidato y al moverlo o descartarlo de etapa."""
+        for campo, valor in OportunidadService.contadores_pipeline(db, solicitud.empresa_id, [solicitud.id])[solicitud.id].items():
+            setattr(solicitud, campo, valor)
         db.commit()
 
     @staticmethod

@@ -892,7 +892,7 @@ class PermisosPipeline(BaseModel):
 
 
 class ContadoresEtapas(BaseModel):
-    """Candidatos vigentes de una búsqueda por etapa del pipeline."""
+    """Candidatos vigentes de una búsqueda por etapa del pipeline. `total` no incluye a los descartados."""
 
     total: int
     por_etapa: dict[str, int]

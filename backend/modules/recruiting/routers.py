@@ -670,6 +670,7 @@ async def listar_oportunidades(
         db, empresa_id, busqueda=busqueda, estado=estado, cliente=cliente, tipo=tipo, current_user=current_user
     )
     items, datos = paginar(consulta, pagina, por_pagina)
+    OportunidadService.aplicar_contadores_pipeline(db, empresa_id, items)
     return OportunidadPagina(items=[OportunidadResponse.from_model(o) for o in items], **datos)
 
 

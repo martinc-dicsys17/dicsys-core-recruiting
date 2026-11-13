@@ -193,8 +193,8 @@
                         @click="guardarConfig()"
                         :disabled="guardando"
                         class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-semibold rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50">
-                    <i x-show="!guardando" data-lucide="save" class="w-4 h-4"></i>
-                    <i x-show="guardando" data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                    <span x-show="!guardando" class="inline-flex"><i data-lucide="save" class="w-4 h-4"></i></span>
+                    <span x-show="guardando" class="inline-flex"><i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i></span>
                     <span x-text="guardando ? 'Guardando...' : 'Guardar cambios'">Guardar cambios</span>
                 </button>
             </div>

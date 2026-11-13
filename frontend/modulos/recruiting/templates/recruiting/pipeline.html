@@ -836,7 +836,7 @@
                 <h2 class="text-base font-bold text-dark-900">Etapas del Proceso</h2>
             </div>
             <span class="text-xs text-dark-500 font-medium whitespace-nowrap">
-                Total en proceso: <strong class="text-dark-900 font-bold" x-text="candidatos.length"></strong> candidatos
+                Total en proceso: <strong class="text-dark-900 font-bold" x-text="candidatos.filter(c => !([c.estado, c.etapa_actual].some(v => v === 'Descartado' || v === 'Descartados'))).length"></strong> candidatos
             </span>
         </div>
 

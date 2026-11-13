@@ -100,8 +100,12 @@ Cancelar una búsqueda es pasarla al estado Cancelada (nunca se borra).
   reclutadores, y no ve el líder, el tipo ni Smart Matching.
 - **Búsqueda Ganada = cerrada**: no admite cambios, asignaciones ni candidatos (409). Pasa a Ganada sola cuando un
   candidato llega a Ingreso.
-- **Contadores del embudo** (`candidatos_pipeline`, `coordinando_entrevista`...): se recalculan al sumar o quitar un
-  candidato, sobre todas las postulaciones vigentes (no dependen de quién consulta).
+- **Contadores del embudo** (`candidatos_pipeline`, `coordinando_entrevista`...): salen del Pipeline real
+  (`recruiting_gestionBusqueda`), no dependen de quién consulta, no cuentan descartados y el listado y el detalle los
+  calculan al responder. Se persisten al sumar, quitar, mover o descartar un candidato. Coordinando = Candidato y
+  Screening; Entrevistados RRHH = Entrevista RRHH; Presentación al líder = Entrevista Líder Dicsys; Feedback líder =
+  Validación Administración; Presentación al cliente = Entrevista Cliente; «Candidatos en Pipeline» y Q Activos = todos
+  los que no están descartados.
 - **Modalidad y prioridad** se guardan sin tildes (`Hibrido`, `Critica`) y la pantalla las muestra con su tilde.
 - **Dependencia de permisos**: los combos del formulario (skills, habilidades, perfiles de puesto) salen de los
   catálogos de Candidatos, así que quien usa Búsquedas necesita también `recruiting.candidatos`.
