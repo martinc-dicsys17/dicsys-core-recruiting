@@ -254,3 +254,6 @@ remove/
 /data/
 *.dump
 *.bak
+
+# Dependencias de Node (frontend-vue)
+node_modules/
