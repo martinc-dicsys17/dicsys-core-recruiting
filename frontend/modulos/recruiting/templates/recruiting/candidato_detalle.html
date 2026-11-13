@@ -7,6 +7,39 @@
 {% block content %}
 <div class="p-2 lg:p-6 w-full max-w-none animate-fade-in" x-data="candidatoDetalleComponent()">
 
+    <!-- Modal de confirmación: agregar a Blacklist -->
+    <div x-show="confirmarBlacklist" x-cloak
+         class="fixed inset-0 z-50 flex items-center justify-center bg-dark-900/50 p-4"
+         @keydown.escape.window="confirmarBlacklist = false"
+         @click.self="confirmarBlacklist = false">
+        <div role="dialog" aria-modal="true" aria-labelledby="titulo-modal-blacklist"
+             class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl border border-dark-200">
+            <div class="flex items-start gap-3">
+                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#a3162b]">
+                    <i data-lucide="shield-ban" class="w-5 h-5 text-white"></i>
+                </span>
+                <div>
+                    <h2 id="titulo-modal-blacklist" class="text-lg font-bold text-dark-900">¿Agregar a Blacklist?</h2>
+                    <p class="mt-1 text-sm text-dark-600">
+                        ¿Estás seguro de mandar a
+                        <strong x-text="datos.nombre + ' ' + (datos.apellido || '')"></strong>
+                        a la Blacklist?
+                    </p>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-2">
+                <button type="button" @click="confirmarBlacklist = false"
+                        class="bg-white hover:bg-dark-50 text-dark-700 border border-dark-200 font-semibold px-4 py-2.5 rounded-xl text-sm cursor-pointer">
+                    Cancelar
+                </button>
+                <button type="button" @click="confirmarBlacklist = false; mostrarToast('error', 'El alta a Blacklist todavía no está disponible.')"
+                        class="bg-[#a3162b] hover:bg-[#7f1526] text-white font-semibold px-4 py-2.5 rounded-xl text-sm cursor-pointer">
+                    Sí, agregar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Toast de notificaciones -->
     <div x-show="toast.visible" 
          x-cloak
@@ -63,8 +96,16 @@
             <!-- Botones en Modo Lectura -->
             <template x-if="!editando">
                 <div class="flex items-center gap-2">
-                    <button type="button" 
-                            @click="iniciarEdicion()" 
+                    {# Solo visual: la accion se conecta cuando exista el backend de Blacklist. #}
+                    <button type="button"
+                            id="btn-agregar-blacklist"
+                            @click="confirmarBlacklist = true"
+                            class="inline-flex items-center gap-2 bg-[#a3162b] hover:bg-[#7f1526] text-white font-semibold px-4 py-2.5 rounded-xl shadow-soft transition-colors cursor-pointer text-sm">
+                        <i data-lucide="shield-ban" class="w-4 h-4 text-white"></i>
+                        <span>Agregar a Blacklist</span>
+                    </button>
+                    <button type="button"
+                            @click="iniciarEdicion()"
                             class="inline-flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white font-semibold px-4 py-2.5 rounded-xl shadow-soft transition-colors cursor-pointer text-sm">
                         <i data-lucide="edit-3" class="w-4 h-4 text-white"></i>
                         <span>Editar</span>
@@ -613,6 +654,7 @@ function candidatoDetalleComponent() {
 
     return {
         editando: false,
+        confirmarBlacklist: false,
         guardando: false,
         eliminando: false,
         datos: { ...rawCandidato },
