@@ -537,6 +537,7 @@ def create_app(config=None, api_request_func=None):
     from modulos.permisos.app_module import permisos_bp
     from modulos.recibos.app_module import recibos_admin_bp, recibos_nomina_bp, recibos_portal_bp
     from modulos.recruiting.app_module import recruiting_bp
+    from modulos.vue_app.app_module import vue_app_bp
     from modulos.sincronizacion.app_module import sincronizacion_bp
     from modulos.soporte.app_module import soporte_bp
     from modulos.starmiles.app_module import starmiles_bp
@@ -565,6 +566,7 @@ def create_app(config=None, api_request_func=None):
     app.register_blueprint(recibos_nomina_bp)
     app.register_blueprint(oidc_bp)  # proveedor OpenID Connect (F21)
     app.register_blueprint(recruiting_bp)
+    app.register_blueprint(vue_app_bp)
 
     return app
 

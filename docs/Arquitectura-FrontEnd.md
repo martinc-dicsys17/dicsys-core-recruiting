@@ -1,8 +1,9 @@
 # Arquitectura Frontend - Dicsys Core
 
-> **Legacy.** Es el frontend de Flask + HTMX + Alpine que corre hoy. El reemplazo es una SPA en Vue 3 que convive con
-> este frontend y lo apaga módulo por módulo: ver [`update-techs-v2-final.md`](../update-techs-v2-final.md) (Paso 2,
-> fases F08 a F13). Cuando la SPA arranque, su arquitectura va en `docs/Arquitectura-FrontEnd-Vue.md`.
+> **Legacy.** Es el frontend de Flask + HTMX + Alpine que corre hoy. Las pantallas nuevas ya no se hacen acá:
+> se desarrollan en Vue 3 siguiendo a Blacklist (ver `frontend-vue/README.md` y la regla en `CLAUDE.md`). La SPA convive
+> con este frontend; este documento rige solo para las pantallas legacy existentes, que se migran únicamente cuando se
+> pida. Plan general de migración: [`update-techs-v2-final.md`](../update-techs-v2-final.md).
 
 ## Estructura de directorios
 

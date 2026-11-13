@@ -1,0 +1,147 @@
+/* Orden de capas: los estilos de PrimeVue van despues del reset de Tailwind y antes de sus utilidades,
+   asi las clases de Tailwind pueden ajustar un componente de PrimeVue. Debe coincidir con cssLayer en main.ts. */
+@layer theme, base, primevue, components, utilities;
+
+@import 'tailwindcss';
+
+/* Tokens de diseno de Dicsys Core: mismos valores que usa el frontend actual (core/base.html). */
+@theme {
+  --font-sans: 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+
+  --color-primary-50: #e6f4ff;
+  --color-primary-100: #bae3ff;
+  --color-primary-200: #7cc4fa;
+  --color-primary-300: #47a3f3;
+  --color-primary-400: #2186eb;
+  --color-primary-500: #0967d2;
+  --color-primary-600: #0552b5;
+  --color-primary-700: #03449e;
+  --color-primary-800: #01337d;
+  --color-primary-900: #002159;
+
+  --color-dark-50: #f8fafc;
+  --color-dark-100: #f1f5f9;
+  --color-dark-200: #e2e8f0;
+  --color-dark-300: #cbd5e1;
+  --color-dark-400: #94a3b8;
+  --color-dark-500: #64748b;
+  --color-dark-600: #475569;
+  --color-dark-700: #334155;
+  --color-dark-800: #1e293b;
+  --color-dark-900: #0f172a;
+
+  /* Tematica oscura de Blacklist: grafito (superficies) y bordo (acentos).
+     Mismos valores que el esquema oscuro de PrimeVue en primevue-preset.ts. */
+  --color-grafito-50: #f4f4f6;
+  --color-grafito-100: #e4e4e8;
+  --color-grafito-200: #cacad1;
+  --color-grafito-300: #a8a8b3;
+  --color-grafito-400: #8b8b96;
+  --color-grafito-500: #5f5f69;
+  --color-grafito-600: #45454d;
+  --color-grafito-700: #33333a;
+  --color-grafito-800: #26262b;
+  --color-grafito-900: #1b1b1f;
+  --color-grafito-950: #121214;
+
+  --color-bordo-50: #fff1f2;
+  --color-bordo-100: #ffe1e4;
+  --color-bordo-200: #ffc8cd;
+  --color-bordo-300: #ff9ba5;
+  --color-bordo-400: #f8606f;
+  --color-bordo-500: #e5364a;
+  --color-bordo-600: #c81e35;
+  --color-bordo-700: #a3162b;
+  --color-bordo-800: #7f1526;
+  --color-bordo-900: #5c1220;
+  --color-bordo-950: #3a0812;
+
+  --color-accent-green: #7cb342;
+  --color-accent-yellow: #fdd835;
+  --color-accent-orange: #fb8c00;
+  --color-accent-purple: #8e24aa;
+  --color-accent-cyan: #00acc1;
+
+  --shadow-soft: 0 2px 15px -3px rgb(0 0 0 / 0.07), 0 10px 20px -2px rgb(0 0 0 / 0.04);
+
+  --animate-fade-in: fade-in 0.4s ease-out;
+  --animate-pop-in: pop-in 0.18s ease-out;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
+@layer base {
+  button:not(:disabled),
+  [role='button'] {
+    cursor: pointer;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: var(--color-dark-100);
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-dark-300);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-dark-400);
+  }
+}
+
+@utility dicsys-gradient {
+  background: linear-gradient(90deg, #7cb342 0%, #fdd835 25%, #fb8c00 50%, #0967d2 75%, #8e24aa 100%);
+}
+
+@utility gradient-text {
+  background: linear-gradient(135deg, #0967d2 0%, #8e24aa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Campo de formulario comun a toda la nueva interfaz. */
+@utility campo {
+  width: 100%;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-dark-200);
+  background: white;
+  padding: 0.5rem 0.875rem;
+  font-size: var(--text-sm);
+  color: var(--color-dark-800);
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+
+  &::placeholder {
+    color: var(--color-dark-400);
+  }
+  &:focus {
+    border-color: var(--color-primary-500);
+    box-shadow: 0 0 0 3px rgb(9 103 210 / 0.15);
+  }
+}

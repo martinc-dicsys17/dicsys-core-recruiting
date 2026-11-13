@@ -11,8 +11,9 @@
 - **Antes de generar o modificar código, leer y cumplir `docs/` según corresponda:**
   - Backend: `docs/Arquitectura-Backend.md` (estructura y contrato de la API), `docs/Modulos-Python.md` (dependencias y
     módulos nuevos) y `docs/Stack-Trace-Flujos.md` (flujos, manejo de errores y propagación de errores HTTP).
-  - Frontend: `docs/Arquitectura-FrontEnd.md` (Flask con Blueprints, Jinja2, HTMX, Alpine.js y Tailwind; es el frontend
-    vigente hasta que la SPA lo reemplace).
+  - Frontend: `frontend-vue/README.md` (Vue 3, stack y convenciones de las pantallas nuevas) y
+    `docs/Arquitectura-FrontEnd.md` (Flask con Blueprints, Jinja2, HTMX, Alpine.js y Tailwind; frontend legacy, solo
+    para las pantallas existentes).
   - Base de datos: `docs/Migraciones.md`.
   - Ambiente de test y deploy: `docs/Ambiente-Test.md`.
   - Módulos con documentación propia: `docs/modulos/` y `docs/modulo/`, cuando exista la del módulo que se toca.
@@ -48,6 +49,14 @@
 - **Multitenancy**: las tablas de datos de negocio llevan `empresa_id` y toda consulta filtra por la empresa activa del
   JWT (`get_empresa_activa`), nunca por una que mande el cliente. Los catálogos globales (por ejemplo, skills y
   habilidades de Recruiting) no la llevan; todo lo que tiene la columna se filtra siempre.
+- **Pantallas nuevas en Vue (regla de arquitectura frontend).** Toda pantalla nueva se desarrolla con el frontend
+  nuevo (Vue 3, `frontend-vue/`), tomando como referencia la implementación de Blacklist
+  (`frontend-vue/src/modules/recruiting/blacklist/`): mismo stack (TypeScript, PrimeVue, TanStack Query, Pinia,
+  Tailwind), misma estructura por pantalla (`api/`, `composables/`, `components/`), mismos estilos y mismo mecanismo de
+  integración (host `frontend/modulos/vue_app`, entrada en `PANTALLAS_VUE` y compilado en `frontend/static/vue`). Se
+  reutiliza lo existente antes de crear algo nuevo. **No se crean pantallas nuevas con Flask/Jinja2/HTMX/Alpine.** Las
+  pantallas legacy siguen funcionando como están y se migran solo cuando el usuario lo pide. El diseño de Recruiting
+  sigue siendo solo para escritorio (sin mobile-first ni responsive).
 - **El frontend no toca la base**: habla con el backend por su API (`get_api_request_func()`) y protege sus rutas con
   `require_permiso`. El backend es el que valida el acceso de verdad; el frontend solo orienta la interfaz.
 - **No inventar helpers, wrappers ni librerías fuera de los estándares documentados.** Antes de crear uno, buscar si ya

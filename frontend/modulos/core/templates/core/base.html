@@ -364,6 +364,17 @@
                         </span>
                         {% endif %}
                         {% endfor %}
+                        {# Pantallas de la nueva interfaz Vue (modulos/vue_app). Estandar visual para identificarlas:
+                           fondo verde muy suave, linea verde a la izquierda y etiqueta "VUE". #}
+                        {% for pantalla in (pantallas_vue or {}).get(menu.codigo, []) %}
+                        <a href="{{ pantalla.url }}"
+                           title="Pantalla del nuevo frontend Vue"
+                           class="flex items-center py-2 px-3 rounded-lg transition-all duration-200 group bg-emerald-50/70 text-dark-600 hover:bg-emerald-100/70 hover:text-dark-800 shadow-[inset_2px_0_0_0_#34d399]">
+                            <i data-lucide="{{ pantalla.icono or 'circle' }}" class="w-4 h-4 mr-3 text-emerald-600"></i>
+                            <span class="text-sm font-medium">{{ pantalla.nombre }}</span>
+                            <span class="ml-auto text-[10px] leading-none font-bold tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded">VUE</span>
+                        </a>
+                        {% endfor %}
                     </div>
                 </div>
                 {% endfor %}
