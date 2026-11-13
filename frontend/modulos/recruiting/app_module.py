@@ -1,5 +1,5 @@
 """
-Módulo Recruiting: Dashboard, Manager Dashboard, Candidatos y Búsquedas. Pipeline y Parámetros se migran después.
+Módulo Recruiting: Dashboard, Manager Dashboard, Candidatos, Búsquedas y Pipeline. Parámetros se migra después.
 """
 
 import logging
@@ -16,6 +16,7 @@ from flask import (
     redirect,
     render_template,
     request,
+    Response,
     session,
     url_for,
 )
@@ -41,6 +42,14 @@ def _ve_candidatos():
     return bool(permisos.get("recruiting") and permisos.get("recruiting.candidatos"))
 
 
+def _ve_pipeline():
+    """Si el usuario tiene el ítem Pipeline: el Dashboard solo enlaza a las pantallas a las que puede entrar."""
+    if _es_admin():
+        return True
+    permisos = _obtener_permisos_usuario()
+    return bool(permisos.get("recruiting") and permisos.get("recruiting.gestion_busquedas"))
+
+
 # === DASHBOARD ===
 # /recruiting/dashboard va primero: es la URL que arma url_for('recruiting.dashboard') para el menú.
 # El administrador entra por el mismo ítem del menú y ve el Manager Dashboard, como en el módulo original.
@@ -59,7 +68,15 @@ def dashboard():
         detalle = data.get("detail") if isinstance(data, dict) else None
         return render_template("recruiting/dashboard.html", dashboard=None, error=detalle or ERROR_DASHBOARD)
 
-    return render_template("recruiting/dashboard.html", dashboard=data, error=None, tiene_candidatos=_ve_candidatos())
+    return render_template(
+        "recruiting/dashboard.html",
+        dashboard=data,
+        error=None,
+        tiene_candidatos=_ve_candidatos(),
+        tiene_pipeline=_ve_pipeline(),
+        # Los casos de CV duplicado los revisa el personal interno: el grupo EXTERNOS no los ve
+        puede_ver_duplicados=_permisos_pipeline()["puede_cargar_cv_general"],
+    )
 
 
 # === MANAGER DASHBOARD (solo administradores) ===
@@ -148,7 +165,12 @@ def _detalle_de_error(data, por_defecto):
 
 def _permisos_candidatos():
     """Acciones que el usuario ve en la pantalla; restrictivo si no se puede consultar el backend."""
-    permisos = {"puede_eliminar_candidatos": False, "puede_cargar_cv_general": False, "puede_carga_masiva": False}
+    permisos = {
+        "puede_eliminar_candidatos": False,
+        "puede_cargar_cv_general": False,
+        "puede_carga_masiva": False,
+        "puede_asignar_candidatos": False,
+    }
     try:
         data, status = get_api_request_func()("GET", "/recruiting/candidatos/permisos", token=session.get("token"))
         if status == 200 and isinstance(data, dict):
@@ -422,11 +444,18 @@ def nuevo_candidato():
     token = session.get("token")
     return render_template(
         "recruiting/candidato_form.html",
+        busqueda_id=_busqueda_id_valido(request.args.get("busqueda_id")),
         niveles_seniority_catalogo=_lista_de_nombres(
             api_request, token, "/recruiting/niveles-seniority", ordenar=False
         ),
         **_contexto_de_formulario(api_request, token),
     )
+
+
+def _busqueda_id_valido(valor):
+    """El id de la búsqueda desde la que se da de alta un candidato (texto UUID), o '' si no es válido."""
+    texto = str(valor or "").strip()
+    return texto if re.fullmatch(r"[0-9a-fA-F]{8}(-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}", texto) else ""
 
 
 def _lista_desde_texto(valor):
@@ -487,12 +516,21 @@ def crear_candidato():
     token = session.get("token")
     body = (request.get_json(silent=True) or {}) if request.is_json else request.form.to_dict()
 
-    data, status = api_request("POST", "/recruiting/candidatos", data=_payload_de_candidato(body), token=token)
-    destino = _volver_valido(body.get("volver")) or url_for("recruiting.candidatos")
+    # Alta desde el detalle de una búsqueda: el backend valida que sea EXTERNOS y que la búsqueda esté asignada al usuario
+    busqueda_id = _busqueda_id_valido(body.get("busqueda_id"))
+    if busqueda_id:
+        data, status = api_request(
+            "POST", f"/recruiting/oportunidades/{busqueda_id}/candidatos/nuevo", data=_payload_de_candidato(body), token=token
+        )
+        destino = _volver_valido(body.get("volver")) or url_for("recruiting.oportunidad_detalle", id=busqueda_id)
+    else:
+        data, status = api_request("POST", "/recruiting/candidatos", data=_payload_de_candidato(body), token=token)
+        destino = _volver_valido(body.get("volver")) or url_for("recruiting.candidatos")
 
     if status in (200, 201):
         if request.is_json:
-            return {"success": True, "candidato": data, "redirect": destino}, 201
+            candidato = data.get("candidato") if busqueda_id and isinstance(data, dict) else data
+            return {"success": True, "candidato": candidato, "redirect": destino}, 201
         return redirect(destino)
 
     error_msg = _detalle_de_error(data, "Error al crear el candidato")
@@ -505,6 +543,7 @@ def crear_candidato():
             "recruiting/candidato_form.html",
             error=error_msg,
             form=body,
+            busqueda_id=busqueda_id,
             niveles_seniority_catalogo=_lista_de_nombres(
                 api_request, token, "/recruiting/niveles-seniority", ordenar=False
             ),
@@ -988,6 +1027,7 @@ def oportunidad_detalle(id):
         puede_ver_smart_matching=ve_smart_matching,
         puede_administrar_externos=puede_administrar_externos,
         es_usuario_externo=permisos["es_externo"],
+        puede_cargar_cv_en_busqueda=permisos["es_externo"] and not ganada,
         externos_disponibles=_externos_disponibles(api_request, token) if puede_administrar_externos else [],
         reclutadores_catalogo=_opciones_de_personas(api_request, token, "reclutadores"),
     )
@@ -1097,3 +1137,412 @@ def asignar_candidato_oportunidad(id):
     if status in (200, 201):
         return jsonify({"success": True, "data": data}), status
     return jsonify({"success": False, "error": _detalle_de_error(data, "Error al asignar el candidato")}), status or 400
+
+
+# === PIPELINE (ítem «gestion_busquedas») ===
+# La vista global, el Pipeline de una búsqueda (tabla, mover de etapa, descartar, adjuntos), la ficha del pipeline de un
+# candidato y «Agregar candidato». Las pantallas compartidas con Candidatos y Búsquedas exigen solo el módulo: el backend
+# valida el permiso del ítem en cada llamada y esta capa solo orienta la interfaz.
+
+ERROR_PIPELINE = "No se pudo cargar el Pipeline. Probá de nuevo en unos minutos."
+EXTENSIONES_ADJUNTO_ETAPA = (".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", ".txt", ".zip", ".rar")
+MAX_ADJUNTO_ETAPA_BYTES = 10 * 1024 * 1024
+
+
+def _permisos_pipeline():
+    """Acciones que el usuario ve en el Pipeline; restrictivo si no se puede consultar el backend."""
+    permisos = {
+        "puede_mover_descartar": False,
+        "puede_eliminar_candidatos": False,
+        "puede_asignar_candidatos": False,
+        "puede_crear_busquedas": False,
+        "puede_eliminar_busquedas": False,
+        "puede_ver_lider_tipo_fecha_busqueda": False,
+        "puede_ver_smart_matching": False,
+        "puede_cargar_cv_general": False,
+        "puede_cargar_cv_en_busqueda": False,
+    }
+    try:
+        data, status = get_api_request_func()("GET", "/recruiting/pipeline-permisos", token=session.get("token"))
+        if status == 200 and isinstance(data, dict):
+            for clave in permisos:
+                permisos[clave] = bool(data.get(clave))
+    except Exception:
+        pass
+    return permisos
+
+
+def _busqueda_ganada(op):
+    """True si la búsqueda está Ganada (se cierra sola al confirmar el Ingreso de un candidato)."""
+    return isinstance(op, dict) and str(op.get("estado") or "").strip().lower() == "ganada"
+
+
+def _filtro_alcance_candidatos():
+    """Filtro de candidatos del Pipeline desde la query string: '' (todos) | 'propios'."""
+    return "propios" if request.args.get("alcance_candidatos", "").strip().lower() == "propios" else ""
+
+
+def _parametro_alcance(prefijo="?"):
+    alcance = _filtro_alcance_candidatos()
+    return prefijo + urlencode({"alcance_candidatos": alcance}) if alcance else ""
+
+
+@recruiting_bp.route("/gestion-busquedas", methods=["GET"])
+@recruiting_bp.route("/asignar-candidato", methods=["GET"])
+@require_permiso("recruiting.gestion_busquedas")
+def gestion_busquedas():
+    """Pipeline: vista global (todas las búsquedas con sus candidatos por columna) o individual (elegir una búsqueda)."""
+    api_request = get_api_request_func()
+    token = session.get("token")
+    vista = request.args.get("vista", "global")
+    if vista not in ("global", "individual"):
+        vista = "global"
+
+    resumen = {"columnas": [], "items": []}
+    oportunidades_abiertas = []
+    error = None
+    if vista == "global":
+        data, status = api_request(
+            "GET",
+            "/recruiting/pipeline-resumen?"
+            + urlencode({"estado": "Abierta", "alcance_candidatos": _filtro_alcance_candidatos()}),
+            token=token,
+        )
+        if status == 200 and isinstance(data, dict):
+            resumen = {"columnas": data.get("columnas") or [], "items": data.get("items") or []}
+        else:
+            error = _detalle_de_error(data, ERROR_PIPELINE)
+    else:
+        data, status = api_request("GET", "/recruiting/oportunidades?estado=Abierta&por_pagina=100", token=token)
+        if status == 200 and isinstance(data, dict):
+            oportunidades_abiertas = [
+                op for op in (data.get("items") or []) if str(op.get("estado", "")).strip().lower() == "abierta"
+            ]
+        else:
+            error = _detalle_de_error(data, ERROR_PIPELINE)
+
+    return render_template(
+        "recruiting/asignar_candidato_hub.html",
+        puede_crear_busquedas=_permisos_pipeline()["puede_crear_busquedas"],
+        vista=vista,
+        resumen=resumen,
+        oportunidades=oportunidades_abiertas,
+        filtro_alcance_candidatos=_filtro_alcance_candidatos(),
+        error_pipeline=error,
+    )
+
+
+@recruiting_bp.route("/pipeline", methods=["GET"])
+@recruiting_bp.route("/oportunidades/pipeline", methods=["GET"])
+@require_permiso("recruiting.gestion_busquedas")
+def oportunidades_pipeline_hub():
+    """Lleva al Pipeline de la primera búsqueda Abierta (o de la más reciente); sin búsquedas, a la vista global."""
+    data, status = get_api_request_func()("GET", "/recruiting/oportunidades?por_pagina=20", token=session.get("token"))
+    if status == 200 and isinstance(data, dict):
+        items = data.get("items") or []
+        abierta = next((op for op in items if str(op.get("estado", "")).strip().lower() == "abierta"), None)
+        elegida = abierta or (items[0] if items else None)
+        if elegida and elegida.get("id"):
+            return redirect(url_for("recruiting.pipeline", id=elegida["id"]))
+    return redirect(url_for("recruiting.gestion_busquedas"))
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/pipeline", methods=["GET"])
+@require_permiso("recruiting.gestion_busquedas")
+def pipeline(id):
+    """Pipeline de una búsqueda: sus candidatos por etapa, con mover de etapa y descartar."""
+    api_request = get_api_request_func()
+    token = session.get("token")
+    consulta = _parametro_alcance()
+
+    op, status_op = api_request("GET", f"/recruiting/oportunidades/{id}", token=token)
+    if status_op != 200 or not isinstance(op, dict):
+        flash(
+            "No tenés acceso a esta búsqueda: no la tenés asignada."
+            if status_op == 403
+            else "La búsqueda solicitada no existe o no fue encontrada.",
+            "error",
+        )
+        return redirect(url_for("recruiting.gestion_busquedas"))
+
+    candidatos, status_cand = api_request("GET", f"/recruiting/oportunidades/{id}/pipeline-candidatos{consulta}", token=token)
+    contadores, status_cont = api_request("GET", f"/recruiting/oportunidades/{id}/pipeline-contadores{consulta}", token=token)
+    permisos = _permisos_pipeline()
+    ganada = _busqueda_ganada(op)
+
+    return render_template(
+        "recruiting/pipeline.html",
+        op=op,
+        oportunidad=op,
+        candidatos=candidatos if status_cand == 200 and isinstance(candidatos, list) else [],
+        contadores=contadores if status_cont == 200 and isinstance(contadores, dict) else {"total": 0, "por_etapa": {}},
+        error_pipeline=None if status_cand == 200 else _detalle_de_error(candidatos, ERROR_PIPELINE),
+        busqueda_ganada=ganada,
+        # Búsqueda Ganada = cerrada: solo consulta (el backend también rechaza cualquier cambio con 409)
+        puede_mover_descartar=permisos["puede_mover_descartar"] and not ganada,
+        puede_asignar_candidatos=permisos["puede_asignar_candidatos"] and not ganada,
+        filtro_etapas=[e.strip() for e in request.args.get("etapas", "").split(",") if e.strip()],
+        filtro_columna=request.args.get("columna", "").strip(),
+        filtro_alcance_candidatos=_filtro_alcance_candidatos(),
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/pipeline-columna/<string:columna>", methods=["GET"])
+@require_permiso("recruiting.gestion_busquedas")
+def pipeline_columna_candidatos(id, columna):
+    """Candidatos de una búsqueda en una columna de la vista global (detalle al pasar el mouse sobre la cifra)."""
+    data, status = get_api_request_func()(
+        "GET",
+        f"/recruiting/oportunidades/{id}/pipeline-columna/{quote(columna, safe='')}{_parametro_alcance()}",
+        token=session.get("token"),
+    )
+    if status == 200 and isinstance(data, list):
+        return jsonify(data), 200
+    return jsonify({"error": _detalle_de_error(data, "Error al obtener los candidatos")}), status or 500
+
+
+@recruiting_bp.route("/motivos-descarte", methods=["GET"])
+@require_permiso("recruiting.gestion_busquedas")
+def motivos_descarte():
+    """Motivos de descarte de la etapa indicada."""
+    etapa = request.args.get("etapa", "")
+    data, status = get_api_request_func()(
+        "GET", f"/recruiting/motivos-descarte?etapa={quote(etapa)}", token=session.get("token")
+    )
+    if status == 200 and isinstance(data, list):
+        return jsonify(data), 200
+    return jsonify({"error": _detalle_de_error(data, "Error al obtener los motivos de descarte")}), status or 500
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/candidatos/<uuid:candidato_id>/etapa", methods=["PUT", "POST"])
+@require_permiso("recruiting.gestion_busquedas")
+def actualizar_etapa_pipeline(id, candidato_id):
+    """Mueve de etapa, descarta o reingresa al candidato; si el formulario trae un archivo, lo adjunta a la etapa."""
+    api_request = get_api_request_func()
+    token = session.get("token")
+    archivo = request.files.get("archivo") if request.files else None
+    payload = (request.get_json(silent=True) or {}) if request.is_json else request.form.to_dict()
+
+    contenido = None
+    if archivo and archivo.filename:
+        extension = archivo.filename.lower().rsplit(".", 1)[-1] if "." in archivo.filename else ""
+        if f".{extension}" not in EXTENSIONES_ADJUNTO_ETAPA:
+            return jsonify({"success": False, "error": f"Tipo de archivo no permitido (.{extension})."}), 400
+        contenido = archivo.read()
+        if len(contenido) > MAX_ADJUNTO_ETAPA_BYTES:
+            return jsonify({"success": False, "error": "El archivo excede el tamaño máximo permitido de 10 MB."}), 400
+
+    # La observación vacía limpia la anterior; el backend acepta la pretensión como texto y la vacía como ausente
+    payload = {k: v for k, v in payload.items() if v is not None}
+    res, status = api_request(
+        "PUT", f"/recruiting/oportunidades/{id}/candidatos/{candidato_id}/etapa", data=payload, token=token
+    )
+    if status not in (200, 201) or not isinstance(res, dict):
+        return jsonify({"success": False, "error": _detalle_de_error(res, "Error al actualizar la etapa")}), status or 400
+
+    if contenido is not None:
+        parametros = {"etapa_id": str(payload.get("etapa_actual") or res.get("etapa_actual") or "Candidato").strip()}
+        estado = payload.get("estado") or res.get("estado")
+        if estado:
+            parametros["estado"] = str(estado).strip()
+        try:
+            with httpx.Client(timeout=30.0) as cliente:
+                respuesta = cliente.post(
+                    f"{current_app.config['API_URL']}/api/v1/recruiting/oportunidades/{id}/candidatos/{candidato_id}/archivos-etapa",
+                    params=parametros,
+                    headers={"Authorization": f"Bearer {token}"},
+                    files={"archivo": (archivo.filename, contenido, archivo.content_type or "application/octet-stream")},
+                )
+            if respuesta.status_code in (200, 201):
+                res["archivo"] = respuesta.json()
+            else:
+                try:
+                    detalle = _detalle_de_error(respuesta.json(), "Error al guardar el archivo adjunto")
+                except ValueError:
+                    detalle = "Error al guardar el archivo adjunto"
+                return jsonify({"success": False, "error": detalle}), respuesta.status_code
+        except Exception:
+            logging.getLogger(__name__).error("Error al adjuntar el archivo de la etapa", exc_info=True)
+            return jsonify({"success": False, "error": MENSAJE_ERROR_GENERICO}), 500
+
+    return jsonify(res), 200
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/agregar-candidato", methods=["GET"])
+@require_permiso("recruiting.gestion_busquedas")
+def oportunidad_agregar_candidato(id):
+    """Pantalla para buscar candidatos del Banco de Talentos y sumarlos a una búsqueda."""
+    if not _permisos_pipeline()["puede_asignar_candidatos"]:
+        flash("No tenés permisos para asignar candidatos a búsquedas.", "error")
+        return redirect(url_for("recruiting.oportunidades"))
+    api_request = get_api_request_func()
+    token = session.get("token")
+
+    op, status = api_request("GET", f"/recruiting/oportunidades/{id}", token=token)
+    if status != 200 or not isinstance(op, dict):
+        flash("La búsqueda solicitada no existe o no fue encontrada.", "error")
+        return redirect(url_for("recruiting.oportunidades"))
+    if _busqueda_ganada(op):
+        flash("La búsqueda está Ganada y cerrada: no se pueden agregar nuevos candidatos.", "error")
+        return redirect(url_for("recruiting.oportunidad_detalle", id=id))
+
+    asignados, status_asig = api_request("GET", f"/recruiting/oportunidades/{id}/candidatos", token=token)
+    disponibles, status_disp = api_request("GET", "/recruiting/candidatos?pagina=1&por_pagina=100", token=token)
+    return render_template(
+        "recruiting/oportunidad_agregar_candidato.html",
+        op=op,
+        oportunidad=op,
+        candidatos_asignados=asignados if status_asig == 200 and isinstance(asignados, list) else [],
+        candidatos_disponibles=(disponibles.get("items") or []) if status_disp == 200 and isinstance(disponibles, dict) else [],
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/candidatos/<uuid:candidato_id>", methods=["DELETE"])
+@require_permiso("recruiting.oportunidades")
+def desvincular_candidato_oportunidad(id, candidato_id):
+    """Quita al candidato de la búsqueda sin eliminarlo del Banco de Talentos."""
+    data, status = get_api_request_func()(
+        "DELETE", f"/recruiting/oportunidades/{id}/candidatos/{candidato_id}", token=session.get("token")
+    )
+    if status in (200, 204):
+        return jsonify(data if isinstance(data, dict) else {"success": True}), 200
+    return jsonify({"success": False, "error": _detalle_de_error(data, "Error al desvincular el candidato")}), status or 400
+
+
+@recruiting_bp.route("/oportunidades/<uuid:op_id>/candidatos/<uuid:candidato_id>/detalle", methods=["GET"])
+@require_permiso("recruiting")
+def candidato_pipeline_detalle(op_id, candidato_id):
+    """Ficha del pipeline de un candidato: sus pipelines (el de la URL primero) con historial y adjuntos de cada uno."""
+    api_request = get_api_request_func()
+    token = session.get("token")
+
+    oportunidad, status_op = api_request("GET", f"/recruiting/oportunidades/{op_id}", token=token)
+    oportunidad = oportunidad if status_op == 200 and isinstance(oportunidad, dict) else {}
+
+    candidato, status_cand = api_request("GET", f"/recruiting/candidatos/{candidato_id}", token=token)
+    if status_cand != 200 or not isinstance(candidato, dict):
+        flash(
+            _detalle_de_error(candidato, "No tenés permiso para acceder a este candidato.")
+            if status_cand == 403
+            else "El candidato solicitado no fue encontrado.",
+            "danger" if status_cand == 403 else "warning",
+        )
+        return redirect(url_for("recruiting.oportunidad_detalle", id=op_id))
+
+    # Siempre se traen todos los pipelines visibles del candidato: el de la URL va primero y el resto en «Otros Pipelines»
+    pipelines, status_pipes = api_request("GET", f"/recruiting/candidatos/{candidato_id}/pipelines", token=token)
+    pipelines = (
+        sorted(pipelines, key=lambda p: str(p.get("oportunidad_id")) != str(op_id))
+        if status_pipes == 200 and isinstance(pipelines, list)
+        else []
+    )
+    if oportunidad and not pipelines:
+        pipelines.insert(
+            0, {"oportunidad_id": str(op_id), "titulo": oportunidad.get("titulo"), "cliente": oportunidad.get("cliente")}
+        )
+
+    # Historial y adjuntos de cada pipeline, sin mezclar búsquedas
+    for p in pipelines:
+        historial, status_hist = api_request(
+            "GET", f"/recruiting/oportunidades/{p['oportunidad_id']}/candidatos/{candidato_id}/historial", token=token
+        )
+        archivos, status_arch = api_request(
+            "GET", f"/recruiting/oportunidades/{p['oportunidad_id']}/candidatos/{candidato_id}/archivos-etapa", token=token
+        )
+        p["historial"] = historial if status_hist == 200 and isinstance(historial, list) else []
+        p["archivos_etapa"] = archivos if status_arch == 200 and isinstance(archivos, list) else []
+
+    return render_template(
+        "recruiting/candidato_pipeline_detalle.html",
+        oportunidad=oportunidad,
+        candidato=candidato,
+        pipelines=pipelines,
+        op_id=str(op_id),
+    )
+
+
+@recruiting_bp.route("/candidatos/<uuid:id>/pipelines", methods=["GET"])
+@require_permiso("recruiting")
+def candidato_pipelines(id):
+    """Pipelines del candidato (el listado de Candidatos abre el primero)."""
+    data, status = get_api_request_func()("GET", f"/recruiting/candidatos/{id}/pipelines", token=session.get("token"))
+    return jsonify(data if status == 200 and isinstance(data, list) else []), 200
+
+
+@recruiting_bp.route("/candidatos/<uuid:id>/busquedas-elegibles", methods=["GET"])
+@require_permiso("recruiting.candidatos")
+def candidato_busquedas_elegibles(id):
+    """Búsquedas Abiertas compatibles con el candidato (para «Asignar a búsqueda» del listado)."""
+    data, status = get_api_request_func()(
+        "GET", f"/recruiting/candidatos/{id}/busquedas-elegibles", token=session.get("token")
+    )
+    return jsonify(data if status == 200 and isinstance(data, list) else []), 200
+
+
+@recruiting_bp.route("/archivos-etapa/<uuid:archivo_id>/descargar", methods=["GET"])
+@require_permiso("recruiting")
+def descargar_archivo_etapa_proxy(archivo_id):
+    """Descarga un adjunto de etapa a través del backend."""
+    try:
+        with httpx.Client(timeout=60.0) as cliente:
+            respuesta = cliente.get(
+                f"{current_app.config['API_URL']}/api/v1/recruiting/archivos-etapa/{archivo_id}/descargar",
+                headers={"Authorization": f"Bearer {session.get('token')}"},
+            )
+    except Exception:
+        logging.getLogger(__name__).error("Error al descargar un adjunto de etapa", exc_info=True)
+        return jsonify({"error": MENSAJE_ERROR_GENERICO}), 500
+    if respuesta.status_code != 200:
+        return jsonify({"error": "Archivo no encontrado"}), respuesta.status_code
+    salida = Response(respuesta.content, status=200, content_type=respuesta.headers.get("content-type", "application/octet-stream"))
+    if "Content-Disposition" in respuesta.headers:
+        salida.headers["Content-Disposition"] = respuesta.headers["Content-Disposition"]
+    return salida
+
+
+# === ALTA DESDE UNA BÃšSQUEDA ASIGNADA (grupo EXTERNOS) Y CV DUPLICADOS ===
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/cargar-cv", methods=["POST"], defaults={"accion": "cargar-cv"})
+@recruiting_bp.route("/oportunidades/<uuid:id>/actualizar-cv", methods=["POST"], defaults={"accion": "actualizar-cv"})
+@require_permiso("recruiting.oportunidades")
+def oportunidad_cargar_cv(id, accion):
+    """Carga un CV desde una bÃºsqueda asignada: crea el candidato y lo asocia a la bÃºsqueda. Con el email de uno
+    existente asocia la ficha (CV idÃ©ntico) o deriva el caso a Recruiting (CV distinto, respuesta 202)."""
+    archivo, error = _archivo_de_cv(MAX_CV_CARGA_BYTES)
+    if error:
+        return jsonify({"ok": False, **error[0]}), error[1]
+    data, status = _reenviar_archivos("POST", f"/oportunidades/{id}/candidatos/{accion}", {"archivo": archivo}, timeout=45.0)
+    if status in (200, 201, 202) and isinstance(data, dict) and data.get("ok", True) is not False:
+        # 200 (CV idÃ©ntico ya registrado) se reenvÃ­a como 201; 202 (caso derivado a Recruiting) se mantiene
+        return (
+            jsonify(
+                {
+                    "ok": True,
+                    "candidato": data.get("candidato", {}),
+                    "asignacion_id": data.get("asignacion_id"),
+                    "mensaje": data.get("mensaje"),
+                }
+            ),
+            202 if status == 202 else 201,
+        )
+    mensaje = _detalle_de_error(data, MENSAJE_ERROR_GENERICO) if status < 500 else MENSAJE_ERROR_GENERICO
+    return jsonify({"ok": False, "error": mensaje}), status if status >= 400 else 400
+
+
+@recruiting_bp.route("/candidatos-duplicados", methods=["GET"])
+@recruiting_bp.route("/candidatos-duplicados/<uuid:caso_id>", methods=["GET"])
+@recruiting_bp.route("/candidatos-duplicados/<uuid:caso_id>/resolver", methods=["POST"], defaults={"resolver": True})
+@require_permiso("recruiting.dashboard")
+def candidatos_duplicados_proxy(caso_id=None, resolver=False):
+    """Casos de CV duplicado pendientes: listado, detalle para comparar y resoluciÃ³n (conservar o actualizar)."""
+    api_request = get_api_request_func()
+    endpoint = "/recruiting/candidatos-duplicados" + (f"/{caso_id}" if caso_id else "")
+    if resolver:
+        cuerpo = {"accion": (request.get_json(silent=True) or {}).get("accion")}
+        data, status = api_request("POST", endpoint + "/resolver", data=cuerpo, token=session.get("token"))
+    else:
+        data, status = api_request("GET", endpoint, token=session.get("token"))
+    if status and status < 400:
+        return jsonify(data), status
+    return jsonify({"ok": False, "error": _detalle_de_error(data, MENSAJE_ERROR_GENERICO)}), status or 500

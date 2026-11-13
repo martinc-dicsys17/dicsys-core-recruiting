@@ -1,0 +1,453 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Pipeline — Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+{% if error_pipeline %}
+<div class="mb-6 p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 flex items-center gap-3" data-testid="pipeline-error">
+    <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0"></i>
+    <span>{{ error_pipeline }}</span>
+</div>
+{% endif %}
+
+<script id="oportunidades-data" type="application/json">
+    {{ oportunidades | tojson | safe }}
+</script>
+
+<script id="pipeline-resumen-data" type="application/json">
+    {{ resumen | tojson | safe }}
+</script>
+
+<script>
+    function asignarCandidatoHubComponent() {
+        let items = [];
+        try {
+            const raw = document.getElementById('oportunidades-data')?.textContent;
+            items = raw ? JSON.parse(raw) : [];
+        } catch (e) {
+            console.error('Error al parsear oportunidades:', e);
+            items = [];
+        }
+
+        let resumen = { columnas: [], items: [] };
+        try {
+            const rawRes = document.getElementById('pipeline-resumen-data')?.textContent;
+            resumen = rawRes ? JSON.parse(rawRes) : resumen;
+        } catch (e) {
+            console.error('Error al parsear el resumen del pipeline:', e);
+        }
+
+        // Paleta de encabezados por columna (misma familia de colores que las etapas de pipeline.html)
+        const estilos = {
+            screening: { head: 'bg-purple-50 text-purple-700', cell: 'bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200' },
+            submissions: { head: 'bg-amber-50 text-amber-700', cell: 'bg-amber-50 text-amber-700 hover:bg-amber-100 border-amber-200' },
+            interview: { head: 'bg-indigo-50 text-indigo-700', cell: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200' },
+            offer: { head: 'bg-emerald-50 text-emerald-700', cell: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' },
+            hire: { head: 'bg-green-100 text-green-800', cell: 'bg-green-100 text-green-800 hover:bg-green-200 border-green-300' }
+        };
+
+        return {
+            oportunidades: items,
+            columnas: resumen.columnas || [],
+            filas: resumen.items || [],
+            filtroTexto: '',
+
+            filasFiltradas() {
+                const q = (this.filtroTexto || '').trim().toLowerCase();
+                if (!q) return this.filas;
+                return this.filas.filter(f =>
+                    [f.titulo, f.cliente]
+                        .some(v => (v || '').toLowerCase().includes(q))
+                );
+            },
+
+            estiloHead(clave) {
+                return (estilos[clave] || { head: 'bg-dark-50 text-dark-600' }).head;
+            },
+
+            estiloCelda(clave) {
+                return (estilos[clave] || { cell: 'bg-dark-50 text-dark-700 hover:bg-dark-100 border-dark-200' }).cell;
+            },
+
+            // Resalta la etapa donde se concentra la mayor cantidad de candidatos de la búsqueda
+            esMaximo(fila, clave) {
+                const valores = Object.values(fila.columnas || {});
+                const max = valores.length ? Math.max(...valores) : 0;
+                return max > 0 && (fila.columnas[clave] || 0) === max;
+            },
+
+            // Filtro de candidatos (Todos / Propios) activo: se propaga al Pipeline individual y al popup
+            alcanceCandidatos: {{ (filtro_alcance_candidatos or '') | tojson }},
+
+            urlBusqueda(fila) {
+                const base = '/recruiting/oportunidades/' + fila.id + '/pipeline';
+                return this.alcanceCandidatos ? base + '?alcance_candidatos=' + encodeURIComponent(this.alcanceCandidatos) : base;
+            },
+
+            // Abre el Pipeline individual de la búsqueda con las etapas reales de la columna preseleccionadas
+            urlColumna(fila, col) {
+                return '/recruiting/oportunidades/' + fila.id + '/pipeline'
+                    + '?etapas=' + encodeURIComponent((col.etapas || []).join(','))
+                    + '&columna=' + encodeURIComponent(col.nombre)
+                    + (this.alcanceCandidatos ? '&alcance_candidatos=' + encodeURIComponent(this.alcanceCandidatos) : '');
+            },
+
+            // ---- Popup de candidatos al pasar el mouse sobre una cifra ----
+            popup: { abierto: false, fila: null, col: null, cargando: false, error: '', candidatos: [] },
+            _popupTimer: null,
+            _popupReq: 0,
+            _popupCache: {},
+
+            abrirPopup(ev, fila, col) {
+                clearTimeout(this._popupTimer);
+                const p = this.popup;
+                const mismo = p.abierto && p.fila && p.fila.id === fila.id && p.col && p.col.clave === col.clave;
+                this.posicionarPopup(ev.currentTarget);
+                if (mismo) return;
+                p.abierto = true; p.fila = fila; p.col = col; p.error = '';
+                this.$nextTick(() => this.posicionarPopup());
+                const clave = fila.id + '|' + col.clave;
+                if (this._popupCache[clave]) {
+                    p.candidatos = this._popupCache[clave]; p.cargando = false;
+                    return;
+                }
+                p.candidatos = []; p.cargando = true;
+                const req = ++this._popupReq;
+                fetch('/recruiting/oportunidades/' + encodeURIComponent(fila.id) + '/pipeline-columna/' + encodeURIComponent(col.clave)
+                      + (this.alcanceCandidatos ? '?alcance_candidatos=' + encodeURIComponent(this.alcanceCandidatos) : ''),
+                      { headers: { 'Accept': 'application/json' } })
+                    .then(async r => {
+                        const data = await r.json().catch(() => null);
+                        if (!r.ok) throw new Error((data && data.error) || 'No se pudo obtener el detalle de candidatos');
+                        return data;
+                    })
+                    .then(data => {
+                        if (req !== this._popupReq) return;
+                        this._popupCache[clave] = Array.isArray(data) ? data : [];
+                        p.candidatos = this._popupCache[clave]; p.cargando = false;
+                        this.$nextTick(() => this.posicionarPopup());
+                    })
+                    .catch(e => {
+                        if (req !== this._popupReq) return;
+                        p.error = e.message || 'Error al cargar los candidatos'; p.cargando = false;
+                    });
+            },
+
+            programarCierrePopup() {
+                clearTimeout(this._popupTimer);
+                this._popupTimer = setTimeout(() => this.cerrarPopup(), 180);
+            },
+
+            mantenerPopup() { clearTimeout(this._popupTimer); },
+
+            cerrarPopup() {
+                clearTimeout(this._popupTimer);
+                this._popupReq++;
+                this.popup.abierto = false; this.popup.cargando = false;
+                this.popup.candidatos = []; this.popup.error = '';
+                this._popupAnchor = null;
+            },
+
+            // Ubica el popup junto a la cifra sin salirse de la ventana
+            posicionarPopup(anchor) {
+                if (anchor) this._popupAnchor = anchor;
+                const a = this._popupAnchor;
+                if (!a || !a.isConnected) return;
+                const r = a.getBoundingClientRect();
+                const el = this.$refs.popupCard;
+                const lista = this.$refs.popupLista;
+                if (lista) lista.style.maxHeight = '';
+                const w = Math.min(el ? el.offsetWidth : 360, window.innerWidth - 16);
+                const h = el ? el.offsetHeight : 200;
+                let left = r.left + r.width / 2 - w / 2;
+                left = Math.max(8, Math.min(left, window.innerWidth - w - 8));
+                // Siempre debajo de la cifra (4px de separación); si no entra, se acota el scroll interno del listado.
+                // Solo si el espacio de abajo es muy chico se abre arriba, nunca encima de la cifra.
+                const separacion = 4, margen = 8, altoMinLista = 96;
+                const chrome = lista ? h - lista.offsetHeight : 0;
+                const espacioAbajo = window.innerHeight - r.bottom - separacion - margen;
+                const espacioArriba = r.top - separacion - margen;
+                const abajo = espacioAbajo >= chrome + altoMinLista || espacioAbajo >= espacioArriba;
+                const espacio = abajo ? espacioAbajo : espacioArriba;
+                if (lista && h > espacio) lista.style.maxHeight = Math.max(altoMinLista, espacio - chrome) + 'px';
+                const hFinal = el ? el.offsetHeight : h;
+                const top = abajo ? r.bottom + separacion : Math.max(margen, r.top - separacion - hFinal);
+                // Se asigna directo al elemento: un :style en el mismo nodo que x-show pisa su display:none
+                if (el) { el.style.left = left + 'px'; el.style.top = top + 'px'; }
+            },
+
+            formatoMoneda(v) {
+                if (v === null || v === undefined || v === '') return '—';
+                return Number(v).toLocaleString('es-AR', { maximumFractionDigits: 0 }) + ' ARS';
+            },
+
+            iniciales(nombre) {
+                return (nombre || '?').trim().split(/\s+/).slice(0, 2).map(s => s[0]).join('').toUpperCase();
+            },
+
+            tituloColumna(col) {
+                if (!(col.etapas || []).length) return col.nombre + ' — ' + (col.nota || 'Sin etapas asociadas');
+                return col.nombre + ' — incluye: ' + col.etapas.join(', ');
+            }
+        };
+    }
+</script>
+
+<div class="animate-fade-in" x-data="asignarCandidatoHubComponent()" x-init="$nextTick(() => window.lucide && window.lucide.createIcons()); $watch('popup.abierto', () => $nextTick(() => window.lucide && window.lucide.createIcons()))">
+
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div>
+            <div class="flex items-center gap-3 mb-1">
+                <span class="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                    <i data-lucide="layers" class="w-6 h-6"></i>
+                </span>
+                <h1 class="text-3xl font-bold text-dark-900">Pipeline</h1>
+            </div>
+
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            {% set vista_actual = vista %}
+            {% include "recruiting/_pipeline_filtros_tipo.html" %}
+            {% include "recruiting/_pipeline_vista_selector.html" %}
+            <a href="{{ url_for('recruiting.oportunidades') }}"
+               class="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-dark-50 text-dark-700 text-xs font-semibold rounded-xl border border-dark-100 shadow-soft">
+                <i data-lucide="briefcase" class="w-4 h-4 text-dark-400"></i>
+                <span>Ver todas las búsquedas</span>
+            </a>
+        </div>
+    </div>
+
+    {% if vista == 'global' %}
+    <!-- ================= Vista global: una fila por búsqueda, una columna por etapa ================= -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden">
+        <div class="px-5 py-4 border-b border-dark-100 flex flex-col md:flex-row md:items-center justify-between gap-3 bg-dark-50/50">
+            <div>
+                <h2 class="text-base font-bold text-dark-900 flex items-center gap-2">
+                    <i data-lucide="table-2" class="w-4 h-4 text-primary-600"></i>
+                    <span>Pipeline total de búsquedas</span>
+                </h2>
+                <p class="text-xs text-dark-500 mt-0.5">
+                    Candidatos por etapa. Hacé clic en una búsqueda o en una cifra para abrir su pipeline individual.
+                </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="search" x-model="filtroTexto" placeholder="Buscar por búsqueda o cliente"
+                       class="w-full sm:w-72 px-3.5 py-2 bg-white border border-dark-200 rounded-xl text-xs text-dark-800 focus:outline-none focus:ring-2 focus:ring-primary-500">
+            </div>
+        </div>
+
+        <template x-if="filas.length > 0">
+            <div class="overflow-auto max-h-[70vh]">
+                <table class="w-full text-left border-collapse text-sm">
+                    <thead>
+                        <tr class="text-xs uppercase tracking-wider font-semibold">
+                            <th class="sticky top-0 left-0 z-30 bg-dark-50 text-dark-500 py-3 px-4 min-w-[240px] border-b border-dark-100">Búsqueda</th>
+                            <th class="sticky top-0 z-20 bg-dark-50 text-dark-500 py-3 px-3 text-center border-b border-dark-100 w-20"
+                                title="Candidatos activos en las cinco columnas (no incluye descartados)">Total</th>
+                            <template x-for="col in columnas" :key="col.clave">
+                                <th class="sticky top-0 z-20 py-3 px-3 text-center border-b border-dark-100 min-w-[110px]"
+                                    :class="estiloHead(col.clave)"
+                                    :title="tituloColumna(col)" x-text="col.nombre"></th>
+                            </template>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-dark-100">
+                        <template x-for="fila in filasFiltradas()" :key="fila.id">
+                            <tr class="hover:bg-dark-50/60 transition-colors">
+                                <td class="sticky left-0 z-10 bg-white py-3 px-4">
+                                    <a :href="urlBusqueda(fila)"
+                                       class="font-semibold text-dark-900 hover:text-primary-600 transition-colors block leading-tight"
+                                       title="Abrir pipeline individual" x-text="fila.titulo || 'Sin título'"></a>
+                                    <span class="text-xs text-dark-400 block mt-0.5">
+                                        <span x-text="fila.cliente"></span>
+                                        <span x-show="fila.id_busqueda" x-text="' · #' + fila.id_busqueda"></span>
+                                        <span x-show="fila.estado && fila.estado !== 'Abierta'" x-text="' · ' + fila.estado"></span>
+                                        <span x-text="fila.es_externa ? ' · Externa' : ' · Interna'"></span>
+                                    </span>
+                                </td>
+                                <td class="py-3 px-3 text-center font-bold text-dark-800"
+                                    :title="fila.sin_clasificar ? (fila.sin_clasificar + ' candidato(s) en etapas no clasificadas') : ''">
+                                    <a :href="urlBusqueda(fila)" class="hover:text-primary-600" x-text="fila.total"></a>
+                                </td>
+                                <template x-for="col in columnas" :key="col.clave">
+                                    <td class="py-3 px-3 text-center">
+                                        <template x-if="(fila.columnas[col.clave] || 0) > 0">
+                                            <a :href="urlColumna(fila, col)"
+                                               class="inline-flex items-center justify-center min-w-[2.25rem] px-2.5 py-1 rounded-lg border text-sm transition-colors"
+                                               :class="estiloCelda(col.clave) + (esMaximo(fila, col.clave) ? ' font-extrabold ring-2 ring-offset-1 ring-dark-300' : ' font-semibold')"
+                                               :title="tituloColumna(col)"
+                                               @mouseenter="abrirPopup($event, fila, col)"
+                                               @mouseleave="programarCierrePopup()"
+                                               @focus="abrirPopup($event, fila, col)"
+                                               @blur="programarCierrePopup()"
+                                               @keydown.escape="cerrarPopup()"
+                                               x-text="fila.columnas[col.clave]"></a>
+                                        </template>
+                                        <template x-if="(fila.columnas[col.clave] || 0) === 0">
+                                            <span class="text-dark-300">–</span>
+                                        </template>
+                                    </td>
+                                </template>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+
+        <!-- Sin resultados para el filtro de texto -->
+        <template x-if="filas.length > 0 && filasFiltradas().length === 0">
+            <div class="py-10 px-4 text-center">
+                <p class="text-sm font-semibold text-dark-800 mb-1">No se encontraron búsquedas</p>
+                <button type="button" @click="filtroTexto = ''"
+                        class="mt-2 px-4 py-2 bg-dark-100 hover:bg-dark-200 text-dark-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer">
+                    Limpiar búsqueda
+                </button>
+            </div>
+        </template>
+
+        <!-- Estado vacío: sin búsquedas para el estado seleccionado -->
+        <template x-if="filas.length === 0">
+            <div class="p-12 text-center">
+                <div class="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                    <i data-lucide="briefcase" class="w-8 h-8 text-amber-400"></i>
+                </div>
+                <p class="text-dark-700 font-semibold text-lg mb-1">No hay búsquedas para mostrar</p>
+                <p class="text-dark-400 text-sm mb-4">No hay búsquedas en estado <strong>Abierta</strong> visibles para tu usuario.</p>
+                {% if puede_crear_busquedas %}
+                <a href="{{ con_volver(url_for('recruiting.nueva_oportunidad')) }}"
+                   class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-soft transition-colors text-sm cursor-pointer">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    Crear nueva búsqueda
+                </a>
+                {% endif %}
+            </div>
+        </template>
+    </div>
+    <!-- Popup de candidatos de la cifra bajo el cursor -->
+    <div x-cloak :class="popup.abierto ? '' : 'hidden'" x-ref="popupCard" role="dialog" aria-live="polite"
+         @mouseenter="mantenerPopup()" @mouseleave="programarCierrePopup()"
+         class="fixed z-50 w-[22rem] max-w-[calc(100vw-1rem)] bg-white rounded-xl border border-dark-100 shadow-[0_8px_30px_rgba(0,0,0,0.12)] p-4">
+        <div class="flex items-start justify-between gap-3 mb-3">
+            <h3 class="text-sm font-semibold text-dark-900 leading-snug"
+                x-text="popup.col && popup.fila ? 'Candidatos en ' + popup.col.nombre + ' (' + (popup.fila.titulo || 'Sin título') + ')' : ''"></h3>
+            <button type="button" @click="cerrarPopup()" class="text-dark-400 hover:text-dark-700 cursor-pointer" aria-label="Cerrar">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div x-ref="popupLista" class="max-h-[55vh] overflow-y-auto flex flex-col gap-2.5">
+            <p x-show="popup.cargando" class="text-xs text-dark-500 py-4 text-center">Cargando candidatos…</p>
+            <p x-show="popup.error" class="text-xs text-red-600 py-2" x-text="popup.error"></p>
+            <template x-for="c in popup.candidatos" :key="c.candidato_id">
+                <div class="flex items-center gap-3 p-3 rounded-lg border border-dark-100 bg-white">
+                    <span class="w-10 h-10 rounded-full bg-primary-50 text-primary-700 text-xs font-bold flex items-center justify-center flex-shrink-0"
+                          x-text="iniciales(c.nombre)"></span>
+                    <div class="flex-1 min-w-0 text-xs text-dark-600 leading-relaxed">
+                        <p><span class="font-bold text-dark-900">Nombre:</span> <span x-text="c.nombre || '—'"></span></p>
+                        <p><span class="font-bold text-dark-900">Pretensión:</span> <span x-text="c.es_anonimo ? 'Oculto' : formatoMoneda(c.pretension_salarial_bruta_ars)"></span></p>
+                        <p><span class="font-bold text-dark-900">Rol Actual:</span> <span x-text="c.es_anonimo ? 'Oculto' : (c.rol_actual || '—')"></span></p>
+                        <p><span class="font-bold text-dark-900">Seniority:</span> <span x-text="c.seniority || '—'"></span></p>
+                        <template x-if="!c.es_anonimo">
+                            <p><span class="font-bold text-dark-900">Presentado por:</span> <span x-text="c.presentado_por || 'Sin identificar'"></span></p>
+                        </template>
+                        <p><span class="font-bold text-dark-900">Reclutador:</span> <span x-text="c.es_anonimo ? 'Oculto' : (c.reclutador || 'Sin asignar')"></span></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+    {% else %}
+    <!-- ================= Pipeline individual: selección de la búsqueda a gestionar ================= -->
+
+    <!-- Lista de búsquedas abiertas -->
+    <template x-if="oportunidades.length > 0">
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <template x-for="op in oportunidades" :key="op.id">
+                <div
+                    class="group bg-white rounded-2xl border border-dark-100 hover:border-primary-300 p-5 shadow-soft hover:shadow-md transition-all flex flex-col gap-3"
+                >
+                    <!-- Encabezado de la tarjeta -->
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs font-mono text-dark-400 mb-1" x-text="`#${op.id_busqueda || (op.id || '').substring(0, 8)}`"></p>
+                            <a :href="urlBusqueda(op)"
+                               class="font-bold text-dark-900 text-base leading-tight hover:text-primary-700 transition-colors truncate block"
+                               x-text="op.titulo || 'Sin título'"></a>
+                        </div>
+                        <span class="flex-shrink-0 flex flex-col items-end gap-1">
+                            <span class="px-2.5 py-0.5 text-xs font-bold rounded-lg border bg-emerald-50 text-emerald-700 border-emerald-200">Abierta</span>
+                            <span class="px-2.5 py-0.5 text-[10px] font-bold rounded-lg border"
+                                  :class="op.externo_id ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-dark-50 text-dark-600 border-dark-200'"
+                                  x-text="op.externo_id ? 'Externa' : 'Interna'"></span>
+                        </span>
+                    </div>
+
+                    <!-- Datos de la búsqueda -->
+                    <div class="flex flex-col gap-1.5 text-sm text-dark-500">
+                        <div class="flex items-center gap-2" x-show="op.cliente">
+                            <i data-lucide="building-2" class="w-3.5 h-3.5 text-dark-400 flex-shrink-0"></i>
+                            <span class="truncate" x-text="op.cliente"></span>
+                        </div>
+                        <div class="flex items-center gap-2" x-show="op.recruiter_nombre || op.reclutador">
+                            <i data-lucide="user" class="w-3.5 h-3.5 text-dark-400 flex-shrink-0"></i>
+                            <span class="truncate" x-text="op.recruiter_nombre || op.reclutador"></span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div class="flex items-center gap-1.5" x-show="op.seniority">
+                                <i data-lucide="bar-chart-2" class="w-3.5 h-3.5 text-dark-400 flex-shrink-0"></i>
+                                <span x-text="op.seniority"></span>
+                            </div>
+                            <div class="flex items-center gap-1.5" x-show="op.modalidad">
+                                <i data-lucide="map-pin" class="w-3.5 h-3.5 text-dark-400 flex-shrink-0"></i>
+                                <span x-text="op.modalidad === 'Hibrido' ? 'Híbrido' : op.modalidad"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Footer con vacantes y CTA Gestión de Pipeline -->
+                    <div class="flex items-center justify-between pt-3 border-t border-dark-100 mt-auto gap-3">
+                        <div class="flex items-center gap-1.5 text-xs text-dark-500">
+                            <i data-lucide="users" class="w-3.5 h-3.5 text-dark-400"></i>
+                            <span>
+                                <span x-text="op.vacantes || 1"></span>
+                                <span x-show="(op.vacantes || 1) == 1"> vacante</span>
+                                <span x-show="(op.vacantes || 1) > 1"> vacantes</span>
+                            </span>
+                        </div>
+                        <a :href="urlBusqueda(op)"
+                           class="inline-flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-soft hover:shadow-md transition-all cursor-pointer"
+                           title="Gestionar flujo y etapas de candidatos en el Pipeline">
+                            <i data-lucide="kanban" class="w-3.5 h-3.5"></i>
+                            <span>Gestionar Pipeline</span>
+                            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                        </a>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </template>
+
+    <!-- Estado vacío: sin búsquedas abiertas en absoluto -->
+    {% if not oportunidades %}
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft p-12 text-center">
+        <div class="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <i data-lucide="briefcase" class="w-8 h-8 text-amber-400"></i>
+        </div>
+        <p class="text-dark-700 font-semibold text-lg mb-1">No hay búsquedas abiertas</p>
+        <p class="text-dark-400 text-sm mb-4">Para asignar candidatos primero necesitás tener al menos una búsqueda en estado <strong>Abierta</strong>.</p>
+        {% if puede_crear_busquedas %}
+        <a href="{{ con_volver(url_for('recruiting.nueva_oportunidad')) }}"
+           class="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-xl shadow-soft transition-colors text-sm cursor-pointer">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            Crear nueva búsqueda
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+</div>
+
+{% endblock %}

@@ -5,15 +5,16 @@ migración) al Core. Las pantallas se migran de a una y cada ítem del menú lle
 existe; los pendientes se ven como «Próx.».
 
 Código: `backend/modules/recruiting/` (`models.py`, `routers.py`, `schemas.py`, `services.py`, más
-`manager_dashboard.py`, `headline_cv.py`, `pdf_texto_cv.py` y `historial_cargas_services.py`) y
+`manager_dashboard.py`, `pipeline_services.py`, `headline_cv.py`, `pdf_texto_cv.py` y `historial_cargas_services.py`) y
 `frontend/modulos/recruiting/`. Permisos: `recruiting` y `recruiting.<ítem>`; cada endpoint exige el de su ítem.
 
 | Ítem | Estado |
 |---|---|
 | Dashboard Recruiting (y Manager Dashboard, solo administradores) | migrado |
 | Candidatos | migrado (ver abajo) |
-| Búsquedas | migrado, sin etapas (ver abajo) |
-| Pipeline, Parámetros | pendientes |
+| Búsquedas | migrado (ver abajo) |
+| Pipeline | migrado (ver abajo) |
+| Parámetros | pendiente |
 
 ## Candidatos (`recruiting.candidatos`, `/recruiting/candidatos`)
 
@@ -56,12 +57,15 @@ las páginas escaneadas de un PDF; el modelo de reconocimiento se descarga y ver
 imagen) y `libreoffice-writer` (vista previa en PDF de un CV Word, `GET/POST /storage/preview-pdf`). Si falta una,
 la carga sigue con lo que tenga: el OCR y la vista previa nunca hacen fallar una carga.
 
-### Lo que queda para Pipeline
+### Acciones de Candidatos que viven en Pipeline
 
-Asignar un candidato a una búsqueda desde el listado de Candidatos (`busquedas-elegibles`; desde la búsqueda ya se
-puede, con Smart Matching), ver los pipelines y las postulaciones de un candidato, rechazar una postulación, el alta de
-candidatos desde una búsqueda asignada (EXTERNOS) y la revisión de CV duplicados derivados por esos usuarios
-(`CandidatoDuplicado`). El listado y la ficha de Candidatos no ofrecen esas acciones hasta entonces.
+- **Asignar a una búsqueda** desde el listado (`GET /candidatos/{id}/busquedas-elegibles`): búsquedas Abiertas
+  compatibles por skills (70 %) y seniority (30 %), sin las ya asignadas; 403 para EXTERNOS.
+- **Ver detalles** del pipeline de un candidato (`GET /candidatos/{id}/pipelines`, solo los que ya tienen movimientos);
+  `tiene_pipeline` viene en cada fila del listado.
+- `GET /candidatos/{id}/postulaciones`, `GET /candidatos/{id}/historial` (auditoría de las postulaciones, sin responsable
+  ni observaciones para EXTERNOS) y `POST /postulaciones/{id}/rechazar` (motivo obligatorio; 409 si la búsqueda está
+  Ganada). Son API: el original no tiene pantalla que los use.
 
 ## Búsquedas (`recruiting.oportunidades`, `/recruiting/oportunidades`)
 
@@ -102,8 +106,65 @@ Cancelar una búsqueda es pasarla al estado Cancelada (nunca se borra).
 - **Dependencia de permisos**: los combos del formulario (skills, habilidades, perfiles de puesto) salen de los
   catálogos de Candidatos, así que quien usa Búsquedas necesita también `recruiting.candidatos`.
 
-### Lo que queda para Pipeline
+## Pipeline (`recruiting.gestion_busquedas`, `/recruiting/gestion-busquedas`)
 
-Cambio de etapa, kanban y motivos de descarte, y la pantalla «Agregar candidato» (se llega desde el Pipeline). La
-carga de CV y el alta de candidatos desde una búsqueda asignada (EXTERNOS) se migran con la revisión de CV
-duplicados, que es lo que recibe los casos que ese flujo deriva.
+Código: `backend/modules/recruiting/pipeline_services.py` (`PipelineService`, `MotivoDescarteService`,
+`PostulacionService`, `AltaEnBusquedaService`, `CandidatoDuplicadoService`). No hubo cambios de esquema: usa
+`recruiting_gestionBusqueda`, `recruiting_historial_pipeline`, `recruiting_etapa_archivos`, `recruiting_etapas`,
+`recruiting_motivos_descarte*` y `recruiting_candidatos_duplicados`.
+
+Pantallas: vista global (una fila por búsqueda Abierta con los candidatos por columna y el detalle al pasar el mouse),
+selección individual, Pipeline de una búsqueda (tabla por etapa, mover de etapa con adjunto, descartar con motivo,
+reingresar), ficha del pipeline de un candidato (historial y adjuntos), «Agregar candidato» y, en el Dashboard, la
+revisión de CV duplicados. El filtro «Candidatos: Todos / Propios» aplica a las tres vistas.
+
+### API (`/api/v1/recruiting`, `operation_id` `recruiting_pipeline_<acción>`)
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /pipeline-permisos` | Acciones habilitadas (la usan Pipeline, Candidatos, Búsquedas y Dashboard) |
+| `GET /pipeline-resumen` | Vista global: candidatos por columna (`estado`, `alcance_candidatos`) |
+| `GET /oportunidades/{id}/pipeline-candidatos`, `/pipeline-contadores` | Tabla y contadores por etapa (`etapa`, `alcance_candidatos`) |
+| `GET /oportunidades/{id}/pipeline-columna/{columna}` | Candidatos de una columna de la vista global |
+| `GET /motivos-descarte?etapa=` | Motivos de descarte de la etapa (sin motivos propios, los de Screening) |
+| `PUT /oportunidades/{id}/candidatos/{cid}/etapa` | Mover, descartar o reingresar |
+| `GET /oportunidades/{id}/candidatos/{cid}/historial` | Movimientos del candidato en la búsqueda |
+| `POST/GET /oportunidades/{id}/candidatos/{cid}/archivos-etapa`, `GET /archivos-etapa/{id}/descargar` | Adjuntos de etapa (hasta 10 MB) |
+| `POST /oportunidades/{id}/candidatos/cargar-cv`, `/actualizar-cv`, `/nuevo` | Alta desde la búsqueda asignada (solo EXTERNOS) |
+| `GET /candidatos-duplicados`, `GET .../{id}`, `POST .../{id}/resolver` | Revisión de CV duplicados (solo internos) |
+
+Permisos: cada endpoint exige `recruiting.gestion_busquedas`, salvo los que comparten pantalla (ficha del pipeline,
+historial y adjuntos: Pipeline o Candidatos; permisos: cualquiera de Pipeline, Candidatos, Búsquedas o Dashboard; alta
+desde la búsqueda: Búsquedas; duplicados: Dashboard).
+
+### Reglas
+
+- **Flujo**: Candidato → Screening → Entrevista RRHH → Entrevista Líder Dicsys → Validación Administración → Entrevista
+  Cliente → Oferta → Examen Médico Preocupacional → Ingreso. Se avanza a la etapa siguiente o a un salto permitido
+  (Líder → Cliente, Validación → Oferta, Cliente → Examen); no hay retrocesos. Los nombres viejos (Postulado, Entrevista
+  Técnica) se normalizan.
+- **Descarte** desde cualquier etapa activa, con un motivo del catálogo de esa etapa. Un descartado solo reingresa a
+  Entrevista RRHH, con el motivo de reingreso obligatorio.
+- **Pretensión salarial bruta** (entero positivo, ARS) obligatoria al pasar de Entrevista RRHH a Entrevista Líder Dicsys.
+- **Observación** de un movimiento: hasta 50 caracteres (el descarte no tiene límite).
+- **Ingreso cierra la búsqueda** (Ganada) en la misma transacción; una Ganada no admite movimientos (409). El único
+  adjunto que admite es el del movimiento a Ingreso que la cerró (mismo usuario, dentro de 10 minutos, uno por candidato).
+- **Cada movimiento** deja su fila en `recruiting_historial_pipeline`.
+- **EXTERNOS**: ven la tabla de sus búsquedas asignadas con los candidatos que no presentaron anónimos; no mueven,
+  descartan, adjuntan ni ven adjuntos, motivos, responsables ni salarios.
+- **Alta de EXTERNOS desde su búsqueda**: crea la ficha a su nombre y la asocia (la búsqueda debe estar Abierta). Con el
+  email de un candidato existente y el mismo CV asocia la ficha; con un CV distinto la asocia, guarda el CV nuevo en
+  `recruiting/cv_duplicados` y avisa por la campana a los grupos de Recruiting; Recruiting compara y conserva el CV
+  actual o actualiza la ficha.
+
+### Diferencias con el original
+
+- «Agregar candidato» y la asignación desde Candidatos usan `POST /oportunidades/{id}/candidatos` (postulación y fila del
+  pipeline); el original también tenía `POST /oportunidades/{id}/pipeline-candidatos` (solo la fila), que no se migró.
+- No se migró `PUT /postulaciones/{id}/etapa` ni `GET /oportunidades/{id}/pipeline` (métricas del embudo): ninguna
+  pantalla los usa.
+- Los listados de `GET /candidatos/{id}/postulaciones` no crean una postulación de ejemplo cuando el candidato no tiene
+  (el original lo hacía al consultar).
+- El modal «Postular a Búsqueda» de la ficha del candidato era una simulación sin llamada real; no se migró.
+- Alta de EXTERNOS: el original aceptaba cualquier búsqueda no Ganada; el Core exige Abierta, como el resto de las
+  asignaciones.

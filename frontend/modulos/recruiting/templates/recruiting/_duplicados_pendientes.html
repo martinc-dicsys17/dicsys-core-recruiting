@@ -1,0 +1,261 @@
+{#
+  Casos de CV duplicado pendientes de revisión: un usuario EXTERNOS cargó, desde su búsqueda asignada, un CV distinto con
+  el email de un candidato existente. Recruiting compara ambos y conserva el actual o actualiza la ficha con el nuevo.
+  Se muestra a quien no es EXTERNOS (el backend responde 403 a los externos y la lista queda oculta).
+  Datos: GET /recruiting/candidatos-duplicados y su detalle y resolución (proxies del Blueprint).
+#}
+<div x-data="duplicadosPendientes()" x-init="iniciar()">
+    <!-- ==================== CANDIDATOS DUPLICADOS PENDIENTES ==================== -->
+    <div class="bg-white rounded-2xl border border-dark-100 mt-8" id="duplicados-pendientes" x-show="duplicadosCargados" x-cloak>
+        <div class="flex items-center justify-between gap-3 p-6 border-b border-dark-100">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                    <i data-lucide="files" class="w-5 h-5"></i>
+                </div>
+                <h2 class="text-lg font-bold text-dark-900">Candidatos duplicados pendientes</h2>
+            </div>
+            <span class="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-50 text-amber-700 border border-amber-100" data-testid="duplicados-contador" x-text="duplicados.length"></span>
+        </div>
+        <template x-if="duplicados.length === 0">
+            <p class="p-6 text-sm text-dark-500" data-testid="duplicados-vacio">No hay candidatos duplicados pendientes de revisión.</p>
+        </template>
+        <template x-if="duplicados.length > 0">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm text-left" data-testid="duplicados-tabla">
+                    <thead class="text-xs uppercase text-dark-500 bg-dark-50">
+                        <tr>
+                            <th class="px-6 py-3">Fecha</th>
+                            <th class="px-6 py-3">Búsqueda</th>
+                            <th class="px-6 py-3">Candidato / Email</th>
+                            <th class="px-6 py-3">Presentado por</th>
+                            <th class="px-6 py-3">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="caso in duplicados" :key="caso.id">
+                            <tr class="border-t border-dark-100" :data-caso-id="caso.id">
+                                <td class="px-6 py-3 whitespace-nowrap" x-text="formatearFecha(caso.fecha)"></td>
+                                <td class="px-6 py-3" x-text="caso.busqueda || '-'"></td>
+                                <td class="px-6 py-3">
+                                    <div class="font-semibold text-dark-900" x-text="caso.candidato"></div>
+                                    <div class="text-xs text-dark-500" x-text="caso.email"></div>
+                                </td>
+                                <td class="px-6 py-3" x-text="caso.presentado_por || '-'"></td>
+                                <td class="px-6 py-3">
+                                    <button type="button" @click="abrirDuplicado(caso.id)"
+                                            class="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg text-xs cursor-pointer">
+                                        Revisar
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </template>
+    </div>
+
+    <!-- Modal comparación de CV: candidato existente (mismo email) con un CV distinto presentado por un usuario externo -->
+    <div x-show="comparacionCv" x-cloak
+         x-effect="document.body.classList.toggle('overflow-hidden', !!comparacionCv)"
+         @keydown.escape.window="cerrarDuplicado()"
+         class="fixed inset-0 z-50 overflow-hidden overscroll-contain"
+         aria-labelledby="modal-comparar-cv-title" role="dialog" aria-modal="true">
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-xs"></div>
+        <div class="flex h-full items-center justify-center p-4 text-center">
+            <div class="relative flex flex-col overflow-hidden overscroll-contain h-[95vh] max-h-[95vh] rounded-2xl bg-white text-left shadow-2xl w-full max-w-7xl p-6 border border-dark-100">
+                <div class="flex flex-shrink-0 items-center gap-3 pb-4 border-b border-dark-100 mb-4">
+                    <div class="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                        <i data-lucide="files" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-base font-bold text-dark-900" id="modal-comparar-cv-title">El candidato ya existe con otro CV</h3>
+                        <p class="text-xs text-dark-500" x-text="comparacionCv ? (comparacionCv.candidato + ' - ' + comparacionCv.email) : ''"></p>
+                    </div>
+                    <button type="button" @click="cerrarDuplicado()" :disabled="resolviendoDuplicado" title="Cerrar" aria-label="Cerrar comparacion de CV"
+                            class="ml-auto self-start text-dark-400 hover:text-dark-600 p-1.5 rounded-lg hover:bg-dark-50 transition-colors cursor-pointer disabled:opacity-60">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+                <div class="grid grid-cols-1 grid-rows-2 md:grid-cols-2 md:grid-rows-1 gap-4 text-xs flex-1 min-h-0 overflow-hidden">
+                    <template x-for="col in [['CV actual', 'actual'], ['CV nuevo', 'nuevo']]" :key="col[1]">
+                        <div class="min-w-0 min-h-0 flex flex-col">
+                            <div class="flex flex-shrink-0 items-center justify-between gap-2 mb-2">
+                                <h4 class="text-sm font-bold text-dark-900" x-text="col[0]"></h4>
+                                <a x-show="visorCv && visorCv[col[1]].url" :href="visorCv && visorCv[col[1]].url" target="_blank" rel="noopener"
+                                   class="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white border-2 border-primary-500 text-primary-700 hover:bg-primary-50 font-semibold rounded-lg shadow-sm text-sm cursor-pointer transition-colors">
+                                    <i data-lucide="external-link" class="w-4 h-4"></i>
+                                    <span>VER CV</span>
+                                </a>
+                            </div>
+                            <template x-if="visorCv && visorCv[col[1]].url">
+                                <iframe :src="visorCv[col[1]].url + '#view=FitH&navpanes=0&pagemode=none'" :title="col[0]" class="w-full flex-1 min-h-0 rounded-xl border border-dark-100 bg-dark-50"></iframe>
+                            </template>
+                            <template x-if="visorCv && !visorCv[col[1]].url && visorCv[col[1]].cargando">
+                                <div class="w-full rounded-xl border border-dashed border-dark-200 bg-dark-50 flex flex-col items-center justify-center gap-2 text-dark-500 text-center p-4 flex-1 min-h-0" role="status">
+                                    <div class="w-6 h-6 rounded-full border-2 border-dark-200 border-t-primary-600 animate-spin"></div>
+                                    <span>Generando vista previa...</span>
+                                </div>
+                            </template>
+                            <template x-if="visorCv && !visorCv[col[1]].url && !visorCv[col[1]].cargando">
+                                <div class="w-full rounded-xl border border-dashed border-dark-200 bg-dark-50 flex flex-col items-center justify-center gap-2 text-dark-500 text-center p-4 flex-1 min-h-0">
+                                    <i data-lucide="file-x" class="w-6 h-6"></i>
+                                    <span>Vista previa no disponible para este archivo.</span>
+                                    <a x-show="visorCv[col[1]].descarga" :href="visorCv[col[1]].descarga" target="_blank" class="text-primary-600 font-semibold hover:underline" x-text="'Descargar ' + (visorCv[col[1]].nombre || 'archivo')"></a>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+                <p x-show="errorDuplicado" x-text="errorDuplicado" class="text-sm text-red-600 mt-3"></p>
+                <div class="flex flex-shrink-0 justify-end gap-3 mt-5">
+                    <button type="button" @click="cerrarDuplicado()" :disabled="resolviendoDuplicado"
+                            class="px-4 py-2.5 bg-white border border-dark-200 text-dark-600 font-semibold rounded-xl text-sm cursor-pointer">
+                        Cerrar
+                    </button>
+                    <button type="button" @click="resolverDuplicado('conservar')" :disabled="resolviendoDuplicado"
+                            class="px-4 py-2.5 bg-white border border-dark-200 hover:border-primary-400 text-dark-700 font-semibold rounded-xl text-sm cursor-pointer">
+                        Conservar actual
+                    </button>
+                    <button type="button" @click="resolverDuplicado('actualizar')" :disabled="resolviendoDuplicado"
+                            class="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-semibold rounded-xl text-sm cursor-pointer">
+                        <span x-text="resolviendoDuplicado ? 'Procesando...' : 'Actualizar con el nuevo'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function duplicadosPendientes() {
+    return {
+        duplicados: [],
+        duplicadosCargados: false,
+        comparacionCv: null,
+        visorCv: null,
+        errorDuplicado: '',
+        resolviendoDuplicado: false,
+
+        iniciar() {
+            this.cargarDuplicados().then(() => {
+                const id = new URLSearchParams(window.location.search).get('duplicado');
+                if (id) this.abrirDuplicado(id);
+            });
+        },
+
+        formatearFecha(valor) {
+            if (!valor) return '-';
+            const fecha = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(valor) ? valor : valor + 'Z');
+            return isNaN(fecha) ? valor : fecha.toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' });
+        },
+
+        async cargarDuplicados() {
+            try {
+                const res = await fetch('/recruiting/candidatos-duplicados', { headers: { 'Accept': 'application/json' } });
+                if (res.ok) {
+                    const data = await res.json();
+                    this.duplicados = data.items || [];
+                    this.duplicadosCargados = true;
+                }
+            } catch (err) {
+                console.error('Error al cargar candidatos duplicados:', err);
+            }
+            this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+        },
+
+        async abrirDuplicado(id) {
+            this.errorDuplicado = '';
+            try {
+                const res = await fetch(`/recruiting/candidatos-duplicados/${encodeURIComponent(id)}`, { headers: { 'Accept': 'application/json' } });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    if (window.Alpine && Alpine.store('toasts')) Alpine.store('toasts').error(data.error || 'No se pudo abrir el caso.');
+                    return;
+                }
+                const esPdf = (nombre) => /\.pdf$/i.test(nombre || '');
+                const esWord = (nombre) => /\.docx?$/i.test(nombre || '');
+                const visor = (cv) => {
+                    const url = cv && cv.cv_url ? '/storage/' + cv.cv_url : '';
+                    return { url: esPdf(cv && cv.cv_url) ? url : '', descarga: url, nombre: cv && cv.archivo, cargando: esWord(cv && cv.cv_url), vistaBlob: '' };
+                };
+                this.liberarVisoresCv();
+                this.visorCv = { actual: visor(data.actual), nuevo: visor(data.nuevo) };
+                this.comparacionCv = data;
+                [['actual', data.actual], ['nuevo', data.nuevo]].forEach(([columna, cv]) => {
+                    if (esWord(cv && cv.cv_url)) this.cargarVistaPreviaWord(columna, '/storage/preview-pdf/' + cv.cv_url);
+                });
+                this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+            } catch (err) {
+                if (window.Alpine && Alpine.store('toasts')) Alpine.store('toasts').error('Error de conexión al abrir el caso.');
+            }
+        },
+
+        // Convierte un CV Word a PDF en el backend y lo muestra como blob; si falla queda el aviso con la descarga
+        async cargarVistaPreviaWord(columna, urlVista) {
+            const visor = this.visorCv;
+            let vistaBlob = '';
+            try {
+                const response = await fetch(urlVista);
+                const tipo = response.headers.get('content-type') || '';
+                if (!response.ok || !/pdf/i.test(tipo)) throw new Error('HTTP ' + response.status);
+                vistaBlob = URL.createObjectURL(await response.blob());
+            } catch (err) {
+                console.warn('Vista previa de CV Word no disponible (' + columna + '):', err);
+            }
+            if (this.visorCv !== visor) {
+                if (vistaBlob) URL.revokeObjectURL(vistaBlob);
+                return;
+            }
+            this.visorCv[columna].vistaBlob = vistaBlob;
+            this.visorCv[columna].url = vistaBlob;
+            this.visorCv[columna].cargando = false;
+        },
+
+        liberarVisoresCv() {
+            if (this.visorCv) {
+                ['actual', 'nuevo'].forEach((columna) => {
+                    if (this.visorCv[columna].vistaBlob) URL.revokeObjectURL(this.visorCv[columna].vistaBlob);
+                });
+            }
+            this.visorCv = null;
+        },
+
+        cerrarDuplicado() {
+            this.comparacionCv = null;
+            this.liberarVisoresCv();
+            this.errorDuplicado = '';
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('duplicado')) {
+                url.searchParams.delete('duplicado');
+                window.history.replaceState({}, '', url);
+            }
+        },
+
+        async resolverDuplicado(accion) {
+            if (!this.comparacionCv || this.resolviendoDuplicado) return;
+            this.resolviendoDuplicado = true;
+            this.errorDuplicado = '';
+            try {
+                const res = await fetch(`/recruiting/candidatos-duplicados/${encodeURIComponent(this.comparacionCv.id)}/resolver`, {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ accion }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.ok) {
+                    this.cerrarDuplicado();
+                    await this.cargarDuplicados();
+                    if (window.Alpine && Alpine.store('toasts')) Alpine.store('toasts').success(accion === 'actualizar' ? 'Candidato actualizado con el nuevo CV.' : 'Se conservó el CV actual.');
+                } else {
+                    this.errorDuplicado = data.error || 'No se pudo resolver el caso.';
+                }
+            } catch (err) {
+                this.errorDuplicado = 'Error de conexión al resolver el caso.';
+            } finally {
+                this.resolviendoDuplicado = false;
+            }
+        },
+    };
+}
+</script>

@@ -1,0 +1,1411 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Pipeline — {{ op.titulo or 'Búsqueda' }} | Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block head %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // En la pantalla de Pipeline, activar visualmente "Gestión de Búsquedas" en el menú lateral
+        const links = document.querySelectorAll('aside a[href*="/recruiting/"]');
+        links.forEach(link => {
+            const href = link.getAttribute('href') || '';
+            const spanText = link.querySelector('span')?.textContent?.trim() || '';
+
+            if (href.includes('gestion-busquedas') || href.includes('asignar-candidato') || spanText === 'Pipeline' || spanText === 'Gestión de Búsquedas') {
+                link.classList.remove('text-dark-500', 'hover:bg-dark-50', 'hover:text-dark-700');
+                link.classList.add('bg-primary-50', 'text-primary-700', 'border-l-3', 'border-primary-500', 'font-bold');
+                const icon = link.querySelector('i');
+                if (icon) {
+                    icon.classList.remove('text-dark-400', 'group-hover:text-dark-600');
+                    icon.classList.add('text-primary-600');
+                }
+                const span = link.querySelector('span');
+                if (span) {
+                    span.classList.remove('font-medium');
+                    span.classList.add('font-bold');
+                }
+            } else if ((href === '/recruiting/oportunidades' || href.endsWith('/recruiting/oportunidades/')) && spanText === 'Búsquedas') {
+                link.classList.remove('bg-primary-50', 'text-primary-700', 'border-l-3', 'border-primary-500', 'font-bold');
+                link.classList.add('text-dark-500', 'hover:bg-dark-50', 'hover:text-dark-700');
+                const icon = link.querySelector('i');
+                if (icon) {
+                    icon.classList.remove('text-primary-600');
+                    icon.classList.add('text-dark-400', 'group-hover:text-dark-600');
+                }
+                const span = link.querySelector('span');
+                if (span) {
+                    span.classList.remove('font-bold');
+                    span.classList.add('font-medium');
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}
+
+{% block content %}
+<script id="pipeline-candidatos-data" type="application/json">
+    {{ candidatos | tojson | safe }}
+</script>
+
+<script id="pipeline-op-data" type="application/json">
+    {{ op | tojson | safe }}
+</script>
+
+{% if error_pipeline %}
+<div class="mb-6 p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 flex items-center gap-3" data-testid="pipeline-error">
+    <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0"></i>
+    <span>{{ error_pipeline }}</span>
+</div>
+{% endif %}
+
+<script id="pipeline-contadores-data" type="application/json">
+    {{ contadores | default({}) | tojson | safe }}
+</script>
+
+<script id="pipeline-filtro-data" type="application/json">
+    {{ {'etapas': filtro_etapas | default([]), 'columna': filtro_columna | default('')} | tojson | safe }}
+</script>
+
+<script>
+    function pipelineComponent() {
+        let initialCandidatos = [];
+        let initialOp = {};
+        let initialContadores = { total: 0, por_etapa: {} };
+
+        try {
+            const rawCands = document.getElementById('pipeline-candidatos-data')?.textContent;
+            initialCandidatos = rawCands ? JSON.parse(rawCands) : [];
+        } catch (e) {
+            console.error('Error parseando candidatos:', e);
+            initialCandidatos = [];
+        }
+
+        try {
+            const rawOp = document.getElementById('pipeline-op-data')?.textContent;
+            initialOp = rawOp ? JSON.parse(rawOp) : {};
+        } catch (e) {
+            console.error('Error parseando búsqueda:', e);
+            initialOp = {};
+        }
+
+        try {
+            const rawCnt = document.getElementById('pipeline-contadores-data')?.textContent;
+            initialContadores = rawCnt ? JSON.parse(rawCnt) : { total: 0, por_etapa: {} };
+        } catch (e) {
+            console.error('Error parseando contadores:', e);
+            initialContadores = { total: 0, por_etapa: {} };
+        }
+
+        // Filtro inicial desde la vista global: una etapa -> chip de esa etapa; varias -> grupo (columna)
+        let filtroInicial = { etapas: [], columna: '' };
+        try {
+            const rawFiltro = document.getElementById('pipeline-filtro-data')?.textContent;
+            filtroInicial = rawFiltro ? JSON.parse(rawFiltro) : filtroInicial;
+        } catch (e) {
+            console.error('Error parseando filtro inicial:', e);
+        }
+        const etapasIniciales = (filtroInicial.etapas || []).filter(e => e && e !== 'Descartados');
+        // Al ingresar al Pipeline siempre queda seleccionada "Todas", aunque la URL traiga etapas/columna (p. ej. desde la vista global)
+        const etapaFiltroInicial = 'Todas';
+
+        return {
+            op: initialOp,
+            candidatos: initialCandidatos,
+            contadores: initialContadores,
+            etapaFiltro: etapaFiltroInicial,
+            filtroGrupo: etapasIniciales,
+            filtroColumna: filtroInicial.columna || '',
+            toastMessage: '',
+            toastType: 'success',
+            showToast: false,
+
+            // URL del Pipeline para el botón Volver del detalle: conserva vista y búsqueda, pero no la etapa seleccionada (al volver queda "Todas")
+            urlRetorno() {
+                const params = new URLSearchParams(window.location.search);
+                params.delete('etapas');
+                params.delete('columna');
+                const qs = params.toString();
+                return window.location.pathname + (qs ? '?' + qs : '');
+            },
+
+            // Modal Mover Etapa
+            modalMover: false,
+            candidatoSeleccionado: null,
+            nuevaEtapa: '',
+            destinosMover: [],
+            siguienteEtapaValida: '',
+            comentarioEtapa: '',
+            pretensionSalarialTxt: '',
+            pretensionSalarialError: '',
+            guardandoMover: false,
+            archivoMover: null,
+            archivoMoverNombre: '',
+            archivoMoverTamano: '',
+            archivoMoverError: '',
+
+            // Modal Descartar
+            modalDescartar: false,
+            motivoDescarte: '',
+            comentarioDescarte: '',
+            guardandoDescarte: false,
+            motivosDescarte: [],
+            cargandoMotivos: false,
+            errorMotivos: '',
+
+            // Modal Reingresar Candidato (Excepción por cambio de perfil)
+            modalReingresar: false,
+            motivoReingreso: '',
+            guardandoReingreso: false,
+
+            // Flujo estrictamente secuencial y lineal
+            etapasEmbudo: [
+                'Candidato',
+                'Screening',
+                'Entrevista RRHH',
+                'Entrevista Líder Dicsys',
+                'Validación Administración',
+                'Entrevista Cliente',
+                'Oferta',
+                'Examen Médico Preocupacional',
+                'Ingreso'
+            ],
+
+            etapasTodas: [
+                'Candidato',
+                'Screening',
+                'Entrevista RRHH',
+                'Entrevista Líder Dicsys',
+                'Validación Administración',
+                'Entrevista Cliente',
+                'Oferta',
+                'Examen Médico Preocupacional',
+                'Ingreso',
+                'Descartados'
+            ],
+
+            notify(msg, type = 'success') {
+                this.toastMessage = msg;
+                this.toastType = type;
+                this.showToast = true;
+                setTimeout(() => {
+                    this.showToast = false;
+                }, 3500);
+            },
+
+            conteoEtapa(etapa) {
+                if (etapa === 'Todas') {
+                    return this.candidatos.length;
+                }
+                const targetEtapa = etapa.trim().toLowerCase();
+                return this.candidatos.filter(c => {
+                    const cEtapa = this.normalizarEtapaNombre(c.etapa_actual || '').toLowerCase();
+                    if (targetEtapa === 'descartados' || targetEtapa === 'descartado') {
+                        return cEtapa === 'descartados' || cEtapa === 'descartado' || (c.estado || '').toLowerCase() === 'descartado';
+                    }
+                    return cEtapa === targetEtapa;
+                }).length;
+            },
+
+            candidatosFiltrados() {
+                if (this.etapaFiltro === '__grupo__') {
+                    const grupo = this.filtroGrupo.map(e => e.toLowerCase());
+                    return this.candidatos.filter(c => {
+                        const cEtapa = this.normalizarEtapaNombre(c.etapa_actual || '').toLowerCase();
+                        return grupo.includes(cEtapa) && (c.estado || '').toLowerCase() !== 'descartado';
+                    });
+                }
+                return this.candidatos.filter(c => {
+                    if (this.etapaFiltro === 'Todas') return true;
+                    const filtro = this.etapaFiltro.trim().toLowerCase();
+                    const cEtapa = this.normalizarEtapaNombre(c.etapa_actual || '').toLowerCase();
+                    if (filtro === 'descartados' || filtro === 'descartado') {
+                        return cEtapa === 'descartados' || cEtapa === 'descartado' || (c.estado || '').toLowerCase() === 'descartado';
+                    }
+                    return cEtapa === filtro;
+                });
+            },
+
+            normalizarEtapaNombre(etapa) {
+                if (!etapa) return 'Candidato';
+                const s = etapa.trim();
+                const u = s.toUpperCase().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U');
+                if (u === 'DESCARTADO' || u === 'DESCARTADOS') return 'Descartados';
+                if (u === 'CANDIDATO' || u === 'POSTULADO' || u === 'COORDINANDO ENTREVISTA') return 'Candidato';
+                if (u === 'SCREENING') return 'Screening';
+                if (u.includes('RRHH')) return 'Entrevista RRHH';
+                if (u.includes('LIDER') || u.includes('TECNICA')) return 'Entrevista Líder Dicsys';
+                if (u.includes('ADMINISTRAC')) return 'Validación Administración';
+                if (u.includes('EXAMEN') || u.includes('PREOCUPACIONAL')) return 'Examen Médico Preocupacional';
+                if (u.includes('CLIENTE')) return 'Entrevista Cliente';
+                if (u.includes('OFERTA')) return 'Oferta';
+                if (u.includes('INGRESO')) return 'Ingreso';
+                return s;
+            },
+
+            etapaUpperKey(etapa) {
+                const norm = this.normalizarEtapaNombre(etapa);
+                return norm.toUpperCase().replace('Á', 'A').replace('É', 'E').replace('Í', 'I').replace('Ó', 'O').replace('Ú', 'U');
+            },
+
+            obtenerSiguienteEtapa(etapaActual) {
+                const norm = this.normalizarEtapaNombre(etapaActual);
+                const idx = this.etapasEmbudo.indexOf(norm);
+                if (idx >= 0 && idx < this.etapasEmbudo.length - 1) {
+                    return this.etapasEmbudo[idx + 1];
+                }
+                return null;
+            },
+
+            saltosPermitidos: {
+                'Entrevista Líder Dicsys': ['Entrevista Cliente'],
+                'Validación Administración': ['Oferta'],
+                'Entrevista Cliente': ['Examen Médico Preocupacional']
+            },
+
+            destinosPermitidos(etapaActual) {
+                const norm = this.normalizarEtapaNombre(etapaActual);
+                const siguiente = this.obtenerSiguienteEtapa(norm);
+                if (!siguiente) return [];
+                return [siguiente, ...(this.saltosPermitidos[norm] || [])];
+            },
+
+            abrirModalMover(candidato) {
+                if (candidato && candidato.es_anonimo) return;
+                this.candidatoSeleccionado = { ...candidato };
+                const currentEtapa = this.normalizarEtapaNombre(candidato.etapa_actual);
+                const siguiente = this.obtenerSiguienteEtapa(currentEtapa);
+
+                if (!siguiente) {
+                    this.notify('El candidato se encuentra en una etapa terminal y no puede avanzar más.', 'warning');
+                    return;
+                }
+
+                this.siguienteEtapaValida = siguiente;
+                this.destinosMover = this.destinosPermitidos(currentEtapa);
+                this.nuevaEtapa = siguiente;
+                this.comentarioEtapa = '';
+                this.pretensionSalarialTxt = '';
+                this.pretensionSalarialError = '';
+                this.limpiarArchivoMover();
+                this.modalMover = true;
+                this.$nextTick(() => window.lucide && window.lucide.createIcons());
+            },
+
+            // Pretensión salarial: solo en la transición Entrevista RRHH -> Entrevista Líder Dicsys
+            esTransicionRrhhALider() {
+                return this.normalizarEtapaNombre(this.candidatoSeleccionado?.etapa_actual) === 'Entrevista RRHH'
+                    && this.nuevaEtapa === 'Entrevista Líder Dicsys';
+            },
+
+            // Deja solo dígitos y muestra formato moneda ARS (separador de miles, sin centavos)
+            formatearPretensionSalarial() {
+                const digitos = (this.pretensionSalarialTxt || '').replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+                this.pretensionSalarialError = '';
+                this.pretensionSalarialTxt = digitos ? '$ ' + Number(digitos).toLocaleString('es-AR', { maximumFractionDigits: 0 }) : '';
+            },
+
+            // Devuelve { valor, error }: valor es un entero > 0; vacío o inválido devuelve error (obligatorio en RRHH -> Líder)
+            validarPretensionSalarial() {
+                const crudo = (this.pretensionSalarialTxt || '').replace(/[$\s.]/g, '');
+                if (!crudo) return { valor: null, error: 'La pretensión salarial es obligatoria.' };
+                if (!/^\d+$/.test(crudo)) return { valor: null, error: 'Ingresá un monto entero válido, sin decimales ni valores negativos.' };
+                const valor = Number(crudo);
+                if (valor <= 0) return { valor: null, error: 'La pretensión salarial debe ser un importe mayor a cero.' };
+                if (!Number.isSafeInteger(valor)) return { valor: null, error: 'El monto ingresado es demasiado grande.' };
+                return { valor, error: '' };
+            },
+
+            limpiarArchivoMover() {
+                this.archivoMover = null;
+                this.archivoMoverNombre = '';
+                this.archivoMoverTamano = '';
+                this.archivoMoverError = '';
+                if (this.$refs.archivoMoverInput) {
+                    this.$refs.archivoMoverInput.value = '';
+                }
+            },
+
+            seleccionarArchivoMover(event) {
+                const file = event.target.files && event.target.files[0];
+                if (!file) return;
+
+                this.archivoMoverError = '';
+                const maxBytes = 10 * 1024 * 1024; // 10 MB
+                if (file.size > maxBytes) {
+                    this.archivoMoverError = 'El archivo supera el límite de 10 MB.';
+                    this.limpiarArchivoMover();
+                    return;
+                }
+
+                const nombre = file.name.toLowerCase();
+                const extensionesValidas = ['.pdf', '.doc', '.docx', '.png', '.jpg', '.jpeg', '.xlsx', '.xls', '.txt', '.zip', '.rar'];
+                const valida = extensionesValidas.some(ext => nombre.endsWith(ext));
+                if (!valida) {
+                    this.archivoMoverError = 'Tipo de archivo no permitido. Formatos: PDF, DOC, DOCX, PNG, JPG, XLSX, TXT, ZIP, RAR.';
+                    this.limpiarArchivoMover();
+                    return;
+                }
+
+                this.archivoMover = file;
+                this.archivoMoverNombre = file.name;
+                if (file.size < 1024 * 1024) {
+                    this.archivoMoverTamano = (file.size / 1024).toFixed(1) + ' KB';
+                } else {
+                    this.archivoMoverTamano = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+                }
+                this.$nextTick(() => window.lucide && window.lucide.createIcons());
+            },
+
+            async guardarMoverEtapa() {
+                if (!this.candidatoSeleccionado || !this.nuevaEtapa) return;
+
+                let pretension = null;
+                if (this.esTransicionRrhhALider()) {
+                    const v = this.validarPretensionSalarial();
+                    this.pretensionSalarialError = v.error;
+                    if (v.error) return;
+                    pretension = v.valor;
+                }
+                this.guardandoMover = true;
+
+                const candId = this.candidatoSeleccionado.candidato_id || this.candidatoSeleccionado.id;
+                const opId = this.op.id;
+
+                try {
+                    const nuevoEstado = this.nuevaEtapa === 'Ingreso' ? 'Ingreso confirmado' : 'En proceso';
+                    const feedback = this.comentarioEtapa ? this.comentarioEtapa.trim() : null;
+
+                    let res;
+                    if (this.archivoMover) {
+                        const formData = new FormData();
+                        formData.append('etapa_actual', this.nuevaEtapa);
+                        formData.append('estado', nuevoEstado);
+                        if (feedback) {
+                            formData.append('feedback_etapa', feedback);
+                        }
+                        if (pretension !== null) {
+                            formData.append('pretension_salarial_bruta_ars', String(pretension));
+                        }
+                        formData.append('archivo', this.archivoMover);
+
+                        res = await fetch(`/recruiting/oportunidades/${opId}/candidatos/${candId}/etapa`, {
+                            method: 'POST',
+                            headers: {
+                                'Accept': 'application/json'
+                            },
+                            body: formData
+                        });
+                    } else {
+                        const payload = {
+                            etapa_actual: this.nuevaEtapa,
+                            estado: nuevoEstado,
+                            feedback_etapa: feedback
+                        };
+                        if (pretension !== null) {
+                            payload.pretension_salarial_bruta_ars = pretension;
+                        }
+
+                        res = await fetch(`/recruiting/oportunidades/${opId}/candidatos/${candId}/etapa`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(payload)
+                        });
+                    }
+
+                    const resData = await res.json();
+
+                    if (res.ok && resData.success !== false) {
+                        const target = this.candidatos.find(c => (c.candidato_id || c.id) === candId);
+                        if (target) {
+                            target.etapa_actual = this.nuevaEtapa;
+                            target.estado = nuevoEstado;
+                            target.feedback_etapa = feedback;
+                            if (pretension !== null) target.pretension_salarial_bruta_ars = pretension;
+                            delete target.motivo_descarte;
+                        }
+                        const msgAdjunto = this.archivoMover ? ' con archivo adjunto' : '';
+                        if (this.normalizarEtapaNombre(this.nuevaEtapa) === 'Ingreso') {
+                            // El backend cerró la búsqueda como Ganada: se recarga para mostrarla bloqueada (solo consulta)
+                            this.op.estado = 'Ganada';
+                            this.notify(`Se movió a ${this.candidatoSeleccionado.nombre} a Ingreso${msgAdjunto}. La búsqueda quedó Ganada y cerrada.`);
+                            setTimeout(() => window.location.reload(), 1500);
+                        } else {
+                            this.notify(`Se movió a ${this.candidatoSeleccionado.nombre} a la etapa '${this.nuevaEtapa}'${msgAdjunto}.`);
+                        }
+                    } else {
+                        const errorMsg = resData.error || resData.detail || 'Error al mover etapa';
+                        this.notify(errorMsg, 'warning');
+                        // Si el Ingreso se registró pero falló el adjunto, la búsqueda ya quedó Ganada: se recarga para reflejar el estado real
+                        if (this.normalizarEtapaNombre(this.nuevaEtapa) === 'Ingreso') {
+                            setTimeout(() => window.location.reload(), 2500);
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error al mover etapa:', err);
+                    this.notify('Error de red al actualizar etapa', 'warning');
+                } finally {
+                    this.guardandoMover = false;
+                    this.modalMover = false;
+                    this.limpiarArchivoMover();
+                    this.candidatoSeleccionado = null;
+                    this.$nextTick(() => window.lucide && window.lucide.createIcons());
+                }
+            },
+
+            // Motivos de descarte de la etapa actual del candidato (recruiting_motivos_descarte)
+            obtenerMotivosParaEtapa() {
+                return this.motivosDescarte.map(m => m.motivo);
+            },
+
+            async cargarMotivosDescarte(etapa) {
+                this.cargandoMotivos = true;
+                this.errorMotivos = '';
+                this.motivoDescarte = '';
+                try {
+                    const res = await fetch('/recruiting/motivos-descarte?etapa=' + encodeURIComponent(this.normalizarEtapaNombre(etapa)), {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok || !Array.isArray(data) || data.length === 0) {
+                        throw new Error((data && (data.error || data.detail)) || 'Respuesta sin motivos');
+                    }
+                    this.motivosDescarte = data;
+                    this.motivoDescarte = data[0].motivo;
+                } catch (err) {
+                    console.error('Error al cargar motivos de descarte:', err);
+                    this.motivosDescarte = [];
+                    this.errorMotivos = 'No se pudieron cargar los motivos de descarte. Intente nuevamente.';
+                } finally {
+                    this.cargandoMotivos = false;
+                }
+            },
+
+            motivoDescarteValido() {
+                return !this.cargandoMotivos && this.obtenerMotivosParaEtapa().includes(this.motivoDescarte);
+            },
+
+            abrirModalDescartar(candidato) {
+                if (candidato && candidato.es_anonimo) return;
+                this.candidatoSeleccionado = { ...candidato };
+                this.comentarioDescarte = '';
+                this.modalDescartar = true;
+                this.cargarMotivosDescarte(candidato.etapa_actual);
+                this.$nextTick(() => window.lucide && window.lucide.createIcons());
+            },
+
+            async guardarDescarte() {
+                if (!this.candidatoSeleccionado) return;
+                if (!this.motivoDescarteValido()) {
+                    this.notify('Debe seleccionar un motivo de descarte.', 'warning');
+                    return;
+                }
+                this.guardandoDescarte = true;
+
+                const candId = this.candidatoSeleccionado.candidato_id || this.candidatoSeleccionado.id;
+                const opId = this.op.id;
+
+                try {
+                    const payload = {
+                        etapa_actual: 'Descartados',
+                        estado: 'Descartado',
+                        motivo_descarte: this.motivoDescarte.trim(),
+                        feedback_etapa: this.comentarioDescarte ? this.comentarioDescarte.trim() : null
+                    };
+
+                    const res = await fetch(`/recruiting/oportunidades/${opId}/candidatos/${candId}/etapa`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const resData = await res.json();
+
+                    if (res.ok && resData.success !== false) {
+                        const target = this.candidatos.find(c => (c.candidato_id || c.id) === candId);
+                        if (target) {
+                            target.etapa_actual = 'Descartados';
+                            target.estado = 'Descartado';
+                            target.motivo_descarte = this.motivoDescarte;
+                            target.feedback_etapa = this.comentarioDescarte;
+                        }
+                        this.notify(`El candidato ${this.candidatoSeleccionado.nombre} fue marcado como descartado.`, 'warning');
+                    } else {
+                        const errorMsg = resData.error || resData.detail || 'Error al descartar candidato';
+                        this.notify(errorMsg, 'warning');
+                    }
+                } catch (err) {
+                    console.error('Error al descartar candidato:', err);
+                    this.notify('Error de red al registrar el descarte', 'warning');
+                } finally {
+                    this.guardandoDescarte = false;
+                    this.modalDescartar = false;
+                    this.candidatoSeleccionado = null;
+                    this.$nextTick(() => window.lucide && window.lucide.createIcons());
+                }
+            },
+
+            abrirModalReingreso(candidato) {
+                if (candidato && candidato.es_anonimo) return;
+                this.candidatoSeleccionado = { ...candidato };
+                this.motivoReingreso = '';
+                this.modalReingresar = true;
+                this.$nextTick(() => window.lucide && window.lucide.createIcons());
+            },
+
+            async guardarReingreso() {
+                if (!this.candidatoSeleccionado) return;
+                const motivo = (this.motivoReingreso || '').trim();
+                if (!motivo) {
+                    this.notify('El motivo del reingreso por cambio de perfil es obligatorio.', 'warning');
+                    return;
+                }
+                this.guardandoReingreso = true;
+
+                const candId = this.candidatoSeleccionado.candidato_id || this.candidatoSeleccionado.id;
+                const opId = this.op.id;
+
+                try {
+                    const payload = {
+                        etapa_actual: 'Entrevista RRHH',
+                        estado: 'En proceso',
+                        feedback_etapa: motivo
+                    };
+
+                    const res = await fetch(`/recruiting/oportunidades/${opId}/candidatos/${candId}/etapa`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const resData = await res.json();
+
+                    if (res.ok && resData.success !== false) {
+                        const target = this.candidatos.find(c => (c.candidato_id || c.id) === candId);
+                        if (target) {
+                            target.etapa_actual = 'Entrevista RRHH';
+                            target.estado = 'En proceso';
+                            target.feedback_etapa = motivo;
+                            delete target.motivo_descarte;
+                        }
+                        this.notify(`El candidato ${this.candidatoSeleccionado.nombre} reingresó exitosamente al proceso en 'Entrevista RRHH'.`);
+                    } else {
+                        const errorMsg = resData.error || resData.detail || 'Error al reingresar candidato';
+                        this.notify(errorMsg, 'warning');
+                    }
+                } catch (err) {
+                    console.error('Error al reingresar candidato:', err);
+                    this.notify('Error de red al reingresar el candidato', 'warning');
+                } finally {
+                    this.guardandoReingreso = false;
+                    this.modalReingresar = false;
+                    this.candidatoSeleccionado = null;
+                    this.$nextTick(() => window.lucide && window.lucide.createIcons());
+                }
+            },
+
+            getEtapaConfig(etapa, estado) {
+                if (estado === 'Descartado' || etapa === 'Descartado' || etapa === 'Descartados') {
+                    return {
+                        badge: 'bg-rose-50 text-rose-700 border-rose-200',
+                        dot: 'bg-rose-500',
+                        tabActive: 'bg-rose-500 text-white border-rose-600 shadow-sm',
+                        tabInactive: 'bg-rose-50/70 hover:bg-rose-100/80 text-rose-700 border-rose-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-rose-200/70 text-rose-800'
+                    };
+                }
+                const etapaVal = this.normalizarEtapaNombre(etapa || 'Screening');
+                const map = {
+                    'Todas': {
+                        badge: 'bg-slate-100 text-slate-700 border-slate-300',
+                        dot: 'bg-slate-500',
+                        tabActive: 'bg-slate-800 text-white border-slate-900 shadow-sm',
+                        tabInactive: 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200',
+                        badgeCountActive: 'bg-white/20 text-white',
+                        badgeCountInactive: 'bg-slate-200 text-slate-700'
+                    },
+                    'Candidato': {
+                        badge: 'bg-blue-50 text-blue-700 border-blue-200',
+                        dot: 'bg-blue-500',
+                        tabActive: 'bg-blue-600 text-white border-blue-700 shadow-sm',
+                        tabInactive: 'bg-blue-50/70 hover:bg-blue-100/80 text-blue-700 border-blue-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-blue-200/70 text-blue-800'
+                    },
+                    'Screening': {
+                        badge: 'bg-purple-50 text-purple-700 border-purple-200',
+                        dot: 'bg-purple-500',
+                        tabActive: 'bg-purple-600 text-white border-purple-700 shadow-sm',
+                        tabInactive: 'bg-purple-50/70 hover:bg-purple-100/80 text-purple-700 border-purple-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-purple-200/70 text-purple-800'
+                    },
+                    'Entrevista RRHH': {
+                        badge: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+                        dot: 'bg-cyan-500',
+                        tabActive: 'bg-cyan-600 text-white border-cyan-700 shadow-sm',
+                        tabInactive: 'bg-cyan-50/70 hover:bg-cyan-100/80 text-cyan-700 border-cyan-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-cyan-200/70 text-cyan-800'
+                    },
+                    'Entrevista Líder Dicsys': {
+                        badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                        dot: 'bg-indigo-500',
+                        tabActive: 'bg-indigo-600 text-white border-indigo-700 shadow-sm',
+                        tabInactive: 'bg-indigo-50/70 hover:bg-indigo-100/80 text-indigo-700 border-indigo-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-indigo-200/70 text-indigo-800'
+                    },
+                    'Validación Administración': {
+                        badge: 'bg-orange-50 text-orange-700 border-orange-200',
+                        dot: 'bg-orange-500',
+                        tabActive: 'bg-orange-600 text-white border-orange-700 shadow-sm',
+                        tabInactive: 'bg-orange-50/70 hover:bg-orange-100/80 text-orange-700 border-orange-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-orange-200/70 text-orange-800'
+                    },
+                    'Entrevista Cliente': {
+                        badge: 'bg-amber-50 text-amber-700 border-amber-200',
+                        dot: 'bg-amber-500',
+                        tabActive: 'bg-amber-600 text-white border-amber-700 shadow-sm',
+                        tabInactive: 'bg-amber-50/70 hover:bg-amber-100/80 text-amber-700 border-amber-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-amber-200/70 text-amber-800'
+                    },
+                    'Oferta': {
+                        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                        dot: 'bg-emerald-500',
+                        tabActive: 'bg-emerald-600 text-white border-emerald-700 shadow-sm',
+                        tabInactive: 'bg-emerald-50/70 hover:bg-emerald-100/80 text-emerald-700 border-emerald-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-emerald-200/70 text-emerald-800'
+                    },
+                    'Examen Médico Preocupacional': {
+                        badge: 'bg-teal-50 text-teal-700 border-teal-200',
+                        dot: 'bg-teal-500',
+                        tabActive: 'bg-teal-600 text-white border-teal-700 shadow-sm',
+                        tabInactive: 'bg-teal-50/70 hover:bg-teal-100/80 text-teal-700 border-teal-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-teal-200/70 text-teal-800'
+                    },
+                    'Ingreso': {
+                        badge: 'bg-green-100 text-green-800 border-green-300',
+                        dot: 'bg-green-600',
+                        tabActive: 'bg-green-700 text-white border-green-800 shadow-sm',
+                        tabInactive: 'bg-green-100/70 hover:bg-green-200/80 text-green-800 border-green-300/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-green-200 text-green-900'
+                    },
+                    'Descartados': {
+                        badge: 'bg-rose-50 text-rose-700 border-rose-200',
+                        dot: 'bg-rose-500',
+                        tabActive: 'bg-rose-600 text-white border-rose-700 shadow-sm',
+                        tabInactive: 'bg-rose-50/70 hover:bg-rose-100/80 text-rose-700 border-rose-200/80',
+                        badgeCountActive: 'bg-white/25 text-white',
+                        badgeCountInactive: 'bg-rose-200/70 text-rose-800'
+                    }
+                };
+                return map[etapaVal] || map['Screening'];
+            },
+
+            badgeClassEtapa(etapa, estado) {
+                return this.getEtapaConfig(etapa, estado).badge;
+            },
+
+            badgeDotClassEtapa(etapa, estado) {
+                return this.getEtapaConfig(etapa, estado).dot;
+            },
+
+            getInitials(name) {
+                if (!name) return 'C';
+                const parts = name.trim().split(' ');
+                if (parts.length >= 2) {
+                    return (parts[0][0] + parts[1][0]).toUpperCase();
+                }
+                return name.substring(0, 2).toUpperCase();
+            }
+        };
+    }
+</script>
+
+<div class="animate-fade-in" x-data="pipelineComponent()" x-init="$nextTick(() => window.lucide && window.lucide.createIcons())">
+
+    <!-- Toast Notification -->
+    <div x-show="showToast"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 transform translate-y-2"
+         x-transition:enter-end="opacity-100 transform translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100 transform translate-y-0"
+         x-transition:leave-end="opacity-0 transform translate-y-2"
+         class="fixed bottom-6 right-6 z-50 max-w-md shadow-xl rounded-xl border p-4 flex items-center gap-3"
+         :class="toastType === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'"
+         style="display: none;">
+        <i :data-lucide="toastType === 'success' ? 'check-circle' : 'alert-triangle'" class="w-5 h-5 flex-shrink-0"></i>
+        <p class="text-sm font-medium" x-text="toastMessage"></p>
+        <button @click="showToast = false" class="ml-auto text-dark-400 hover:text-dark-600">
+            <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+    </div>
+
+    <!-- Selector de vista (Vista global / Pipeline individual) -->
+    <div class="flex flex-wrap justify-end items-center gap-2 mb-4">
+        {% set vista_actual = 'individual' %}
+        {% include "recruiting/_pipeline_filtros_tipo.html" %}
+        {% include "recruiting/_pipeline_vista_selector.html" %}
+    </div>
+
+    <!-- Cabecera de la búsqueda -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft p-6 mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+                <div class="flex items-center gap-2 mb-2">
+                    <a href="{{ url_for('recruiting.oportunidades') }}" class="text-xs font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-1">
+                        <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>
+                        <span>Búsquedas</span>
+                    </a>
+                    <span class="text-dark-300">/</span>
+                    <a href="{{ url_for('recruiting.gestion_busquedas', vista='individual') }}" class="text-xs font-semibold text-dark-500 hover:text-primary-600">
+                        Gestión de Búsquedas
+                    </a>
+                    <span data-testid="estado-busqueda" class="px-2.5 py-0.5 text-xs font-bold rounded-lg border"
+                          :class="op.estado === 'Ganada' ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'"
+                          x-text="op.estado || 'Abierta'"></span>
+                    <span class="px-2.5 py-0.5 text-xs font-bold rounded-lg border"
+                          :class="op.externo_id ? 'bg-indigo-50 text-indigo-700 border-indigo-200' : 'bg-dark-50 text-dark-600 border-dark-200'"
+                          x-text="op.externo_id ? 'Búsqueda externa' : 'Búsqueda interna'"></span>
+                </div>
+                <h1 class="text-2xl lg:text-3xl font-bold text-dark-900 leading-tight" x-text="op.titulo || 'Tech Lead Python / Cloud'"></h1>
+                
+                <div class="flex flex-wrap items-center gap-4 mt-3 text-sm text-dark-600">
+                    <div class="flex items-center gap-1.5" x-show="op.cliente">
+                        <i data-lucide="building-2" class="w-4 h-4 text-dark-400"></i>
+                        <span class="font-medium text-dark-800" x-text="op.cliente"></span>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <i data-lucide="users" class="w-4 h-4 text-dark-400"></i>
+                        <span>Vacantes: <strong class="text-dark-800" x-text="op.vacantes || 1"></strong></span>
+                    </div>
+                    <div class="flex items-center gap-1.5" x-show="op.seniority">
+                        <i data-lucide="bar-chart-2" class="w-4 h-4 text-dark-400"></i>
+                        <span x-text="op.seniority"></span>
+                    </div>
+                    <div class="flex items-center gap-1.5" x-show="op.modalidad">
+                        <i data-lucide="map-pin" class="w-4 h-4 text-dark-400"></i>
+                        <span x-text="op.modalidad === 'Hibrido' ? 'Híbrido' : op.modalidad"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2.5">
+                <a :href="'/recruiting/oportunidades/' + (op.id || 1) + '?volver=' + encodeURIComponent(window.location.pathname + window.location.search)"
+                   class="inline-flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-dark-50 text-dark-700 border border-dark-200 font-semibold rounded-xl shadow-soft transition-colors text-sm">
+                    <i data-lucide="file-text" class="w-4 h-4 text-dark-500"></i>
+                    <span>Ver ficha de búsqueda</span>
+                </a>
+            </div>
+        </div>
+        {% if busqueda_ganada %}
+        <!-- Búsqueda Ganada: cerrada automáticamente al confirmar el Ingreso de un candidato (solo consulta) -->
+        <div data-testid="aviso-busqueda-ganada" class="flex items-start gap-3 mt-4 px-4 py-3 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-800 text-sm">
+            <i data-lucide="lock" class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
+            <div>
+                <p class="font-bold">Búsqueda Ganada y cerrada</p>
+                <p class="text-xs mt-0.5">Un candidato llegó a la etapa Ingreso. Los candidatos quedan visibles solo para consulta: no se pueden agregar nuevos, moverlos de etapa, descartarlos ni reingresarlos.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Barra de contadores / filtros por etapa -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft p-5 mb-6">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3.5 pb-2 border-b border-dark-100/60">
+            <div class="flex items-center gap-2">
+                <i data-lucide="kanban" class="w-5 h-5 text-primary-600"></i>
+                <h2 class="text-base font-bold text-dark-900">Etapas del Proceso</h2>
+            </div>
+            <span class="text-xs text-dark-500 font-medium whitespace-nowrap">
+                Total en proceso: <strong class="text-dark-900 font-bold" x-text="candidatos.length"></strong> candidatos
+            </span>
+        </div>
+
+        <!-- Badges / Filtros de etapas (flex-wrap fluido con soporte de scroll y espacio garantizado) -->
+        <div class="flex flex-wrap lg:flex-nowrap items-center gap-2 lg:gap-1.5 pt-0.5 lg:overflow-x-auto">
+            <!-- Botón Todas -->
+            <button
+                type="button"
+                @click="etapaFiltro = 'Todas'"
+                :class="etapaFiltro === 'Todas' ? getEtapaConfig('Todas').tabActive : getEtapaConfig('Todas').tabInactive"
+                class="inline-flex items-center justify-center gap-1.5 lg:flex-1 px-3 lg:px-2.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer">
+                <span>Todas</span>
+                <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none"
+                      :class="etapaFiltro === 'Todas' ? getEtapaConfig('Todas').badgeCountActive : getEtapaConfig('Todas').badgeCountInactive"
+                      x-text="conteoEtapa('Todas')"></span>
+            </button>
+
+            <!-- Badges de cada etapa -->
+            <template x-for="etapa in etapasTodas" :key="etapa">
+                <button
+                    type="button"
+                    @click="etapaFiltro = etapa"
+                    :class="etapaFiltro === etapa ? getEtapaConfig(etapa).tabActive : getEtapaConfig(etapa).tabInactive"
+                    class="inline-flex items-center justify-center gap-1.5 lg:flex-1 px-3 lg:px-2.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer flex-shrink-0">
+                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          :class="etapaFiltro === etapa ? 'bg-white' : getEtapaConfig(etapa).dot"></span>
+                    <span x-text="etapa === 'Entrevista Líder Dicsys' ? 'Entrevista Líder' : etapa"></span>
+                    <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-bold leading-none"
+                          :class="etapaFiltro === etapa ? getEtapaConfig(etapa).badgeCountActive : getEtapaConfig(etapa).badgeCountInactive"
+                          x-text="conteoEtapa(etapa)"></span>
+                </button>
+            </template>
+        </div>
+    </div>
+
+    <!-- Grilla / Tabla: Seguimiento de Candidatos en Proceso -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden">
+        <!-- Encabezado de la sección -->
+        <div class="px-5 py-4 border-b border-dark-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-dark-50/50">
+            <div>
+                <h3 class="text-base font-bold text-dark-900 flex items-center gap-2">
+                    <i data-lucide="users" class="w-4 h-4 text-primary-600"></i>
+                    <span>Seguimiento de Candidatos en Proceso</span>
+                </h3>
+            </div>
+            <div class="text-xs text-dark-500 font-medium sm:text-right pr-1">
+                Mostrando <strong class="text-dark-800" x-text="candidatosFiltrados().length"></strong> de <span x-text="candidatos.length"></span> candidatos
+            </div>
+        </div>
+
+        <!-- Tabla -->
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+                <thead>
+                    <tr class="bg-dark-50 text-dark-500 font-semibold text-xs uppercase tracking-wider border-b border-dark-100">
+                        <th class="py-3 px-4">Candidato</th>
+                        <th class="py-3 px-4">Seniority</th>
+                        <th class="py-3 px-4">Teléfono / Contacto</th>
+                        <th class="py-3 px-4">Etapa Actual</th>
+                        <th class="py-3 px-4 text-right">Acción</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100">
+                    <template x-for="cand in candidatosFiltrados()" :key="cand.id">
+                        <tr class="hover:bg-dark-50/60 transition-colors">
+                            <!-- Nombre / Email -->
+                            <td class="py-3.5 px-4">
+                                <div class="flex items-center gap-3">
+                                    <div class="w-9 h-9 rounded-xl bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xs flex-shrink-0"
+                                         x-text="getInitials(cand.nombre)"></div>
+                                    <div>
+                                        <a x-show="!cand.es_anonimo" :href="'/recruiting/candidatos/' + cand.id + '?volver=' + encodeURIComponent(urlRetorno())"
+                                           class="font-semibold text-dark-900 hover:text-primary-600 transition-colors block"
+                                           x-text="cand.nombre"></a>
+                                        <span x-show="cand.es_anonimo" class="font-semibold text-dark-900 block" x-text="cand.nombre"></span>
+                                        <span class="text-xs text-dark-400 block" x-text="cand.es_anonimo ? 'Oculto' : cand.email"></span>
+                                        <span class="text-[10px] font-bold uppercase tracking-wide" :class="cand.es_externo ? 'text-indigo-600' : 'text-dark-400'"
+                                              x-text="cand.es_externo ? 'Externo' : 'Interno'"></span>
+                                        <template x-if="!cand.es_anonimo">
+                                            <span class="text-[11px] text-dark-500 block"
+                                                  x-text="'Presentado por: ' + (cand.presentado_por || 'Sin identificar')"></span>
+                                        </template>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <!-- Seniority -->
+                            <td class="py-3.5 px-4">
+                                <span class="px-2.5 py-1 text-xs font-semibold rounded-lg bg-dark-100 text-dark-700"
+                                      x-text="cand.seniority || 'No especificado'"></span>
+                            </td>
+
+                            <!-- Teléfono -->
+                            <td class="py-3.5 px-4">
+                                <div class="flex items-center gap-1.5 text-dark-600">
+                                    <i data-lucide="phone" class="w-3.5 h-3.5 text-dark-400"></i>
+                                    <span class="text-xs font-mono" x-text="cand.es_anonimo ? 'Oculto' : (cand.telefono || 'Sin teléfono')"></span>
+                                </div>
+                            </td>
+
+                            <!-- Etapa Actual -->
+                            <td class="py-3.5 px-4">
+                                <div class="flex flex-col">
+                                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold rounded-full border px-2.5 py-1 w-fit"
+                                          :class="badgeClassEtapa(cand.etapa_actual, cand.estado)">
+                                        <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                              :class="badgeDotClassEtapa(cand.etapa_actual, cand.estado)"></span>
+                                        <span x-text="normalizarEtapaNombre(cand.etapa_actual)"></span>
+                                    </span>
+                                    <span x-show="cand.motivo_descarte" class="text-[11px] text-rose-600 italic mt-1 line-clamp-1" :title="cand.motivo_descarte" x-text="'Motivo: ' + cand.motivo_descarte"></span>
+                                </div>
+                            </td>
+
+                            <td class="py-3.5 px-4 text-right whitespace-nowrap">
+                                <!-- Caso 1: Candidato activo en el embudo (no terminal, no descartado) -->
+                                <template x-if="normalizarEtapaNombre(cand.etapa_actual) !== 'Ingreso' && normalizarEtapaNombre(cand.etapa_actual) !== 'Descartados' && (cand.estado || '').toLowerCase() !== 'descartado'">
+                                    <div class="inline-flex items-center gap-1.5 justify-end">
+                                        <!-- Botón Primario: Mover Etapa -->
+                                        <button
+                                            type="button"
+                                            @click="abrirModalMover(cand)"
+                                            :disabled="cand.es_anonimo || {{ 'false' if puede_mover_descartar else 'true' }}" :class="cand.es_anonimo ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''"
+                                            {% if not puede_mover_descartar %}disabled aria-disabled="true"{% endif %}
+                                            title="{% if busqueda_ganada %}La búsqueda está Ganada y cerrada{% elif puede_mover_descartar %}Avanzar a la siguiente etapa del embudo{% else %}No tenés permiso para mover de etapa{% endif %}"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-soft transition-colors cursor-pointer{% if not puede_mover_descartar %} opacity-50 cursor-not-allowed pointer-events-none{% endif %}">
+                                            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                                            <span>Mover Etapa</span>
+                                        </button>
+
+                                        <!-- Botón Ver Detalles -->
+                                        <a
+                                            x-show="!cand.es_anonimo"
+                                            :href="'/recruiting/oportunidades/' + op.id + '/candidatos/' + (cand.candidato_id || cand.id) + '/detalle?origen=pipeline'"
+                                            title="Ver historial de estados y fechas del candidato"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-dark-700 bg-dark-50 hover:bg-dark-100 border border-dark-200 rounded-lg transition-colors cursor-pointer">
+                                            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                                            <span>Ver Detalles</span>
+                                        </a>
+
+                                        <!-- Botón Secundario / Alerta: Descartar -->
+                                        <button
+                                            type="button"
+                                            @click="abrirModalDescartar(cand)"
+                                            :disabled="cand.es_anonimo || {{ 'false' if puede_mover_descartar else 'true' }}" :class="cand.es_anonimo ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''"
+                                            {% if not puede_mover_descartar %}disabled aria-disabled="true"{% endif %}
+                                            title="{% if busqueda_ganada %}La búsqueda está Ganada y cerrada{% elif puede_mover_descartar %}Descartar candidato de la búsqueda{% else %}No tenés permiso para descartar{% endif %}"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer{% if not puede_mover_descartar %} opacity-50 cursor-not-allowed pointer-events-none{% endif %}">
+                                            <i data-lucide="user-x" class="w-3.5 h-3.5"></i>
+                                            <span>Descartar</span>
+                                        </button>
+                                    </div>
+                                </template>
+
+                                <!-- Caso 2: Candidato en etapa terminal Ingreso (sin mutaciones, solo Ver Detalles) -->
+                                <template x-if="normalizarEtapaNombre(cand.etapa_actual) === 'Ingreso' && (cand.estado || '').toLowerCase() !== 'descartado'">
+                                    <div class="inline-flex items-center gap-1.5 justify-end">
+                                        <span class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                            <i data-lucide="check-circle" class="w-3.5 h-3.5"></i>
+                                            <span>Ingreso Confirmado</span>
+                                        </span>
+                                        <a
+                                            x-show="!cand.es_anonimo"
+                                            :href="'/recruiting/oportunidades/' + op.id + '/candidatos/' + (cand.candidato_id || cand.id) + '/detalle?origen=pipeline'"
+                                            title="Ver historial de estados y fechas del candidato"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-dark-700 bg-dark-50 hover:bg-dark-100 border border-dark-200 rounded-lg transition-colors cursor-pointer">
+                                            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                                            <span>Ver Detalles</span>
+                                        </a>
+                                    </div>
+                                </template>
+
+                                <!-- Caso 3: Candidatos descartados (Permite Ver Detalles y Reingresar por cambio de perfil) -->
+                                <template x-if="normalizarEtapaNombre(cand.etapa_actual) === 'Descartados' || (cand.estado || '').toLowerCase() === 'descartado'">
+                                    <div class="inline-flex items-center gap-1.5 justify-end">
+                                        <!-- Botón Excepcional: Reingresar al Proceso (no disponible en una búsqueda Ganada) -->
+                                        {% if not busqueda_ganada %}
+                                        <button
+                                            type="button"
+                                            @click="abrirModalReingreso(cand)"
+                                            :disabled="cand.es_anonimo" :class="cand.es_anonimo ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''"
+                                            title="Reingresar al proceso por cambio de perfil/requerimientos (inicia en Entrevista RRHH)"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 rounded-lg transition-colors cursor-pointer shadow-2xs">
+                                            <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-amber-600"></i>
+                                            <span>Reingresar al Proceso</span>
+                                        </button>
+                                        {% endif %}
+
+                                        <a
+                                            x-show="!cand.es_anonimo"
+                                            :href="'/recruiting/oportunidades/' + op.id + '/candidatos/' + (cand.candidato_id || cand.id) + '/detalle?origen=pipeline'"
+                                            title="Ver historial de estados y motivo de descarte del candidato"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-dark-700 bg-dark-50 hover:bg-dark-100 border border-dark-200 rounded-lg transition-colors cursor-pointer">
+                                            <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                                            <span>Ver Detalles</span>
+                                        </a>
+                                    </div>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Estado vacío cuando no hay candidatos asignados o con el filtro seleccionado -->
+        <template x-if="candidatosFiltrados().length === 0">
+            <div class="py-12 px-4 flex flex-col items-center justify-center text-center">
+                <div class="w-14 h-14 bg-dark-50 rounded-2xl flex items-center justify-center mb-3.5 text-dark-400 shadow-2xs">
+                    <i data-lucide="users" class="w-7 h-7"></i>
+                </div>
+                <!-- Caso 1: Búsqueda sin ningún candidato asignado -->
+                <template x-if="candidatos.length === 0">
+                    <div class="flex flex-col items-center justify-center max-w-md">
+                        <h3 class="text-base font-bold text-dark-900 mb-1">No hay candidatos asignados a esta búsqueda todavía</h3>
+                        <p class="text-xs text-dark-500 mb-5">
+                            Comenzá asignando candidatos desde el banco de talento o desde el detalle de la búsqueda para gestionar su proceso en el embudo.
+                        </p>
+                        <div class="flex items-center justify-center gap-3">
+                            {% if puede_asignar_candidatos %}
+                            <a :href="'/recruiting/oportunidades/' + op.id + '/agregar-candidato' + '?volver=' + encodeURIComponent(window.location.pathname + window.location.search)"
+                               class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white font-semibold text-xs rounded-xl shadow-soft transition-all cursor-pointer">
+                                <i data-lucide="user-plus" class="w-4 h-4"></i>
+                                <span>Agregar Candidato a esta Búsqueda</span>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Caso 2: Hay candidatos en la búsqueda pero ninguno en la etapa filtrada -->
+                <template x-if="candidatos.length > 0">
+                    <div class="flex flex-col items-center justify-center max-w-md">
+                        <h3 class="text-base font-bold text-dark-800 mb-1">No se encontraron candidatos</h3>
+                        <p class="text-xs text-dark-500 mb-4" x-show="etapaFiltro !== 'Todas'">
+                            No hay candidatos en la etapa '<span x-text="etapaFiltro === '__grupo__' ? filtroColumna : etapaFiltro"></span>'.
+                        </p>
+                        <div class="flex items-center justify-center gap-3">
+                            <button
+                                type="button"
+                                @click="etapaFiltro = 'Todas'"
+                                class="px-4 py-2 bg-dark-100 hover:bg-dark-200 text-dark-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-2xs">
+                                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                                <span>Ver todas las etapas</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </template>
+    </div>
+
+    <!-- Modal: Mover Etapa (Embudo Secuencial Estricto) -->
+    <div
+        x-show="modalMover"
+        x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-900/50 backdrop-blur-xs"
+        @keydown.escape.window="modalMover = false"
+    >
+        <div
+            @click.away="modalMover = false"
+            class="bg-white rounded-2xl shadow-xl border border-dark-100 max-w-2xl w-full mx-4 p-6 sm:p-7 animate-fade-in flex flex-col gap-5"
+        >
+            <div class="flex items-start justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="p-2 bg-primary-50 text-primary-600 rounded-xl">
+                        <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-lg font-bold text-dark-900">Mover Etapa</h3>
+                        <p class="text-xs text-dark-500" x-text="'Candidato: ' + (candidatoSeleccionado?.nombre || '')"></p>
+                    </div>
+                </div>
+                <button @click="modalMover = false" class="text-dark-400 hover:text-dark-600 p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="bg-dark-50 rounded-xl p-3 text-xs flex items-center justify-between">
+                <span class="text-dark-500">Etapa actual:</span>
+                <span class="inline-flex items-center gap-1.5 font-semibold px-2.5 py-1 rounded-full border"
+                      :class="badgeClassEtapa(candidatoSeleccionado?.etapa_actual || 'Screening', candidatoSeleccionado?.estado)">
+                    <span class="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                          :class="badgeDotClassEtapa(candidatoSeleccionado?.etapa_actual || 'Screening', candidatoSeleccionado?.estado)"></span>
+                    <span x-text="normalizarEtapaNombre(candidatoSeleccionado?.etapa_actual || 'Screening')"></span>
+                </span>
+            </div>
+
+            <!-- Selector de nueva etapa del embudo (Estricto: Solo siguiente etapa inmediata) -->
+            <div>
+                <label class="block text-xs font-semibold text-dark-700 mb-1.5">Siguiente etapa del embudo:</label>
+                <div class="relative">
+                    <select
+                        x-model="nuevaEtapa"
+                        class="w-full px-3.5 py-2.5 bg-white border border-dark-200 rounded-xl text-sm text-dark-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                        <template x-for="d in destinosMover" :key="d"><option :value="d" x-text="d"></option></template>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Pretensión salarial bruta (solo Entrevista RRHH -> Entrevista Líder Dicsys) -->
+            <div x-show="esTransicionRrhhALider()" x-cloak>
+                <label for="pretensionSalarialInput" class="block text-xs font-semibold text-dark-700 mb-1.5">Pretensión salarial bruta (ARS): <span class="text-rose-600" aria-hidden="true">*</span></label>
+                <input
+                    id="pretensionSalarialInput"
+                    type="text"
+                    inputmode="numeric"
+                    autocomplete="off"
+                    x-model="pretensionSalarialTxt"
+                    @input="formatearPretensionSalarial()"
+                    placeholder="$ 1.500.000"
+                    class="w-full px-3.5 py-2.5 bg-white border rounded-xl text-sm text-dark-800 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    required aria-required="true" :aria-invalid="pretensionSalarialError ? 'true' : 'false'"
+                    :class="pretensionSalarialError ? 'border-rose-500 focus:ring-rose-300' : 'border-dark-200'"
+                >
+                <p x-show="pretensionSalarialError" x-text="pretensionSalarialError" class="text-[11px] text-rose-600 font-medium mt-1"></p>
+                <p x-show="!pretensionSalarialError" class="text-[10px] text-dark-400 mt-1">Monto en pesos argentinos, sin decimales.</p>
+            </div>
+
+            <!-- Comentario opcional -->
+            <div>
+                <label class="block text-xs font-semibold text-dark-700 mb-1.5">Nota o feedback de la etapa (opcional):</label>
+                <textarea
+                    x-model="comentarioEtapa"
+                    rows="2"
+                    maxlength="50"
+                    placeholder="Ej: Aprobó entrevista con muy buena predisposición. Se coordina siguiente instancia."
+                    class="w-full h-[60px] px-3.5 py-2 bg-white border border-dark-200 rounded-xl text-sm text-dark-800 focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                ></textarea>
+                <p class="text-[11px] text-dark-400 mt-1 flex items-center justify-between gap-2">
+                    <span>
+                        <i data-lucide="info" class="w-3 h-3 inline mr-0.5"></i>
+                        Máximo 50 caracteres para la observación.
+                    </span>
+                    <span x-text="(comentarioEtapa || '').length + '/50'"></span>
+                </p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-dark-100">
+                <!-- Adjuntar Archivo (Abajo a la izquierda) -->
+                <div class="flex flex-col gap-1">
+                    <input
+                        type="file"
+                        x-ref="archivoMoverInput"
+                        @change="seleccionarArchivoMover($event)"
+                        class="hidden"
+                        accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.xlsx,.xls,.txt,.zip,.rar"
+                    >
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            @click="$refs.archivoMoverInput.click()"
+                            title="Adjuntar archivo asociado a esta etapa (opcional)"
+                            class="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-dark-700 bg-dark-50 hover:bg-dark-100 border border-dark-200 rounded-xl transition-colors cursor-pointer"
+                        >
+                            <i data-lucide="paperclip" class="w-3.5 h-3.5 text-dark-500"></i>
+                            <span x-text="archivoMover ? 'Cambiar archivo' : 'Adjuntar archivo'"></span>
+                        </button>
+
+                        <template x-if="archivoMover">
+                            <div class="inline-flex items-center gap-1.5 bg-primary-50 border border-primary-200 text-primary-700 px-2.5 py-1 rounded-lg text-xs">
+                                <i data-lucide="file-text" class="w-3.5 h-3.5 flex-shrink-0 text-primary-600"></i>
+                                <span class="max-w-[170px] truncate font-medium" :title="archivoMoverNombre" x-text="archivoMoverNombre"></span>
+                                <span class="text-[10px] text-primary-500" x-text="'(' + archivoMoverTamano + ')'"></span>
+                                <button
+                                    type="button"
+                                    @click="limpiarArchivoMover()"
+                                    class="text-primary-500 hover:text-rose-600 p-0.5 rounded cursor-pointer ml-0.5"
+                                    title="Quitar archivo adjunto"
+                                >
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </div>
+                        </template>
+                    </div>
+
+                    <p x-show="archivoMoverError" x-text="archivoMoverError" class="text-[11px] text-rose-600 font-medium"></p>
+                    <p x-show="!archivoMover && !archivoMoverError" class="text-[10px] text-dark-400">
+                        Opcional (PDF, DOCX, imágenes, etc. Máx 10 MB)
+                    </p>
+                </div>
+
+                <!-- Botones de Acción (Abajo a la derecha) -->
+                <div class="flex items-center justify-end gap-2.5">
+                    <button
+                        type="button"
+                        @click="modalMover = false"
+                        class="px-4 py-2 text-sm font-semibold text-dark-600 hover:bg-dark-100 rounded-xl transition-colors cursor-pointer"
+                    >
+                        Cancelar
+                    </button>
+                    <button
+                        type="button"
+                        @click="guardarMoverEtapa()"
+                        :disabled="guardandoMover"
+                        class="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50 rounded-xl shadow-soft transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                    >
+                        <i data-lucide="check" class="w-4 h-4"></i>
+                        <span x-text="guardandoMover ? 'Guardando...' : 'Confirmar Avance'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Descartar Candidato (Motivos por etapa activa) -->
+    <div
+        x-show="modalDescartar"
+        x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-900/50 backdrop-blur-xs"
+        @keydown.escape.window="modalDescartar = false"
+    >
+        <div
+            @click.away="modalDescartar = false"
+            class="bg-white rounded-2xl shadow-xl border border-dark-100 max-w-lg w-full p-6 animate-fade-in flex flex-col gap-4"
+        >
+            <div class="flex items-start justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="p-2 bg-rose-50 text-rose-600 rounded-xl">
+                        <i data-lucide="user-x" class="w-5 h-5"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-lg font-bold text-dark-900">Descartar Candidato</h3>
+                        <p class="text-xs text-dark-500" x-text="'Candidato: ' + (candidatoSeleccionado?.nombre || '')"></p>
+                    </div>
+                </div>
+                <button @click="modalDescartar = false" class="text-dark-400 hover:text-dark-600 p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="bg-rose-50/60 rounded-xl p-3 text-xs text-rose-800 border border-rose-200/60">
+                <span>Etapa activa de descarte: </span>
+                <strong x-text="normalizarEtapaNombre(candidatoSeleccionado?.etapa_actual || 'Screening')"></strong>
+            </div>
+
+            <!-- Motivo de descarte (específico de la etapa) -->
+            <div>
+                <label class="block text-xs font-semibold text-dark-700 mb-1.5">Motivo de no avance / descarte / baja:</label>
+                <div x-show="cargandoMotivos" class="px-3.5 py-2.5 text-sm text-dark-500">Cargando motivos...</div>
+                <div x-show="!cargandoMotivos && errorMotivos" class="flex items-center justify-between gap-3 px-3.5 py-2.5 bg-rose-50 border border-rose-200 rounded-xl text-sm text-rose-800">
+                    <span x-text="errorMotivos"></span>
+                    <button type="button" @click="cargarMotivosDescarte(candidatoSeleccionado?.etapa_actual)" class="font-semibold underline cursor-pointer">Reintentar</button>
+                </div>
+                <select
+                    x-show="!cargandoMotivos && !errorMotivos"
+                    x-model="motivoDescarte"
+                    class="w-full px-3.5 py-2.5 bg-white border border-dark-200 rounded-xl text-sm text-dark-800 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                    <template x-for="motivo in obtenerMotivosParaEtapa()" :key="motivo">
+                        <option :value="motivo" x-text="motivo"></option>
+                    </template>
+                </select>
+            </div>
+
+            <!-- Observaciones adicionales -->
+            <div>
+                <label class="block text-xs font-semibold text-dark-700 mb-1.5">Observaciones adicionales (opcional):</label>
+                <textarea
+                    x-model="comentarioDescarte"
+                    rows="3"
+                    placeholder="Detalle o feedback adicional sobre el motivo de descarte..."
+                    class="w-full px-3.5 py-2.5 bg-white border border-dark-200 rounded-xl text-sm text-dark-800 focus:outline-none focus:ring-2 focus:ring-rose-500 resize-none"
+                ></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-dark-100">
+                <button
+                    type="button"
+                    @click="modalDescartar = false"
+                    class="px-4 py-2.5 text-sm font-semibold text-dark-600 hover:bg-dark-100 rounded-xl transition-colors cursor-pointer"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    @click="guardarDescarte()"
+                    :disabled="!motivoDescarteValido() || guardandoDescarte"
+                    class="px-5 py-2.5 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-soft transition-colors cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    <span>Confirmar Descarte</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: Reingresar Candidato (Excepción por cambio de perfil) -->
+    <div
+        x-show="modalReingresar"
+        x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-dark-900/50 backdrop-blur-xs"
+        @keydown.escape.window="modalReingresar = false"
+    >
+        <div
+            @click.away="modalReingresar = false"
+            class="bg-white rounded-2xl shadow-xl border border-dark-100 max-w-lg w-full p-6 animate-fade-in flex flex-col gap-4"
+        >
+            <div class="flex items-start justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="p-2 bg-amber-50 text-amber-600 rounded-xl">
+                        <i data-lucide="rotate-cw" class="w-5 h-5"></i>
+                    </span>
+                    <div>
+                        <h3 class="text-lg font-bold text-dark-900">Reingresar Candidato al Proceso</h3>
+                        <p class="text-xs text-dark-500" x-text="'Candidato: ' + (candidatoSeleccionado?.nombre || '')"></p>
+                    </div>
+                </div>
+                <button @click="modalReingresar = false" class="text-dark-400 hover:text-dark-600 p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="bg-amber-50 rounded-xl p-3.5 text-xs text-amber-900 border border-amber-200">
+                <p class="font-semibold mb-1">Excepción: Reingreso por cambio de perfil</p>
+                <p>
+                    Si se modificaron los requerimientos de la búsqueda, el candidato se reingresará a partir de la etapa 
+                    <strong>Entrevista RRHH</strong>, conservando todo su historial previo de evaluaciones.
+                </p>
+            </div>
+
+            <!-- Etapa destino fija -->
+            <div>
+                <label class="block text-xs font-semibold text-dark-700 mb-1">Etapa de Reingreso:</label>
+                <input
+                    type="text"
+                    disabled
+                    value="Entrevista RRHH"
+                    class="w-full px-3.5 py-2.5 bg-dark-50 border border-dark-200 rounded-xl text-sm font-semibold text-dark-700 cursor-not-allowed"
+                />
+            </div>
+
+            <!-- Motivo de reingreso (Obligatorio) -->
+            <div>
+                <label class="block text-xs font-semibold text-dark-700 mb-1">
+                    Motivo del reingreso / cambio de requerimientos <span class="text-rose-500">*</span>:
+                </label>
+                <textarea
+                    x-model="motivoReingreso"
+                    rows="3"
+                    placeholder="Ej: Se flexibilizó el seniority requerido / Nuevo alcance técnico del cliente."
+                    class="w-full px-3.5 py-2.5 bg-white border border-dark-200 rounded-xl text-sm text-dark-800 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+                    required
+                ></textarea>
+                <p class="text-[11px] text-dark-400 mt-1">
+                    Este motivo quedará registrado en el historial de auditoría de la postulación.
+                </p>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-2 border-t border-dark-100">
+                <button
+                    type="button"
+                    @click="modalReingresar = false"
+                    class="px-4 py-2.5 text-sm font-semibold text-dark-600 hover:bg-dark-100 rounded-xl transition-colors cursor-pointer"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    @click="guardarReingreso()"
+                    :disabled="!motivoReingreso.trim() || guardandoReingreso"
+                    class="px-5 py-2.5 text-sm font-semibold text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-soft transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                >
+                    <i data-lucide="check" class="w-4 h-4"></i>
+                    <span x-text="guardandoReingreso ? 'Reingresando...' : 'Confirmar Reingreso'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

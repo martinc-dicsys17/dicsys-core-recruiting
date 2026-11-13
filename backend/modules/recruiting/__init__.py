@@ -6,7 +6,7 @@ a los grupos son 'recruiting' y 'recruiting.<codigo>' de cada ítem. Las pantall
 'ruta' es el endpoint del blueprint 'recruiting' del frontend (frontend/modulos/recruiting). El sidebar lo resuelve con
 url_for, que fallaría para todos los usuarios con un endpoint inexistente: un ítem lleva su ruta recién cuando su
 pantalla existe. Hasta entonces va con ruta=None y se muestra como "Próx." (igual que los pendientes de Nómina). Los
-endpoints que faltan son los del módulo original: recruiting.gestion_busquedas y recruiting.parametros.
+endpoint que falta es el del módulo original: recruiting.parametros.
 """
 
 from backend.core.registry import registrar_modulo
@@ -42,7 +42,7 @@ registrar_modulo(
             "codigo": "gestion_busquedas",
             "nombre": "Pipeline",
             "icono": "layers",
-            "ruta": None,
+            "ruta": "recruiting.gestion_busquedas",
             "orden": 3,
         },
         {

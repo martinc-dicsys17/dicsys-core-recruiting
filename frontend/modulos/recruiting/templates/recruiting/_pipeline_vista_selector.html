@@ -1,0 +1,12 @@
+<!-- Selector de vista de Recruiting → Pipeline (compartido por la vista global y el Pipeline individual).
+     Conserva el filtro de candidatos al cambiar de vista. -->
+{% set _origen = request.args.get('alcance_candidatos', '') %}
+<div class="flex items-center gap-2">
+    <label for="pipeline-vista" class="text-xs font-semibold text-dark-500">Vista</label>
+    <select id="pipeline-vista"
+            onchange="window.location.href = this.value"
+            class="px-3 py-2.5 bg-white border border-dark-200 rounded-xl text-xs font-semibold text-dark-700 shadow-soft focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer">
+        <option value="{{ url_for('recruiting.gestion_busquedas', alcance_candidatos=_origen or None) }}" {% if vista_actual == 'global' %}selected{% endif %}>Vista global</option>
+        <option value="{{ url_for('recruiting.gestion_busquedas', vista='individual', alcance_candidatos=_origen or None) }}" {% if vista_actual == 'individual' %}selected{% endif %}>Pipeline individual</option>
+    </select>
+</div>

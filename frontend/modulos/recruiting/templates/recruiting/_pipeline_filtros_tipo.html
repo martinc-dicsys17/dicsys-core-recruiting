@@ -1,0 +1,13 @@
+<!-- Filtro de candidatos (Todos / Propios) del Pipeline (compartido por la vista global, la selección individual y el Pipeline de una búsqueda).
+     Variables: filtro_alcance_candidatos. Se envía por GET conservando el resto de los parámetros de la URL (vista, etapas, columna). -->
+<form method="get" class="flex flex-wrap items-center gap-2" id="pipeline-filtros-tipo">
+    {% for k, v in request.args.items() if k != 'alcance_candidatos' %}
+    <input type="hidden" name="{{ k }}" value="{{ v }}">
+    {% endfor %}
+    <label for="filtro-origen-candidato" class="text-xs font-semibold text-dark-500">Candidatos</label>
+    <select id="filtro-origen-candidato" name="alcance_candidatos" onchange="this.form.submit()"
+            class="px-3 py-2.5 bg-white border border-dark-200 rounded-xl text-xs font-semibold text-dark-700 shadow-soft focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer">
+        <option value="" {% if not filtro_alcance_candidatos %}selected{% endif %}>Todos</option>
+        <option value="propios" {% if filtro_alcance_candidatos == 'propios' %}selected{% endif %}>Propios</option>
+    </select>
+</form>

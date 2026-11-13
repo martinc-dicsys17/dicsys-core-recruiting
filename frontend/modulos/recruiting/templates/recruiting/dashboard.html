@@ -5,8 +5,8 @@
 {#
   Dashboard de Recruiting (migrado del módulo original). Los datos salen de GET /api/v1/recruiting/dashboard.
   Las tarjetas, las acciones rápidas y los avisos remitían a Candidatos, Búsquedas, Pipeline y Parámetros. Candidatos
-  ya está migrado y sus enlaces funcionan; el resto no son enlaces hasta que se migren esas pantallas, y las acciones
-  quedan como "Próx." (igual que el menú).
+  y Pipeline ya están migrados y sus enlaces funcionan (si el usuario tiene el ítem); el resto no son enlaces hasta que
+  se migren esas pantallas, y las acciones quedan como "Próx." (igual que el menú).
 #}
 
 {% block content %}
@@ -36,8 +36,9 @@
             ("habilidades_catalogo", "Habilidades en BD", "Catálogo", "award", "from-amber-500 to-orange-600", "bg-amber-50 text-amber-700 border-amber-100/60"),
         ] %}
         {% for clave, rotulo, etiqueta, icono, degrade, insignia in tarjetas %}
-        {% if clave == "total_candidatos" and tiene_candidatos %}
-        <a href="{{ url_for('recruiting.candidatos') }}" class="block bg-white rounded-2xl p-6 border border-dark-100 hover:border-primary-200 hover:shadow-soft transition-all" data-testid="kpi-{{ clave }}">
+        {% set enlace = url_for('recruiting.candidatos') if (clave == "total_candidatos" and tiene_candidatos) else (url_for('recruiting.gestion_busquedas') if (clave == "postulaciones_en_proceso" and tiene_pipeline) else None) %}
+        {% if enlace %}
+        <a href="{{ enlace }}" class="block bg-white rounded-2xl p-6 border border-dark-100 hover:border-primary-200 hover:shadow-soft transition-all" data-testid="kpi-{{ clave }}">
         {% else %}
         <div class="bg-white rounded-2xl p-6 border border-dark-100" data-testid="kpi-{{ clave }}">
         {% endif %}
@@ -49,7 +50,7 @@
             </div>
             <p class="text-3xl font-bold text-dark-900 mb-1" data-testid="kpi-{{ clave }}-valor">{{ kpis[clave] }}</p>
             <p class="text-dark-500 text-sm">{{ rotulo }}</p>
-        {% if clave == "total_candidatos" and tiene_candidatos %}</a>{% else %}</div>{% endif %}
+        {% if enlace %}</a>{% else %}</div>{% endif %}
         {% endfor %}
     </div>
 
@@ -72,7 +73,7 @@
                         ("Nueva Búsqueda", "Crear posición", "briefcase-business", None),
                         ("Carga CV Individual", "Parser inteligente", "file-up", url_for('recruiting.candidatos', accion='cargar-cv') if tiene_candidatos else None),
                         ("Base Candidatos", "Banco de talentos", "users", url_for('recruiting.candidatos') if tiene_candidatos else None),
-                        ("Pipeline Búsquedas", "Embudo de selección", "columns-3", None),
+                        ("Pipeline Búsquedas", "Embudo de selección", "columns-3", url_for('recruiting.gestion_busquedas') if tiene_pipeline else None),
                     ] %}
                     {% if destino %}
                     <a href="{{ destino }}" class="flex flex-col items-center p-4 bg-dark-50 hover:bg-primary-50 rounded-xl text-center transition-colors" data-testid="accion-rapida">
@@ -203,6 +204,9 @@
             </div>
         </div>
     </div>
+    {% if puede_ver_duplicados %}
+    {% include "recruiting/_duplicados_pendientes.html" %}
+    {% endif %}
     {% endif %}
 </div>
 {% endblock %}

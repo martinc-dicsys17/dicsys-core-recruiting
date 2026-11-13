@@ -1142,12 +1142,14 @@ class CandidatoService:
 
     @staticmethod
     def permisos(db: Session, empresa_id: uuid.UUID, current_user: Usuario) -> Dict[str, bool]:
-        """Acciones habilitadas en el listado: el grupo EXTERNOS no elimina candidatos ni carga CV fuera de una búsqueda."""
+        """Acciones habilitadas en el listado: el grupo EXTERNOS no elimina ni asigna candidatos, ni carga CV fuera de una
+        búsqueda."""
         no_externo = not usuario_es_grupo_externos(db, current_user, empresa_id)
         return {
             "puede_eliminar_candidatos": no_externo,
             "puede_cargar_cv_general": no_externo,
             "puede_carga_masiva": no_externo,
+            "puede_asignar_candidatos": no_externo,
         }
 
     @staticmethod
@@ -5607,9 +5609,15 @@ class CandidatosDeBusquedaService:
 
     @staticmethod
     def listar(
-        db: Session, empresa_id: uuid.UUID, oportunidad_id: uuid.UUID, current_user: Optional[Usuario] = None
+        db: Session,
+        empresa_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
+        current_user: Optional[Usuario] = None,
+        etapa: Optional[str] = None,
+        alcance: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Candidatos vigentes de la búsqueda, con su etapa y estado."""
+        """Candidatos vigentes de la búsqueda, con su etapa y estado. `etapa` filtra por una etapa ('Todas' o vacío no
+        filtra) y `alcance='propios'` deja solo los que cargó el usuario (se suma a la visibilidad, nunca la amplía)."""
         solicitud = OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
         query = (
             db.query(GestionBusqueda, Candidato)
@@ -5623,6 +5631,10 @@ class CandidatosDeBusquedaService:
             )
         )
         query = CandidatosDeBusquedaService._filtro_visibilidad(query, db, empresa_id, current_user)
+        if etapa and etapa.strip().lower() != "todas":
+            query = query.filter(func.lower(GestionBusqueda.etapa_actual) == etapa.strip().lower())
+        if (alcance or "").strip().lower() == "propios":
+            query = query.filter(Candidato.creador_id == current_user.id) if current_user else query.filter(false())
         filas = query.order_by(GestionBusqueda.created_at.desc()).all()
 
         ids_externos = {u.id for u in OportunidadService._query_externos(db, empresa_id).all()}
@@ -5809,14 +5821,25 @@ class CandidatosDeBusquedaService:
         datos: AsignarCandidatoRequest,
         usuario: Optional[str] = None,
         current_user: Optional[Usuario] = None,
+        desde_busqueda_asignada: bool = False,
     ) -> Postulacion:
         """Suma un candidato a una búsqueda Abierta: crea su postulación y su fila del pipeline, y deja la traza. Sumarlo
-        directo en Ingreso cierra la búsqueda (Ganada)."""
-        OportunidadService.exigir_no_externo(
-            db, empresa_id, current_user, "Los usuarios del grupo EXTERNOS no pueden asignar candidatos a búsquedas"
-        )
+        directo en Ingreso cierra la búsqueda (Ganada).
+
+        `desde_busqueda_asignada` es para el alta de un usuario EXTERNOS desde su búsqueda asignada (carga de CV o alta
+        manual): el grupo EXTERNOS no asigna desde el listado, pero sí asocia el candidato que presenta, aunque la ficha
+        existente sea de otro usuario (la búsqueda sigue validándose contra su asignación)."""
+        if not desde_busqueda_asignada:
+            OportunidadService.exigir_no_externo(
+                db, empresa_id, current_user, "Los usuarios del grupo EXTERNOS no pueden asignar candidatos a búsquedas"
+            )
         solicitud = OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
-        candidato = CandidatoService.get_by_id(db, empresa_id, str(datos.candidato_id), current_user=current_user)
+        candidato = CandidatoService.get_by_id(
+            db,
+            empresa_id,
+            str(datos.candidato_id),
+            current_user=None if desde_busqueda_asignada else current_user,
+        )
 
         if solicitud.estado != ESTADO_BUSQUEDA_ABIERTA:
             raise HTTPException(

@@ -422,6 +422,145 @@
         </div>
     </div>
 
+    <!-- Modal para Asignar Candidato a una Búsqueda Real de la BD -->
+    <div x-show="modalAsignarBusquedaAbierto"
+         x-cloak
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-asignar-title" role="dialog" aria-modal="true">
+        <!-- Backdrop -->
+        <div class="fixed inset-0 bg-dark-900/60 backdrop-blur-xs transition-opacity"
+             @click="cerrarModalAsignarBusqueda()"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all w-full max-w-xl p-6 border border-dark-100"
+                 @click.away="cerrarModalAsignarBusqueda()">
+                
+                <div class="flex items-center justify-between pb-3 border-b border-dark-100 mb-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                            <i data-lucide="user-plus" class="w-5 h-5"></i>
+                        </div>
+                        <div>
+                            <h3 id="modal-asignar-title" class="text-base font-bold text-dark-900">Asignar a Búsqueda</h3>
+                            <p class="text-xs text-dark-400">
+                                Candidato: <span class="font-semibold text-dark-700" x-text="candidatoAAsignar ? (candidatoAAsignar.nombre + ' ' + (candidatoAAsignar.apellido || '')).trim() : ''"></span>
+                            </p>
+                        </div>
+                    </div>
+                    <button type="button" @click="cerrarModalAsignarBusqueda()" :disabled="asignandoBusqueda" class="text-dark-400 hover:text-dark-600 p-1.5 rounded-lg hover:bg-dark-50 transition-colors">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+
+                <!-- Alerta de Error -->
+                <div x-show="errorAsignarBusqueda" x-cloak class="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="w-4 h-4 text-red-600 flex-shrink-0"></i>
+                    <span x-text="errorAsignarBusqueda"></span>
+                </div>
+
+                <!-- Lista de selección de Búsquedas Abiertas Elegibles (Match > 50%) -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between" x-show="!cargandoBusquedas && (busquedasDisponibles || []).length > 0">
+                        <label class="block text-xs font-semibold text-dark-700">Seleccionar Búsqueda Abierta Elegible</label>
+                        <span class="text-[11px] text-dark-400 font-medium" x-text="(busquedasDisponibles || []).length + ' disponibles'"></span>
+                    </div>
+
+                    <!-- Lista de búsquedas disponibles cargadas de la BD -->
+                    <div>
+                        <!-- Spinner de carga -->
+                        <div x-show="cargandoBusquedas" class="p-8 text-center text-dark-400 space-y-2 border border-dark-200 rounded-xl bg-dark-50/30">
+                            <div class="w-8 h-8 mx-auto rounded-full border-2 border-primary-200 border-t-primary-600 animate-spin"></div>
+                            <p class="text-xs">Evaluando coincidencias de perfil con búsquedas abiertas...</p>
+                        </div>
+
+                        <!-- Estado vacío cuando no aplica a ninguna (texto exacto requerido) -->
+                        <div x-show="!cargandoBusquedas && (busquedasDisponibles || []).length === 0" 
+                             class="p-8 text-center text-dark-500 border border-dark-200 rounded-xl bg-dark-50/30">
+                            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-3">
+                                <i data-lucide="alert-circle" class="w-6 h-6"></i>
+                            </div>
+                            <p class="text-sm font-semibold text-dark-800">No hay ninguna búsqueda que pueda aplicar.</p>
+                            <p class="text-xs text-dark-400 mt-1">El perfil del candidato no alcanza el nivel de compatibilidad requerido con las búsquedas abiertas o ya se encuentra asignado a ellas.</p>
+                        </div>
+
+                        <!-- Selector de búsquedas elegibles (solo si hay opciones con Match > 50%) -->
+                        <template x-if="!cargandoBusquedas && (busquedasDisponibles || []).length > 0">
+                            <div class="border border-dark-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto bg-dark-50/30 divide-y divide-dark-100">
+                                <template x-for="b in busquedasDisponibles" :key="b.id">
+                                    <div @click="busquedaSeleccionadaId = b.id; errorAsignarBusqueda = ''"
+                                         class="p-3 transition-colors cursor-pointer flex items-center justify-between gap-3 text-left"
+                                         :class="busquedaSeleccionadaId === b.id ? 'bg-primary-50/70 border-l-4 border-primary-600' : 'hover:bg-white bg-transparent'">
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2 flex-wrap">
+                                                <span class="text-[10px] px-2 py-0.5 rounded font-bold whitespace-nowrap bg-emerald-100 text-emerald-700 cursor-help transition-shadow hover:shadow-xs"
+                                                      :title="obtenerTooltipMatchBusqueda(b)"
+                                                      x-text="`${b.match_porcentaje || b.porcentaje_match}% match`"></span>
+                                                <template x-if="b.seniority_compatible">
+                                                    <span class="text-[10px] px-1.5 py-0.5 rounded font-semibold whitespace-nowrap bg-blue-50 text-blue-700 border border-blue-200/60 flex items-center gap-1">
+                                                        <i data-lucide="award" class="w-3 h-3 text-blue-600"></i>
+                                                        <span>Seniority compatible</span>
+                                                    </span>
+                                                </template>
+                                            </div>
+                                            <div class="mt-1">
+                                                <h4 class="text-xs font-semibold text-dark-800 leading-snug">
+                                                    <span class="text-dark-500 font-normal">Búsqueda:</span>
+                                                    <span x-text="b.titulo || 'Sin título'"></span>
+                                                </h4>
+                                            </div>
+                                            <div class="flex items-center gap-2 mt-0.5 text-[11px] text-dark-500">
+                                                <span class="font-medium text-dark-600" x-text="b.cliente || 'Cliente'"></span>
+                                                <span>•</span>
+                                                <span x-text="b.seniority || b.modalidad || 'General'"></span>
+                                                <template x-if="b.id_busqueda">
+                                                    <span>• <span class="font-mono text-dark-400" x-text="'#' + b.id_busqueda"></span></span>
+                                                </template>
+                                            </div>
+                                            <!-- Skills coincidentes si existen -->
+                                            <template x-if="(b.skills_coincidentes || []).length > 0">
+                                                <div class="flex flex-wrap gap-1 mt-1.5">
+                                                    <template x-for="s in (b.skills_coincidentes || [])" :key="s">
+                                                        <span class="px-1.5 py-0.2 text-[10px] bg-emerald-50 text-emerald-700 rounded border border-emerald-200/50" x-text="s"></span>
+                                                    </template>
+                                                </div>
+                                            </template>
+                                        </div>
+                                        <div class="shrink-0">
+                                            <div class="w-5 h-5 rounded-full border flex items-center justify-center transition-colors"
+                                                 :class="busquedaSeleccionadaId === b.id ? 'border-primary-600 bg-primary-600 text-white' : 'border-dark-300 bg-white'">
+                                                <i data-lucide="check" class="w-3 h-3" x-show="busquedaSeleccionadaId === b.id"></i>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div class="mt-6 flex items-center justify-end gap-3 pt-3 border-t border-dark-100">
+                    <button type="button" 
+                            @click="cerrarModalAsignarBusqueda()" 
+                            :disabled="asignandoBusqueda"
+                            class="px-4 py-2 text-xs font-semibold text-dark-600 hover:text-dark-800 bg-white border border-dark-200 rounded-xl transition-colors cursor-pointer">
+                        Cancelar
+                    </button>
+                    <!-- Botón Confirmar Asignación: solo visible y habilitado si hay búsquedas elegibles disponibles -->
+                    <template x-if="!cargandoBusquedas && (busquedasDisponibles || []).length > 0">
+                        <button type="button" 
+                                @click="confirmarAsignacionBusqueda()" 
+                                :disabled="!busquedaSeleccionadaId || asignandoBusqueda"
+                                class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <i data-lucide="loader-2" class="w-4 h-4 animate-spin" x-show="asignandoBusqueda"></i>
+                            <i data-lucide="check" class="w-4 h-4" x-show="!asignandoBusqueda"></i>
+                            <span x-text="asignandoBusqueda ? 'Asignando...' : 'Confirmar Asignación'"></span>
+                        </button>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% if error_listado %}
     <div class="mb-6 p-4 rounded-xl bg-red-50 text-red-800 border border-red-200 flex items-center gap-3" data-testid="candidatos-error">
         <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0"></i>
@@ -633,6 +772,15 @@
                                     <span>CV</span>
                                 </a>
                                 {% endif %}
+                                {% if puede_asignar_candidatos %}
+                                <button type="button"
+                                        @click="abrirModalAsignarBusqueda({ id: '{{ c.id }}', nombre: '{{ c.nombre | escape }}', apellido: '{{ (c.apellido or '') | escape }}', headline: '{{ (c.headline or '') | escape }}', email: '{{ (c.email or '') | escape }}' })"
+                                        class="inline-flex items-center justify-center p-1 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/60 rounded-lg transition-colors cursor-pointer"
+                                        title="Asignar a búsqueda"
+                                        aria-label="Asignar a búsqueda">
+                                    <i data-lucide="user-plus" class="w-3.5 h-3.5 text-emerald-600"></i>
+                                </button>
+                                {% endif %}
                                 <a href="/recruiting/candidatos/{{ c.id }}" 
                                    class="inline-flex items-center justify-center w-7 h-7 text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors cursor-pointer"
                                    title="Ver candidato"
@@ -640,6 +788,14 @@
                                     <i data-lucide="eye" class="w-3.5 h-3.5"></i>
                                     <span class="sr-only">Ver candidato</span>
                                 </a>
+                                {% if c.tiene_pipeline %}
+                                <button type="button"
+                                        @click="abrirPrimerPipeline('{{ c.id }}')"
+                                        class="inline-flex items-center justify-center p-1 text-xs font-medium text-dark-600 bg-dark-50 hover:bg-dark-100 border border-dark-200/60 rounded-lg transition-colors cursor-pointer"
+                                        title="Ver Detalles">
+                                    <i data-lucide="file-search" class="w-3.5 h-3.5"></i>
+                                </button>
+                                {% endif %}
                                 {% if puede_eliminar_candidatos %}
                                 <button type="button"
                                         @click="eliminarCandidato('{{ c.id }}', '{{ c.nombre | escape }} {{ (c.apellido or '') | escape }}')"
@@ -772,6 +928,15 @@ function candidatosComponent() {
         modalResumenMasivoAbierto: false,
         resumenFinalMasivo: null,
 
+        // Estado de modal de Asignar a Búsqueda
+        modalAsignarBusquedaAbierto: false,
+        candidatoAAsignar: null,
+        busquedasDisponibles: [],
+        cargandoBusquedas: false,
+        busquedaSeleccionadaId: '',
+        asignandoBusqueda: false,
+        errorAsignarBusqueda: '',
+        busquedasCargadas: false,
         eliminandoId: null,
 
 
@@ -1320,6 +1485,177 @@ function candidatosComponent() {
                 this.errorCargaMasiva = 'Error de comunicación con el servidor al procesar el archivo comprimido.';
                 this.notificar('error', this.errorCargaMasiva);
                 this.terminarSeguimientoMasivo();
+            }
+        },
+
+
+        async abrirPrimerPipeline(candidatoId) {
+            try {
+                const res = await fetch(`/recruiting/candidatos/${candidatoId}/pipelines`);
+                if (res.ok) {
+                    const postulaciones = await res.json();
+                    if (postulaciones && postulaciones.length > 0) {
+                        const opId = postulaciones[0].oportunidad_id;
+                        if (opId) {
+                            window.location.href = `/recruiting/oportunidades/${opId}/candidatos/${candidatoId}/detalle?volver=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+                            return;
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Error obteniendo pipelines del candidato:', e);
+            }
+        },
+
+        async abrirModalAsignarBusqueda(candidato) {
+            this.candidatoAAsignar = candidato;
+            this.busquedaSeleccionadaId = '';
+            this.errorAsignarBusqueda = '';
+            this.busquedasDisponibles = [];
+            this.modalAsignarBusquedaAbierto = true;
+
+            this.$nextTick(() => {
+                if (window.lucide) lucide.createIcons();
+            });
+
+            // Cargar búsquedas elegibles de la base de datos para este candidato (Match > 50% y no asignado)
+            await this.cargarBusquedasBD(candidato.id);
+        },
+
+        async cargarBusquedasBD(candidatoId) {
+            this.cargandoBusquedas = true;
+            this.busquedasDisponibles = [];
+            try {
+                const targetId = candidatoId || (this.candidatoAAsignar ? this.candidatoAAsignar.id : '');
+                if (!targetId) {
+                    this.busquedasDisponibles = [];
+                    return;
+                }
+                const res = await fetch(`/recruiting/candidatos/${targetId}/busquedas-elegibles`, {
+                    headers: { 'Accept': 'application/json' }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const rawList = Array.isArray(data) ? data : [];
+                    // El backend ya evalúa y pondera el match de skills y seniority
+                    this.busquedasDisponibles = rawList;
+                    this.busquedasCargadas = true;
+                } else {
+                    this.busquedasDisponibles = [];
+                }
+            } catch (err) {
+                console.error('Error al cargar búsquedas elegibles:', err);
+                this.busquedasDisponibles = [];
+            } finally {
+                this.cargandoBusquedas = false;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
+            }
+        },
+
+        obtenerTooltipMatchBusqueda(b) {
+            const skillsTot = Array.isArray(b.skills) ? b.skills : [];
+            const skillsCoinc = Array.isArray(b.skills_coincidentes) ? b.skills_coincidentes : [];
+            const skillsFalt = skillsTot.filter(st => !skillsCoinc.some(sc => String(sc).toLowerCase() === String(st).toLowerCase()));
+            const matchSkills = typeof b.match_skills === 'number' ? b.match_skills : Math.round((skillsCoinc.length / (skillsTot.length || 1)) * 100);
+            const matchSen = typeof b.match_seniority === 'number' ? b.match_seniority : (b.seniority_compatible ? 100 : 0);
+            const totalScore = b.match_porcentaje || b.porcentaje_match || 0;
+
+            let formula = '';
+            if (skillsTot.length === 0) {
+                formula = `100% Seniority (${matchSen}%)`;
+            } else {
+                formula = `(70% Skills [${matchSkills}%]) + (30% Seniority [${matchSen}%])`;
+            }
+
+            return `DETALLE SMART MATCHING\n` +
+                   `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                   `• Skills requeridas (${skillsTot.length}): ${skillsTot.join(', ') || 'Ninguna'}\n` +
+                   `• Skills coincidentes (${skillsCoinc.length}): ${skillsCoinc.join(', ') || 'Ninguna'}\n` +
+                   `• Skills faltantes (${skillsFalt.length}): ${skillsFalt.join(', ') || 'Ninguna'}\n` +
+                   `• Factor Seniority: ${b.seniority || 'N/A'} (${b.seniority_compatible ? 'Compatible' : 'Parcial'} - ${matchSen}%)\n` +
+                   `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+                   `• Fórmula: ${formula}\n` +
+                   `• Resultado final: ${totalScore}% match`;
+        },
+
+        cerrarModalAsignarBusqueda() {
+            if (this.asignandoBusqueda) return;
+            this.modalAsignarBusquedaAbierto = false;
+            this.candidatoAAsignar = null;
+            this.busquedaSeleccionadaId = '';
+            this.errorAsignarBusqueda = '';
+        },
+
+        async confirmarAsignacionBusqueda() {
+            if (!this.busquedaSeleccionadaId || !this.candidatoAAsignar || this.asignandoBusqueda) return;
+
+            this.asignandoBusqueda = true;
+            this.errorAsignarBusqueda = '';
+
+            try {
+                const url = `/recruiting/oportunidades/${this.busquedaSeleccionadaId}/candidatos`;
+                const payload = {
+                    candidato_id: this.candidatoAAsignar.id
+                };
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                // Función auxiliar para limpiar toasts previos y evitar acumulación
+                const limpiarToastsPrevios = () => {
+                    if (typeof Alpine !== 'undefined' && Alpine.store('toasts')) {
+                        Alpine.store('toasts').items = [];
+                    } else if (window.$store && window.$store.toasts) {
+                        window.$store.toasts.items = [];
+                    }
+                };
+
+                if (res.ok && data.success !== false) {
+                    // 1. Cerrar inmediatamente el modal y resetear selección
+                    this.busquedaSeleccionadaId = '';
+                    this.candidatoAAsignar = null;
+                    this.errorAsignarBusqueda = '';
+                    this.modalAsignarBusquedaAbierto = false;
+
+                    // 2. Limpiar toasts previos y mostrar toast verde de notificación
+                    limpiarToastsPrevios();
+                    const msgExito = 'Candidato asignado a la búsqueda correctamente';
+                    if (typeof Alpine !== 'undefined' && Alpine.store('toasts')) {
+                        Alpine.store('toasts').success(msgExito);
+                    } else if (window.$store && window.$store.toasts) {
+                        window.$store.toasts.success(msgExito);
+                    }
+                } else {
+                    const rawMsg = data.error || data.detail || 'Ocurrió un error al asignar el candidato a la búsqueda.';
+
+                    // Si ya está asignado u ocurre advertencia/error:
+                    // 1. NO cerrar el modal: mantenerlo abierto para elegir otra búsqueda o cancelar manualmente
+                    // 2. Mostrar el mensaje de advertencia adentro del mismo modal
+                    this.errorAsignarBusqueda = rawMsg;
+
+                    // 3. Limpiar cualquier toast previo flotante
+                    limpiarToastsPrevios();
+                }
+            } catch (err) {
+                console.error('Error al asignar candidato:', err);
+                const netErr = 'Error de conexión con el servidor al asignar el candidato.';
+                this.errorAsignarBusqueda = netErr;
+                limpiarToastsPrevios();
+            } finally {
+                this.asignandoBusqueda = false;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
             }
         },
 

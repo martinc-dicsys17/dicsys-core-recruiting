@@ -10,7 +10,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from backend.core.paginacion import Pagina
 
@@ -351,6 +351,7 @@ class CandidatoResponse(BaseModel):
     creador_id: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+    tiene_pipeline: bool = False
 
     @classmethod
     def from_model(cls, obj) -> "CandidatoResponse":
@@ -545,6 +546,7 @@ class PermisosCandidatos(BaseModel):
     puede_eliminar_candidatos: bool
     puede_cargar_cv_general: bool
     puede_carga_masiva: bool
+    puede_asignar_candidatos: bool
 
 
 # ---------------------------------------------------------------------------
@@ -867,3 +869,289 @@ class DesvinculacionCandidatoResponse(BaseModel):
     mensaje: str
     candidato_id: str
     oportunidad_id: str
+
+
+# ---------------------------------------------------------------------------
+# Pipeline (ítem «gestion_busquedas»)
+# ---------------------------------------------------------------------------
+
+
+class PermisosPipeline(BaseModel):
+    """Acciones del Pipeline y de las pantallas vecinas que la interfaz muestra u oculta (False para el grupo EXTERNOS,
+    salvo cargar CV en una búsqueda). El backend las valida igual en cada endpoint."""
+
+    puede_mover_descartar: bool
+    puede_eliminar_candidatos: bool
+    puede_asignar_candidatos: bool
+    puede_crear_busquedas: bool
+    puede_eliminar_busquedas: bool
+    puede_ver_lider_tipo_fecha_busqueda: bool
+    puede_ver_smart_matching: bool
+    puede_cargar_cv_general: bool
+    puede_cargar_cv_en_busqueda: bool
+
+
+class ContadoresEtapas(BaseModel):
+    """Candidatos vigentes de una búsqueda por etapa del pipeline."""
+
+    total: int
+    por_etapa: dict[str, int]
+
+
+class PipelineColumnaGlobal(BaseModel):
+    """Columna de la vista global del Pipeline y las etapas reales que agrupa."""
+
+    clave: str
+    nombre: str
+    etapas: List[str]
+    nota: Optional[str] = None
+
+
+class PipelineResumenItem(BaseModel):
+    """Fila de la vista global: candidatos por columna de una búsqueda."""
+
+    id: str
+    id_busqueda: Optional[str] = None
+    titulo: str
+    cliente: Optional[str] = None
+    estado: str
+    recruiter_nombre: Optional[str] = None
+    es_externa: bool = False
+    total: int = 0
+    columnas: dict[str, int] = Field(default_factory=dict)
+    sin_clasificar: int = 0
+
+
+class PipelineResumen(BaseModel):
+    columnas: List[PipelineColumnaGlobal]
+    items: List[PipelineResumenItem]
+
+
+class PipelineColumnaCandidato(BaseModel):
+    """Candidato de una búsqueda dentro de una columna de la vista global (detalle emergente)."""
+
+    candidato_id: str
+    nombre: Optional[str] = None
+    pretension_salarial_bruta_ars: Optional[int] = None
+    rol_actual: Optional[str] = None
+    seniority: Optional[str] = None
+    reclutador: Optional[str] = None
+    presentado_por: Optional[str] = None
+    es_anonimo: bool = False
+    etapa_actual: str
+
+
+class PipelineDeCandidato(BaseModel):
+    """Un pipeline (uno por búsqueda) en el que participa un candidato."""
+
+    gestion_id: str
+    oportunidad_id: str
+    titulo: str
+    cliente: Optional[str] = None
+    etapa_actual: str
+    estado: str
+    pretension_salarial_bruta_ars: Optional[int] = None
+    presentado_por: Optional[str] = None
+
+
+class CambiarEtapaRequest(BaseModel):
+    """Mover de etapa, descartar o reingresar a un candidato en el pipeline de una búsqueda."""
+
+    etapa_actual: str = Field(..., min_length=2, max_length=100, description="Etapa destino")
+    estado: Optional[str] = Field(None, max_length=50)
+    motivo_descarte: Optional[str] = Field(None, description="Obligatorio al descartar")
+    feedback_etapa: Optional[str] = Field(None, description="Observación del movimiento")
+    pretension_salarial_bruta_ars: Optional[int] = Field(
+        None, ge=0, description="Entero en ARS; solo aplica de Entrevista RRHH a Entrevista Líder Dicsys"
+    )
+
+    @model_validator(mode="after")
+    def validar_largo_feedback_etapa(self):
+        """La observación al mover de etapa admite hasta 50 caracteres (el descarte tiene su propio comentario)."""
+        feedback = (self.feedback_etapa or "").strip()
+        if len(feedback) > 50 and (self.etapa_actual or "").strip().lower() != "descartados":
+            raise ValueError("La observación admite un máximo de 50 caracteres.")
+        return self
+
+    @field_validator("pretension_salarial_bruta_ars", mode="before")
+    @classmethod
+    def validar_pretension_entera(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        if isinstance(v, bool):
+            raise ValueError("La pretensión salarial debe ser un monto entero válido")
+        if isinstance(v, int):
+            return v
+        if isinstance(v, str) and v.strip().isascii() and v.strip().isdigit():
+            return int(v.strip())
+        if isinstance(v, float) and v.is_integer():
+            return int(v)
+        raise ValueError("La pretensión salarial debe ser un monto entero válido, sin decimales ni valores negativos")
+
+
+class CambiarEtapaResponse(BaseModel):
+    ok: bool = True
+    id: str
+    etapa_actual: str
+    estado: str
+    motivo_descarte: Optional[str] = None
+    feedback_etapa: Optional[str] = None
+    pretension_salarial_bruta_ars: Optional[int] = None
+
+
+class EtapaArchivoResponse(BaseModel):
+    """Archivo adjunto de una etapa del pipeline."""
+
+    id: str
+    busqueda_id: str
+    candidato_id: str
+    etapa_id: str
+    estado: Optional[str] = None
+    nombre_archivo: str
+    tipo_archivo: str
+    tamano: int
+    created_at: datetime
+    created_by: Optional[str] = None
+    download_url: str
+
+
+class HistorialPipelineItem(BaseModel):
+    """Un movimiento del candidato en el pipeline de una búsqueda."""
+
+    id: str
+    etapa_anterior: Optional[str] = None
+    etapa_nueva: str
+    estado_nuevo: Optional[str] = None
+    descripcion: Optional[str] = None
+    motivo_descarte: Optional[str] = None
+    usuario: Optional[str] = None
+    created_at: Optional[datetime] = None
+    pretension_salarial_bruta_ars: Optional[int] = None
+
+
+class MotivoDescarteResponse(BaseModel):
+    id: int
+    motivo: str
+
+
+class PostulacionResponse(BaseModel):
+    """Participación de un candidato en una búsqueda."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    empresa_id: str
+    candidato_id: str
+    solicitud_id: Optional[str] = None
+    solicitud_titulo: Optional[str] = None
+    solicitud_cliente: Optional[str] = None
+    estado: str
+    etapa: Optional[str] = None
+    fecha_asignacion: Optional[datetime] = None
+    fecha_etapa: Optional[datetime] = None
+    fecha_rechazo: Optional[datetime] = None
+    motivo_rechazo: Optional[str] = None
+    observaciones: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    updated_by: Optional[str] = None
+
+    @field_validator("id", "empresa_id", "candidato_id", "solicitud_id", mode="before")
+    @classmethod
+    def uuid_a_texto(cls, v):
+        return str(v) if isinstance(v, uuid.UUID) else v
+
+
+class RechazoPostulacionRequest(BaseModel):
+    motivo_rechazo: str = Field(..., min_length=2, max_length=150)
+    observaciones: Optional[str] = Field(None, max_length=1000)
+
+
+class TransicionEstadoResponse(BaseModel):
+    """Un cambio de estado de una postulación del candidato (auditoría)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    candidato_id: str
+    postulacion_id: Optional[str] = None
+    estado_anterior: Optional[str] = None
+    estado_nuevo: str
+    motivo_rechazo: Optional[str] = None
+    observaciones: Optional[str] = None
+    usuario: Optional[str] = None
+    created_at: datetime
+
+    @field_validator("id", "candidato_id", "postulacion_id", mode="before")
+    @classmethod
+    def uuid_a_texto(cls, v):
+        return str(v) if isinstance(v, uuid.UUID) else v
+
+
+class BusquedaElegible(BaseModel):
+    """Búsqueda Abierta a la que un candidato puede asignarse (coincidencia de skills y seniority)."""
+
+    id: str
+    id_busqueda: Optional[str] = None
+    titulo: str
+    cliente: Optional[str] = None
+    seniority: Optional[str] = None
+    modalidad: Optional[str] = None
+    estado: str = "Abierta"
+    skills: List[str] = Field(default_factory=list)
+    skills_coincidentes: List[str] = Field(default_factory=list)
+    porcentaje_match: int
+    match_porcentaje: int
+    match_skills: int = 0
+    match_seniority: int = 0
+    seniority_compatible: bool = True
+
+
+class AltaEnBusquedaResponse(BaseModel):
+    """Candidato dado de alta (o ya registrado) desde la búsqueda asignada de un usuario EXTERNOS y su asociación. El
+    código HTTP dice qué pasó: 201 alta, 200 CV idéntico ya registrado (se asoció la ficha existente) y 202 CV distinto
+    derivado a Recruiting para su revisión."""
+
+    ok: bool = True
+    candidato: CandidatoResponse
+    asignacion_id: str
+    mensaje: Optional[str] = None
+
+
+class CasoDuplicado(BaseModel):
+    """Un CV distinto cargado con el email de un candidato existente, a la espera de la revisión de Recruiting."""
+
+    id: str
+    fecha: datetime
+    oportunidad_id: str
+    busqueda: Optional[str] = None
+    candidato_id: str
+    candidato: Optional[str] = None
+    email: Optional[str] = None
+    presentado_por: Optional[str] = None
+    estado: str
+    resolucion: Optional[str] = None
+
+
+class CasoDuplicadoLista(BaseModel):
+    items: List[CasoDuplicado]
+    total: int
+
+
+class CasoDuplicadoDetalle(CasoDuplicado):
+    """El caso con los datos del CV actual y del nuevo para compararlos."""
+
+    actual: ComparacionCV
+    nuevo: ComparacionCV
+
+
+class ResolverCasoDuplicadoRequest(BaseModel):
+    """Conservar el CV actual o actualizar la ficha con el nuevo."""
+
+    accion: Literal["conservar", "actualizar"]
+
+
+class ResolucionCasoDuplicado(BaseModel):
+    ok: bool = True
+    resolucion: str
+    candidato_id: str

@@ -726,6 +726,23 @@
                     </h2>
 
                 </div>
+                {% if puede_cargar_cv_en_busqueda %}
+                <div class="flex flex-wrap items-center gap-3">
+                    <a href="{{ con_volver(url_for('recruiting.nuevo_candidato', busqueda_id=op.id)) }}"
+                       class="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-dark-200 hover:border-primary-400 text-dark-700 font-semibold rounded-xl shadow-soft transition-colors cursor-pointer text-sm">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                        <span>Nuevo Candidato</span>
+                    </a>
+                    <input type="file" id="input-cargar-cv-busqueda" accept=".pdf,.doc,.docx" class="hidden"
+                           @change="cargarCvEnBusqueda($event)">
+                    <button type="button" @click="document.getElementById('input-cargar-cv-busqueda').click()"
+                            :disabled="cargandoCv"
+                            class="inline-flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:opacity-60 text-white font-semibold rounded-xl shadow-soft transition-colors cursor-pointer text-sm">
+                        <i data-lucide="file-up" class="w-4 h-4"></i>
+                        <span x-text="cargandoCv ? 'Procesando CV...' : 'Cargar CV'"></span>
+                    </button>
+                </div>
+                {% endif %}
             </div>
 
             <!-- Tabla de Candidatos Asignados -->
@@ -1181,6 +1198,33 @@ function oportunidadDetalleComponent() {
         gestionandoExterno: false,
         guardandoExterno: false,
         externoSeleccionado: '',
+        cargandoCv: false,
+        async cargarCvEnBusqueda(ev) {
+            const archivo = ev.target.files && ev.target.files[0];
+            ev.target.value = '';
+            if (!archivo) return;
+            this.cargandoCv = true;
+            try {
+                const fd = new FormData();
+                fd.append('archivo', archivo);
+                const res = await fetch(`/recruiting/oportunidades/${this.datos.id}/cargar-cv`, { method: 'POST', body: fd, headers: { 'Accept': 'application/json' } });
+                const data = await res.json().catch(() => ({}));
+                if (res.ok && data.ok) {
+                    // Se persiste el aviso y se recarga: la tabla de candidatos asignados y el toast se ven juntos
+                    const derivado = res.status === 202;
+                    const mensaje = data.mensaje || 'CV cargado y candidato asociado a la búsqueda.';
+                    try {
+                        sessionStorage.setItem('oportunidadAvisoCv', JSON.stringify({ tipo: derivado ? 'info' : 'success', mensaje }));
+                    } catch (e) { /* sin sessionStorage el aviso se omite pero la recarga continua */ }
+                    window.location.reload();
+                    return;
+                }
+                this.mostrarToast('error', data.error || 'No se pudo cargar el CV.');
+            } catch (err) {
+                this.mostrarToast('error', 'Error de conexión al cargar el CV.');
+            }
+            this.cargandoCv = false;
+        },
         iniciarGestionExterno() {
             this.externoSeleccionado = this.datos.externo_id || '';
             this.gestionandoExterno = true;
@@ -1488,6 +1532,14 @@ function oportunidadDetalleComponent() {
             this.$nextTick(() => {
                 if (window.lucide) lucide.createIcons();
             });
+            try {
+                const aviso = sessionStorage.getItem('oportunidadAvisoCv');
+                if (aviso) {
+                    sessionStorage.removeItem('oportunidadAvisoCv');
+                    const { tipo, mensaje } = JSON.parse(aviso);
+                    this.mostrarToast(tipo === 'info' ? 'success' : tipo, mensaje);
+                }
+            } catch (e) { /* aviso ilegible: se descarta */ }
         },
 
         mostrarToast(tipo, mensaje) {
