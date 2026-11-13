@@ -1,5 +1,5 @@
 """
-Módulo Recruiting: Dashboard, Manager Dashboard, Candidatos, Búsquedas y Pipeline. Parámetros se migra después.
+Módulo Recruiting: Dashboard, Manager Dashboard, Candidatos, Búsquedas, Pipeline y Parámetros.
 """
 
 import logging
@@ -18,6 +18,7 @@ from flask import (
     request,
     Response,
     session,
+    stream_with_context,
     url_for,
 )
 
@@ -1546,3 +1547,372 @@ def candidatos_duplicados_proxy(caso_id=None, resolver=False):
     if status and status < 400:
         return jsonify(data), status
     return jsonify({"ok": False, "error": _detalle_de_error(data, MENSAJE_ERROR_GENERICO)}), status or 500
+
+
+# === PARÁMETROS (ítem «parametros») ===
+# Configuración de Smart Matching, catálogos (skills, habilidades, provincias, ciudades, líderes, reclutadores y perfiles
+# profesionales), Archivos de CV e Historial de cargas de CV. Cada pantalla exige 'recruiting.parametros'; el backend valida
+# el permiso y las restricciones (EXTERNOS fuera de todo Parámetros; administradores para limpiar, respaldar, importar y
+# el historial) en cada llamada: esta capa solo orienta la interfaz.
+
+BASE_PARAMETROS = "/recruiting/parametros"
+
+
+@recruiting_bp.context_processor
+def _utilidades_parametros():
+    """La pestaña «Historial de cargas de CV» solo se ofrece a los administradores."""
+    return {"puede_ver_historial_cargas_cv": _es_admin()}
+
+
+def _proxy_parametros(metodo, endpoint, clave_respuesta, mensaje_error, payload=None):
+    """Reenvía una operación de Parámetros al backend y devuelve JSON {success, <clave>} o {success: false, error}."""
+    try:
+        data, status = get_api_request_func()(
+            metodo, f"{BASE_PARAMETROS}{endpoint}", data=payload, token=session.get("token")
+        )
+    except Exception:
+        return jsonify({"success": False, "error": "Error de conexión con el servidor."}), 500
+    if status in (200, 201, 202):
+        return jsonify({"success": True, clave_respuesta: data}), status
+    return jsonify({"success": False, "error": _detalle_de_error(data, mensaje_error)}), status or 400
+
+
+@recruiting_bp.route("/parametros", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros():
+    data, status = get_api_request_func()("GET", f"{BASE_PARAMETROS}/config", token=session.get("token"))
+    match_minimo = data.get("match_minimo_porcentaje", 50) if status == 200 and isinstance(data, dict) else 50
+    return render_template("recruiting/parametros.html", match_minimo=match_minimo)
+
+
+@recruiting_bp.route("/parametros/config", methods=["PUT"])
+@require_permiso("recruiting.parametros")
+def parametros_actualizar_config():
+    return _proxy_parametros("PUT", "/config", "data", "Error al guardar", request.get_json(silent=True) or {})
+
+
+def _registrar_abm_parametros(
+    ruta, ruta_backend, plantilla, clave_lista, clave_item, singular, convertidor="uuid", alias_listado=None
+):
+    """Vista y proxies de un ABM con baja lógica (listar con inactivos, crear, editar y desactivar). Los nombres de
+    endpoint (`parametros_<ruta>_vista`...) los usan las pestañas de las plantillas."""
+    id_ruta = f"<{convertidor}:registro_id>"
+    nombre = ruta.replace("-", "_")
+    permiso = require_permiso("recruiting.parametros")
+
+    def vista():
+        return render_template(f"recruiting/{plantilla}.html")
+
+    def listar():
+        q = (request.args.get("q") or "").strip()
+        sufijo = "?activo_only=false" + (f"&q={quote(q)}" if q else "")
+        return _proxy_parametros("GET", f"/{ruta_backend}{sufijo}", clave_lista, f"Error al cargar {clave_lista}.")
+
+    def crear():
+        return _proxy_parametros(
+            "POST", f"/{ruta_backend}", clave_item, f"Error al crear {singular}.", request.get_json(silent=True) or {}
+        )
+
+    def actualizar(registro_id):
+        return _proxy_parametros(
+            "PUT",
+            f"/{ruta_backend}/{registro_id}",
+            clave_item,
+            f"Error al actualizar {singular}.",
+            request.get_json(silent=True) or {},
+        )
+
+    def desactivar(registro_id):
+        return _proxy_parametros("DELETE", f"/{ruta_backend}/{registro_id}", clave_item, f"Error al desactivar {singular}.")
+
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}", f"parametros_{nombre}_vista", permiso(vista), methods=["GET"])
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_listar_{nombre}", permiso(listar), methods=["GET"])
+    if alias_listado:
+        recruiting_bp.add_url_rule(
+            f"/parametros/{ruta}/{alias_listado}", f"parametros_listar_{nombre}_alias", permiso(listar), methods=["GET"]
+        )
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_crear_{nombre}", permiso(crear), methods=["POST"])
+    recruiting_bp.add_url_rule(
+        f"/parametros/{ruta}/api/{id_ruta}", f"parametros_actualizar_{nombre}", permiso(actualizar), methods=["PUT"]
+    )
+    recruiting_bp.add_url_rule(
+        f"/parametros/{ruta}/api/{id_ruta}", f"parametros_desactivar_{nombre}", permiso(desactivar), methods=["DELETE"]
+    )
+
+
+_registrar_abm_parametros("skills", "skills", "skills", "skills", "skill", "la skill", alias_listado="list")
+_registrar_abm_parametros(
+    "habilidades", "habilidades", "habilidades", "habilidades", "habilidad", "la habilidad", alias_listado="list"
+)
+_registrar_abm_parametros("lideres", "lideres", "lideres", "lideres", "persona", "el líder")
+_registrar_abm_parametros("reclutadores", "reclutadores", "reclutadores", "reclutadores", "persona", "el reclutador")
+_registrar_abm_parametros(
+    "perfiles-profesionales",
+    "perfiles-puesto",
+    "perfiles_profesionales",
+    "perfiles",
+    "perfil",
+    "el perfil profesional",
+    convertidor="int",
+)
+
+
+def _registrar_abm_ubicacion(ruta, clave_lista, clave_item, singular):
+    """Provincias y ciudades: no hay baja lógica, el DELETE elimina."""
+    permiso = require_permiso("recruiting.parametros")
+
+    def vista():
+        return render_template(f"recruiting/{ruta}.html")
+
+    def listar():
+        provincia_id = request.args.get("provincia_id", type=int)
+        sufijo = f"?provincia_id={provincia_id}" if ruta == "ciudades" and provincia_id else ""
+        return _proxy_parametros("GET", f"/{ruta}{sufijo}", clave_lista, f"Error al cargar {clave_lista}.")
+
+    def crear():
+        return _proxy_parametros(
+            "POST", f"/{ruta}", clave_item, f"Error al crear {singular}.", request.get_json(silent=True) or {}
+        )
+
+    def actualizar(registro_id):
+        return _proxy_parametros(
+            "PUT", f"/{ruta}/{registro_id}", clave_item, f"Error al actualizar {singular}.", request.get_json(silent=True) or {}
+        )
+
+    def eliminar(registro_id):
+        return _proxy_parametros("DELETE", f"/{ruta}/{registro_id}", "resultado", f"Error al eliminar {singular}.")
+
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}", f"parametros_{ruta}_vista", permiso(vista), methods=["GET"])
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_listar_{ruta}", permiso(listar), methods=["GET"])
+    recruiting_bp.add_url_rule(f"/parametros/{ruta}/api", f"parametros_crear_{ruta}", permiso(crear), methods=["POST"])
+    recruiting_bp.add_url_rule(
+        f"/parametros/{ruta}/api/<int:registro_id>", f"parametros_actualizar_{ruta}", permiso(actualizar), methods=["PUT"]
+    )
+    recruiting_bp.add_url_rule(
+        f"/parametros/{ruta}/api/<int:registro_id>", f"parametros_eliminar_{ruta}", permiso(eliminar), methods=["DELETE"]
+    )
+
+
+_registrar_abm_ubicacion("provincias", "provincias", "provincia", "la provincia")
+_registrar_abm_ubicacion("ciudades", "ciudades", "ciudad", "la ciudad")
+
+
+# ---- Archivos de CV ----------------------------------------------------------------------------------------------------
+
+
+@recruiting_bp.route("/parametros/archivos-cv", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_vista():
+    """Consulta y descarga de los CV archivados (cv_procesados_ok, cv_duplicados y cv_errores). Limpiar, respaldar e
+    importar son de administradores."""
+    return render_template("recruiting/archivos_cv.html", puede_limpiar_bd=_es_admin())
+
+
+@recruiting_bp.route("/parametros/archivos-cv/api", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_resumen():
+    return _proxy_parametros("GET", "/archivos-cv", "carpetas", "Error al consultar las carpetas de CV.")
+
+
+@recruiting_bp.route("/parametros/archivos-cv/api/<carpeta>", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_detalle(carpeta):
+    consulta = {k: request.args[k] for k in ("pagina", "por_pagina", "buscar") if request.args.get(k)}
+    sufijo = f"?{urlencode(consulta)}" if consulta else ""
+    return _proxy_parametros(
+        "GET", f"/archivos-cv/{quote(carpeta, safe='')}{sufijo}", "carpeta", "Error al consultar la carpeta de CV."
+    )
+
+
+def _solo_administrador(mensaje):
+    """Respuesta 403 si el usuario no es administrador (el backend lo vuelve a validar); None si lo es."""
+    if not _es_admin():
+        return jsonify({"success": False, "error": mensaje}), 403
+    return None
+
+
+@recruiting_bp.route("/parametros/archivos-cv/limpiar-bd", methods=["POST"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_limpiar_bd():
+    """Limpiar BD: solo administradores."""
+    return _solo_administrador("No tenés permiso para limpiar los datos de Recruiting") or _proxy_parametros(
+        "POST", "/archivos-cv/limpiar-bd", "resumen", "Error al limpiar los datos de Recruiting.", {"confirmar": True}
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/backup/iniciar", methods=["POST"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_backup_iniciar():
+    return _solo_administrador("No tenés permiso para generar backups de Recruiting") or _proxy_parametros(
+        "POST", "/archivos-cv/backup/iniciar", "backup", "No se pudo iniciar el backup."
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/backup/<backup_id>/estado", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_backup_estado(backup_id):
+    return _solo_administrador("No tenés permiso para consultar backups de Recruiting") or _proxy_parametros(
+        "GET", f"/archivos-cv/backup/{quote(backup_id, safe='')}/estado", "backup", "No se pudo consultar el backup."
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/backup/<backup_id>/descargar", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_backup_descargar(backup_id):
+    return _solo_administrador("No tenés permiso para descargar backups de Recruiting") or _proxy_descarga_archivos_cv(
+        f"/recruiting/parametros/archivos-cv/backup/{quote(backup_id, safe='')}/descargar"
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/importar/subir", methods=["POST"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_importar_subir():
+    """Reenvía el ZIP del backup al backend por bloques, sin cargarlo en memoria. Solo administradores."""
+    error = _solo_administrador("No tenés permiso para importar backups de Recruiting")
+    if error:
+        return error
+    archivo = request.files.get("archivo")
+    if not archivo or not archivo.filename:
+        return jsonify({"success": False, "error": "Seleccioná un backup .zip."}), 400
+    try:
+        with httpx.Client(timeout=httpx.Timeout(3600.0, connect=10.0)) as cliente:
+            respuesta = cliente.post(
+                f"{current_app.config['API_URL']}/api/v1/recruiting/parametros/archivos-cv/importar/subir",
+                headers={"Authorization": f"Bearer {session.get('token')}"},
+                files={"archivo": (archivo.filename, archivo.stream, "application/zip")},
+            )
+        data = respuesta.json()
+    except Exception:
+        return jsonify({"success": False, "error": "Error de conexión con el servidor."}), 502
+    if respuesta.status_code in (200, 201, 202):
+        return jsonify({"success": True, "importacion": data}), 202
+    return jsonify({"success": False, "error": _detalle_de_error(data, "No se pudo importar el backup.")}), respuesta.status_code
+
+
+@recruiting_bp.route("/parametros/archivos-cv/importar/<importacion_id>/estado", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_importar_estado(importacion_id):
+    return _solo_administrador("No tenés permiso para consultar importaciones de Recruiting") or _proxy_parametros(
+        "GET",
+        f"/archivos-cv/importar/{quote(importacion_id, safe='')}/estado",
+        "importacion",
+        "No se pudo consultar la importación.",
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/importar/<importacion_id>/confirmar", methods=["POST"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_importar_confirmar(importacion_id):
+    return _solo_administrador("No tenés permiso para importar backups de Recruiting") or _proxy_parametros(
+        "POST",
+        f"/archivos-cv/importar/{quote(importacion_id, safe='')}/confirmar",
+        "importacion",
+        "No se pudo iniciar la restauración.",
+        request.get_json(silent=True) or {},
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/importar/<importacion_id>", methods=["DELETE"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_importar_descartar(importacion_id):
+    return _solo_administrador("No tenés permiso para importar backups de Recruiting") or _proxy_parametros(
+        "DELETE", f"/archivos-cv/importar/{quote(importacion_id, safe='')}", "resultado", "No se pudo descartar el backup."
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/<carpeta>/descargar", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_descargar(carpeta):
+    """Descarga de un CV original: el backend valida carpeta y nombre; acá solo se reenvía el archivo por bloques."""
+    return _proxy_descarga_archivos_cv(
+        f"/recruiting/parametros/archivos-cv/{quote(carpeta, safe='')}/descargar", {"nombre": request.args.get("nombre", "")}
+    )
+
+
+@recruiting_bp.route("/parametros/archivos-cv/<carpeta>/descargar-todos", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_archivos_cv_descargar_todos(carpeta):
+    """Descarga en un ZIP de todos los CV de la carpeta."""
+    return _proxy_descarga_archivos_cv(f"/recruiting/parametros/archivos-cv/{quote(carpeta, safe='')}/descargar-todos")
+
+
+def _proxy_descarga_archivos_cv(endpoint, params=None):
+    """Reenvía una descarga al backend y la entrega por bloques, sin cargar el archivo completo en memoria."""
+    token = session.get("token")
+    cliente = httpx.Client(timeout=httpx.Timeout(300.0, connect=10.0))
+    try:
+        peticion = cliente.build_request(
+            "GET",
+            f"{current_app.config['API_URL']}/api/v1{endpoint}",
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        respuesta = cliente.send(peticion, stream=True)
+    except Exception:
+        cliente.close()
+        return jsonify({"success": False, "error": "Error de conexión con el servidor."}), 502
+
+    if respuesta.status_code != 200:
+        detalle = None
+        try:
+            respuesta.read()
+            detalle = respuesta.json().get("detail")
+        except Exception:
+            pass
+        finally:
+            respuesta.close()
+            cliente.close()
+        error = detalle if isinstance(detalle, str) and detalle else "No se pudo completar la descarga."
+        return jsonify({"success": False, "error": error}), respuesta.status_code
+
+    def bloques():
+        try:
+            yield from respuesta.iter_bytes(64 * 1024)
+        finally:
+            respuesta.close()
+            cliente.close()
+
+    cabeceras = {"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"}
+    reenviadas = ("Content-Disposition", "X-Cantidad-Archivos")
+    if "content-encoding" not in respuesta.headers:
+        reenviadas += ("Content-Length",)
+    for nombre in reenviadas:
+        if nombre in respuesta.headers:
+            cabeceras[nombre] = respuesta.headers[nombre]
+    return Response(
+        stream_with_context(bloques()),
+        status=200,
+        content_type=respuesta.headers.get("content-type", "application/octet-stream"),
+        headers=cabeceras,
+    )
+
+
+# ---- Historial de cargas de CV (administradores) ----------------------------------------------------------------------
+
+
+@recruiting_bp.route("/parametros/historial-cargas-cv", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_historial_cargas_cv_vista():
+    if not _es_admin():
+        return render_template("core/403.html", modulo="recruiting.parametros"), 403
+    return render_template("recruiting/historial_cargas_cv.html")
+
+
+@recruiting_bp.route("/parametros/historial-cargas-cv/api", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_historial_cargas_cv_listado():
+    consulta = request.query_string.decode("utf-8")
+    return _proxy_parametros(
+        "GET",
+        "/historial-cargas-cv" + (f"?{consulta}" if consulta else ""),
+        "historial",
+        "Error al consultar el historial de cargas de CV.",
+    )
+
+
+@recruiting_bp.route("/parametros/historial-cargas-cv/api/<uuid:historial_id>", methods=["GET"])
+@require_permiso("recruiting.parametros")
+def parametros_historial_cargas_cv_detalle(historial_id):
+    return _proxy_parametros(
+        "GET", f"/historial-cargas-cv/{historial_id}", "detalle", "Error al consultar el detalle de la carga."
+    )

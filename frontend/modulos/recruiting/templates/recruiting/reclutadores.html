@@ -1,0 +1,433 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Parámetros: Reclutadores — Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<script>
+    function reclutadoresParametrosComponent() {
+        return {
+            registros: [],
+            cargando: false,
+            filtro: '',
+            modalAbierto: false,
+            guardando: false,
+            formError: '',
+            esEdicion: false,
+            form: { id: null, nombre: '' },
+            toastMsg: '',
+            toastType: 'success',
+            showToast: false,
+
+            notify(msg, type = 'success') {
+                this.toastMsg = msg;
+                this.toastType = type;
+                this.showToast = true;
+                setTimeout(() => { this.showToast = false; }, 3500);
+            },
+
+            init() {
+                this.cargar();
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
+            },
+
+            async cargar() {
+                this.cargando = true;
+                try {
+                    const res = await fetch('/recruiting/parametros/reclutadores/api');
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.registros = data.reclutadores || [];
+                    } else {
+                        this.notify(data.error || 'Error al cargar el catálogo.', 'error');
+                    }
+                } catch (e) {
+                    this.notify('Error de conexión al cargar el catálogo.', 'error');
+                } finally {
+                    this.cargando = false;
+                    this.$nextTick(() => {
+                        if (window.lucide) lucide.createIcons();
+                    });
+                }
+            },
+
+            get registrosFiltrados() {
+                const q = this.filtro.trim().toLowerCase();
+                if (!q) return this.registros;
+                return this.registros.filter(r => (r.nombre || '').toLowerCase().includes(q));
+            },
+
+            abrirModalNuevo() {
+                this.esEdicion = false;
+                this.formError = '';
+                this.form = { id: null, nombre: '' };
+                this.modalAbierto = true;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                    const input = document.getElementById('reclutadores-input-nombre');
+                    if (input) input.focus();
+                });
+            },
+
+            abrirModalEditar(registro) {
+                this.esEdicion = true;
+                this.formError = '';
+                this.form = { id: registro.id, nombre: registro.nombre || '' };
+                this.modalAbierto = true;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                    const input = document.getElementById('reclutadores-input-nombre');
+                    if (input) input.focus();
+                });
+            },
+
+            async guardar() {
+                const nombreLimpio = (this.form.nombre || '').trim();
+                if (!nombreLimpio) {
+                    this.formError = 'El nombre es obligatorio.';
+                    return;
+                }
+
+                this.guardando = true;
+                this.formError = '';
+
+                try {
+                    let url = '/recruiting/parametros/reclutadores/api';
+                    let method = 'POST';
+                    const payload = { nombre: nombreLimpio };
+                    if (this.esEdicion && this.form.id) {
+                        url = `/recruiting/parametros/reclutadores/api/${this.form.id}`;
+                        method = 'PUT';
+                    } else {
+                        payload.activo = true;
+                    }
+
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json().catch(() => ({}));
+
+                    if (res.ok && data.success) {
+                        this.notify(this.esEdicion ? 'Reclutador actualizado correctamente.' : 'Reclutador creado exitosamente.');
+                        this.modalAbierto = false;
+                        await this.cargar();
+                    } else {
+                        this.formError = data.error || 'Error al guardar.';
+                    }
+                } catch (e) {
+                    this.formError = 'Error de conexión con el servidor.';
+                } finally {
+                    this.guardando = false;
+                }
+            },
+
+            async toggleEstado(registro) {
+                const nuevoEstado = !registro.activo;
+                try {
+                    const res = await fetch(`/recruiting/parametros/reclutadores/api/${registro.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ activo: nuevoEstado })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        registro.activo = nuevoEstado;
+                        this.notify(`'${registro.nombre}' ${nuevoEstado ? 'activado' : 'desactivado'}.`);
+                    } else {
+                        this.notify(data.error || 'No se pudo cambiar el estado.', 'error');
+                    }
+                } catch (e) {
+                    this.notify('Error de conexión.', 'error');
+                }
+            },
+
+            async desactivar(registro) {
+                if (!confirm(`¿Estás seguro de desactivar a '${registro.nombre}'? Se realizará una baja lógica: las búsquedas existentes conservan la asignación.`)) return;
+                try {
+                    const res = await fetch(`/recruiting/parametros/reclutadores/api/${registro.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        registro.activo = false;
+                        this.notify(`'${registro.nombre}' desactivado exitosamente.`);
+                    } else {
+                        this.notify(data.error || 'Error al desactivar.', 'error');
+                    }
+                } catch (e) {
+                    this.notify('Error de conexión.', 'error');
+                }
+            }
+        };
+    }
+</script>
+
+<div class="animate-fade-in space-y-6" x-data="reclutadoresParametrosComponent()">
+
+    <!-- Toast Notification -->
+    <div x-show="showToast"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold"
+         :class="toastType === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'"
+         x-cloak>
+        <i :data-lucide="toastType === 'success' ? 'check-circle' : 'alert-circle'" class="w-4 h-4 flex-shrink-0"></i>
+        <span x-text="toastMsg"></span>
+    </div>
+
+    <!-- Encabezado Principal y Pestañas de Navegación de Parámetros -->
+    <div class="space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-dark-900">Parámetros</h1>
+                <p class="text-sm text-dark-500 mt-1">Configuración y catálogos maestros del módulo de Reclutamiento</p>
+            </div>
+        </div>
+
+        <!-- Pestañas de Navegación entre pantallas de Parámetros -->
+        <div class="flex flex-wrap items-stretch gap-x-1 border-b border-dark-200/80 pt-2" data-testid="parametros-pestanas">
+            <a href="{{ url_for('recruiting.parametros') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="sparkles" class="w-3 h-3 shrink-0"></i>
+                <span>Porcentaje de Aceptación</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_skills_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Skills / Tecnologías</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_habilidades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Habilidades / Competencias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_provincias_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map" class="w-3 h-3 shrink-0"></i>
+                <span>Provincias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_ciudades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
+                <span>Ciudades</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_lideres_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="user-check" class="w-3 h-3 shrink-0"></i>
+                <span>Líderes / Hiring Managers</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_reclutadores_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-bold border-b-2 border-primary-600 text-primary-600 transition-colors">
+                <i data-lucide="users" class="w-3 h-3 shrink-0"></i>
+                <span>Reclutadores</span>
+                <span class="shrink-0 px-1 py-0.5 text-[10px] font-semibold rounded-full bg-primary-50 text-primary-700" x-text="registros.length"></span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_perfiles_profesionales_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="briefcase" class="w-3 h-3 shrink-0"></i>
+                <span>Perfiles profesionales</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_archivos_cv_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="archive" class="w-3 h-3 shrink-0"></i>
+                <span>Archivos de CV</span>
+            </a>
+            {% if puede_ver_historial_cargas_cv %}
+            <a href="{{ url_for('recruiting.parametros_historial_cargas_cv_vista') }}" data-testid="parametros-pestana-historial-cargas-cv"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="history" class="w-3 h-3 shrink-0"></i>
+                <span>Historial de cargas de CV</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ABM DE RECLUTADORES -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden">
+        <div class="p-6 border-b border-dark-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                    <i data-lucide="users" class="w-5 h-5"></i>
+                </span>
+                <div>
+                    <h2 class="text-base font-bold text-dark-900">Catálogo de Reclutadores responsables</h2>
+                    <p class="text-xs text-dark-400 mt-0.5">Opciones del combo “Reclutador responsable” de Nueva oportunidad</p>
+                </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="relative w-full sm:w-64">
+                    <i data-lucide="search" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="text"
+                           x-model="filtro"
+                           placeholder="Buscar por nombre..."
+                           class="w-full pl-9 pr-8 py-2 text-xs border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white">
+                    <button type="button"
+                            x-show="filtro"
+                            @click="filtro = ''"
+                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-dark-400 hover:text-dark-600 focus:outline-none">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                </div>
+
+                <button type="button"
+                        @click="abrirModalNuevo()"
+                        class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer whitespace-nowrap">
+                    <i data-lucide="plus" class="w-4 h-4"></i>
+                    <span>Nuevo Reclutador</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-dark-100 bg-dark-50/60 text-xs font-semibold uppercase tracking-wider text-dark-500">
+                        <th class="px-6 py-3.5">Nombre</th>
+                        <th class="px-6 py-3.5 text-center">Estado</th>
+                        <th class="px-6 py-3.5 text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100 text-sm">
+                    <template x-if="cargando">
+                        <tr>
+                            <td colspan="3" class="px-6 py-12 text-center text-dark-400">
+                                <div class="inline-flex items-center gap-2 text-xs">
+                                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-primary-600"></i>
+                                    <span>Cargando desde la base de datos...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+
+                    <template x-if="!cargando && registrosFiltrados.length > 0">
+                        <template x-for="reg in registrosFiltrados" :key="reg.id">
+                            <tr class="hover:bg-dark-50/50 transition-colors">
+                                <td class="px-6 py-3.5 font-semibold text-dark-800" x-text="reg.nombre"></td>
+                                <td class="px-6 py-3.5 text-center">
+                                    <button type="button"
+                                            @click="toggleEstado(reg)"
+                                            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer transition-colors"
+                                            :class="reg.activo ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' : 'bg-dark-100 text-dark-500 hover:bg-dark-200'"
+                                            :title="reg.activo ? 'Click para desactivar' : 'Click para activar'">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="reg.activo ? 'bg-emerald-500' : 'bg-dark-400'"></span>
+                                        <span x-text="reg.activo ? 'Activo' : 'Inactivo'"></span>
+                                    </button>
+                                </td>
+                                <td class="px-6 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                    <button type="button"
+                                            @click="abrirModalEditar(reg)"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors cursor-pointer"
+                                            title="Editar">
+                                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                        <span>Editar</span>
+                                    </button>
+                                    <button type="button"
+                                            x-show="reg.activo"
+                                            @click="desactivar(reg)"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                                            title="Desactivar (Baja lógica)">
+                                        <i data-lucide="power" class="w-3.5 h-3.5"></i>
+                                        <span>Desactivar</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+
+                    <template x-if="!cargando && registrosFiltrados.length === 0">
+                        <tr>
+                            <td colspan="3" class="px-6 py-10 text-center">
+                                <div class="flex flex-col items-center justify-center max-w-sm mx-auto">
+                                    <div class="w-10 h-10 bg-dark-100 rounded-xl flex items-center justify-center text-dark-400 mb-2">
+                                        <i data-lucide="search-x" class="w-5 h-5"></i>
+                                    </div>
+                                    <p class="text-sm font-semibold text-dark-800">No se encontraron reclutadores</p>
+                                    <p class="text-xs text-dark-400 mt-0.5" x-text="filtro ? 'Probá con otro término de búsqueda.' : 'No hay registros cargados en el catálogo.'"></p>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Alta / Edición -->
+    <div x-show="modalAbierto"
+         x-cloak
+         @keydown.escape.window="modalAbierto = false"
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-reclutadores-title" role="dialog" aria-modal="true">
+
+        <div class="fixed inset-0 bg-dark-900/40 backdrop-blur-sm transition-opacity"
+             @click="modalAbierto = false"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all w-full max-w-md p-6 border border-dark-100"
+                 @click.stop>
+
+                <div class="flex items-center justify-between pb-4 border-b border-dark-100">
+                    <div class="flex items-center gap-2.5">
+                        <span class="p-2 bg-primary-50 text-primary-600 rounded-xl">
+                            <i data-lucide="users" class="w-5 h-5"></i>
+                        </span>
+                        <h3 class="text-base font-bold text-dark-900" id="modal-reclutadores-title" x-text="esEdicion ? 'Editar Reclutador' : 'Nuevo Reclutador'"></h3>
+                    </div>
+                    <button type="button"
+                            @click="modalAbierto = false"
+                            class="text-dark-400 hover:text-dark-600 focus:outline-none p-1 rounded-lg hover:bg-dark-100 transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <form @submit.prevent="guardar()" class="space-y-4 pt-4">
+                    <div x-show="formError"
+                         x-cloak
+                         class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-start gap-2">
+                        <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+                        <span x-text="formError"></span>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-700 mb-1">Nombre <span class="text-rose-500">*</span></label>
+                        <input type="text"
+                               id="reclutadores-input-nombre"
+                               x-model="form.nombre"
+                               required
+                               maxlength="150"
+                               placeholder="Ej: Ana"
+                               class="w-full px-3.5 py-2 text-sm border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                        <p class="text-[11px] text-dark-400 mt-1">No se permiten nombres duplicados. Renombrar no modifica las búsquedas ya creadas.</p>
+                    </div>
+
+                    <div class="flex justify-end gap-2.5 pt-4 border-t border-dark-100">
+                        <button type="button"
+                                @click="modalAbierto = false"
+                                :disabled="guardando"
+                                class="px-4 py-2 text-xs font-semibold text-dark-600 hover:bg-dark-100 rounded-xl transition-colors cursor-pointer">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                :disabled="guardando"
+                                class="inline-flex items-center gap-2 px-5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50">
+                            <i x-show="!guardando" data-lucide="check" class="w-4 h-4"></i>
+                            <i x-show="guardando" data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                            <span x-text="guardando ? 'Guardando...' : (esEdicion ? 'Guardar Cambios' : 'Crear Reclutador')"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

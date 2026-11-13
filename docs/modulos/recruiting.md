@@ -5,7 +5,7 @@ migración) al Core. Las pantallas se migran de a una y cada ítem del menú lle
 existe; los pendientes se ven como «Próx.».
 
 Código: `backend/modules/recruiting/` (`models.py`, `routers.py`, `schemas.py`, `services.py`, más
-`manager_dashboard.py`, `pipeline_services.py`, `headline_cv.py`, `pdf_texto_cv.py` y `historial_cargas_services.py`) y
+`manager_dashboard.py`, `pipeline_services.py`, `parametros_services.py`, `headline_cv.py`, `pdf_texto_cv.py` y `historial_cargas_services.py`) y
 `frontend/modulos/recruiting/`. Permisos: `recruiting` y `recruiting.<ítem>`; cada endpoint exige el de su ítem.
 
 | Ítem | Estado |
@@ -14,7 +14,7 @@ Código: `backend/modules/recruiting/` (`models.py`, `routers.py`, `schemas.py`,
 | Candidatos | migrado (ver abajo) |
 | Búsquedas | migrado (ver abajo) |
 | Pipeline | migrado (ver abajo) |
-| Parámetros | pendiente |
+| Parámetros | migrado (ver abajo) |
 
 ## Candidatos (`recruiting.candidatos`, `/recruiting/candidatos`)
 
@@ -168,3 +168,52 @@ desde la búsqueda: Búsquedas; duplicados: Dashboard).
 - El modal «Postular a Búsqueda» de la ficha del candidato era una simulación sin llamada real; no se migró.
 - Alta de EXTERNOS: el original aceptaba cualquier búsqueda no Ganada; el Core exige Abierta, como el resto de las
   asignaciones.
+
+## Parámetros (`recruiting.parametros`, `/recruiting/parametros`)
+
+Código: `backend/modules/recruiting/parametros_services.py` (catálogos, Smart Matching, carpetas de CV, limpieza e
+historial), `backup_services.py` e `importacion_backup_services.py` (respaldo y restauración) y `backup_schemas.py`. No
+hubo cambios de esquema. Todos los endpoints exigen `recruiting.parametros` y excluyen al grupo EXTERNOS (403); los de
+alcance global o destructivos, además, rol administrador.
+
+Pantallas (pestañas): Porcentaje de aceptación (Smart Matching), Skills / Tecnologías, Habilidades / Competencias,
+Provincias, Ciudades, Líderes, Reclutadores, Perfiles profesionales, Archivos de CV e Historial de cargas de CV
+(administradores).
+
+### API (`/api/v1/recruiting/parametros`, `operation_id` `recruiting_parametros_<catálogo>_<acción>`)
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET/PUT /config` | Porcentaje mínimo de Smart Matching de la empresa (1 a 100, por defecto 50) |
+| `GET/POST /skills`, `/habilidades`, `/lideres`, `/reclutadores`, `/perfiles-puesto`; `PUT/DELETE .../{id}` | ABM con baja lógica (`activo_only`, `q`) |
+| `GET/POST /provincias`, `/ciudades`; `PUT/DELETE .../{id}` | ABM con borrado físico (409 si tiene ciudades o está en uso) |
+| `GET /archivos-cv`, `GET /archivos-cv/{carpeta}` | Cantidad y tamaño por carpeta; archivos con `pagina`, `por_pagina` (hasta 200) y `buscar` |
+| `GET /archivos-cv/{carpeta}/descargar`, `.../descargar-todos` | Un CV original o la carpeta completa en ZIP |
+| `POST /archivos-cv/limpiar-bd` | Limpia candidatos, búsquedas, pipeline y CV (administradores, con confirmación) |
+| `POST /archivos-cv/backup/iniciar`, `GET .../{id}/estado`, `GET .../{id}/descargar` | Backup completo (base y CV) en segundo plano (administradores) |
+| `POST /archivos-cv/importar/subir`, `GET .../{id}/estado`, `POST .../{id}/confirmar`, `DELETE .../{id}` | Validar y restaurar un backup (administradores) |
+| `GET /historial-cargas-cv`, `GET /historial-cargas-cv/{id}` | Auditoría de las cargas de CV de la empresa activa (administradores) |
+
+### Reglas
+
+- **Catálogos globales**: skills, habilidades, líderes, reclutadores, perfiles, provincias y ciudades no llevan `empresa_id`
+  (como en el original). Smart Matching y el historial sí son por empresa.
+- **Nombres únicos** sin distinguir mayúsculas (provincias y ciudades, también sin tildes). **Los nombres nuevos o
+  editados se guardan sin tildes** (la ñ se conserva); uno sin cambios se deja como estaba.
+- **Baja lógica** de skills, habilidades, líderes, reclutadores y perfiles: los candidatos y las búsquedas guardan el nombre
+  como texto, así que desactivar no los altera.
+- **Carpetas de CV** (`cv_procesados_ok`, `cv_duplicados`, `cv_errores` en `CV_STORAGE_DIR`): globales y de solo lectura; el
+  cliente nunca manda una ruta, solo la carpeta (lista fija) y un nombre simple de archivo regular.
+- **Limpiar, respaldar e importar** abarcan todas las tablas `recruiting_*` y las carpetas de CV de todas las empresas, por
+  eso son de administradores. La restauración reemplaza los datos de Recruiting, exige texto de confirmación y aceptar las
+  limitaciones, y revierte ante cualquier error.
+
+### Diferencias con el original
+
+- «Solo admin@admin.com» pasa a «rol administrador» (limpiar, respaldar, importar e historial).
+- La restauración solo crea las empresas y usuarios que faltan (sin secretos: el usuario creado no puede ingresar hasta
+  que se le resetee la clave) y no restaura grupos ni accesos. Un backup de RECLUIT se rechaza si su `core_usuarios` o
+  `core_empresas` tiene columnas que el Core no tiene.
+- Las rutas del ABM pasaron de `/recruiting/skills`... a `/recruiting/parametros/skills`...: las de solo lectura que usan
+  los combos de Candidatos y Búsquedas no cambian.
+- `GET /recruiting/api/dashboard`, `/areas` y el resto de lo que no es Parámetros no se tocaron.

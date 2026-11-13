@@ -1155,3 +1155,193 @@ class ResolucionCasoDuplicado(BaseModel):
     ok: bool = True
     resolucion: str
     candidato_id: str
+
+
+# ---------------------------------------------------------------------------
+# Parámetros (ítem «parametros»)
+# ---------------------------------------------------------------------------
+
+
+class ConfigSmartMatchingUpdate(BaseModel):
+    """Porcentaje mínimo de coincidencia de skills para que un candidato califique en Smart Matching."""
+
+    match_minimo_porcentaje: int = Field(..., ge=1, le=100)
+
+
+def _texto_sin_espacios_dobles(valor: Optional[str]) -> Optional[str]:
+    if valor is None:
+        return None
+    limpio = " ".join(valor.split())
+    if not limpio:
+        raise ValueError("El nombre no puede estar vacío")
+    return limpio
+
+
+def _lista_de_sinonimos(valor):
+    """Los sinónimos llegan como lista o como texto separado por comas."""
+    if valor is None:
+        return None
+    if isinstance(valor, str):
+        return [s.strip() for s in valor.split(",") if s.strip()]
+    if isinstance(valor, list):
+        return [str(s).strip() for s in valor if str(s).strip()]
+    return []
+
+
+class DetalleCatalogoCreate(BaseModel):
+    """Alta de una skill o una habilidad del catálogo."""
+
+    nombre: str = Field(..., min_length=1, max_length=100)
+    categoria: Optional[str] = Field(None, max_length=100)
+    sinonimos: List[str] = Field(default_factory=list)
+    activo: bool = True
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+    limpiar_sinonimos = field_validator("sinonimos", mode="before")(lambda cls, v: _lista_de_sinonimos(v) or [])
+
+
+class DetalleCatalogoUpdate(BaseModel):
+    """Edición, activación o desactivación de una skill o una habilidad."""
+
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+    categoria: Optional[str] = Field(None, max_length=100)
+    sinonimos: Optional[List[str]] = None
+    activo: Optional[bool] = None
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+    limpiar_sinonimos = field_validator("sinonimos", mode="before")(lambda cls, v: _lista_de_sinonimos(v))
+
+
+class NombreCatalogoCreate(BaseModel):
+    """Alta de un líder, un reclutador o un perfil profesional."""
+
+    nombre: str = Field(..., min_length=1, max_length=150)
+    activo: bool = True
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class NombreCatalogoUpdate(BaseModel):
+    """Edición, activación o desactivación de un líder, un reclutador o un perfil profesional."""
+
+    nombre: Optional[str] = Field(None, min_length=1, max_length=150)
+    activo: Optional[bool] = None
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class PerfilPuestoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    nombre: str
+    activo: bool = True
+
+
+class ProvinciaCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=100)
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class ProvinciaUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=100)
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class CiudadCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=150)
+    provincia_id: int = Field(..., ge=1)
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class CiudadUpdate(BaseModel):
+    nombre: Optional[str] = Field(None, min_length=1, max_length=150)
+    provincia_id: Optional[int] = Field(None, ge=1)
+
+    limpiar_nombre = field_validator("nombre")(lambda cls, v: _texto_sin_espacios_dobles(v))
+
+
+class MensajeResponse(BaseModel):
+    message: str
+
+
+class ArchivoCVResponse(BaseModel):
+    """Un CV archivado en una de las carpetas de CV (solo lectura)."""
+
+    nombre: str
+    tamano_bytes: int
+    tamano: str
+    modificado: datetime
+    motivo_error: Optional[str] = Field(None, description="Resumen para la columna; solo en cv_errores")
+    motivo_detalle: Optional[str] = Field(None, description="Explicación completa para el tooltip; solo en cv_errores")
+
+
+class CarpetaCVResumen(BaseModel):
+    """Cantidad de archivos y espacio ocupado de una carpeta de CV archivados."""
+
+    carpeta: str
+    cantidad_archivos: int
+    tamano_total_bytes: int
+    tamano_total: str
+
+
+class CarpetaCVDetalle(CarpetaCVResumen):
+    """Una carpeta y su listado de archivos, más recientes primero. `cantidad_archivos` es el total de la carpeta; con
+    paginación, `archivos` trae solo la página pedida y `total_filtrado` cuenta los que cumplen la búsqueda."""
+
+    archivos: List[ArchivoCVResponse]
+    pagina: Optional[int] = None
+    por_pagina: Optional[int] = None
+    total_paginas: Optional[int] = None
+    total_filtrado: Optional[int] = None
+
+
+class LimpiarBDRequest(BaseModel):
+    """Confirmación explícita de la limpieza de datos de Recruiting."""
+
+    confirmar: bool = False
+
+
+class LimpiarBDResponse(BaseModel):
+    """Lo eliminado: registros por tabla y archivos físicos por origen."""
+
+    registros: dict[str, int]
+    archivos: dict[str, int]
+    total_registros: int
+    total_archivos: int
+
+
+class HistorialCargaCVItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    fecha_operacion: datetime
+    usuario_nombre: str
+    tipo_carga: str
+    total_archivos: int
+    candidatos_creados: int
+    duplicados: int
+    sin_email: int
+    rechazados: int
+    resultado: str
+
+
+class HistorialCargaCVPagina(Pagina[HistorialCargaCVItem]):
+    """Página del historial de cargas de CV."""
+
+
+class HistorialCargaCVArchivoItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    orden: int
+    nombre_archivo: str
+    resultado: str
+    motivo: Optional[str] = None
+
+
+class HistorialCargaCVDetalle(BaseModel):
+    operacion: HistorialCargaCVItem
+    archivos: List[HistorialCargaCVArchivoItem]

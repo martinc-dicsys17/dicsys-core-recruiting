@@ -11,14 +11,35 @@ from urllib.parse import quote
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from sqlalchemy.orm import Session
 
 from backend.core.errores import responde
 from backend.core.paginacion import MAXIMO, POR_PAGINA, paginar
 from backend.database import get_db
 from backend.dependencies import get_current_user, get_empresa_activa, require_admin, require_submodulo
+from backend.modules.recruiting.backup_schemas import (
+    BackupEstadoResponse,
+    ImportacionConfirmarRequest,
+    ImportacionEstadoResponse,
+)
+from backend.modules.recruiting.backup_services import BackupRecruitingService
+from backend.modules.recruiting.importacion_backup_services import ImportarBackupRecruitingService
 from backend.modules.recruiting.manager_dashboard import ManagerDashboardService
+from backend.modules.recruiting.parametros_services import (
+    ArchivoCVService,
+    CiudadService,
+    ConfigRecruitingService,
+    HabilidadesAbm,
+    HistorialCargasConsultaService,
+    LideresAbm,
+    LimpiezaRecruitingService,
+    PerfilesPuestoAbm,
+    ProvinciaService,
+    ReclutadoresAbm,
+    SkillsAbm,
+    exigir_parametros,
+)
 from backend.modules.recruiting.pipeline_services import (
     AltaEnBusquedaService,
     CandidatoDuplicadoService,
@@ -46,12 +67,31 @@ from backend.modules.recruiting.schemas import (
     CargaCVResponse,
     CargaMasivaFallido,
     CargaMasivaResponse,
+    CarpetaCVDetalle,
+    CarpetaCVResumen,
+    CiudadCreate,
+    CiudadUpdate,
     CasoDuplicado,
     CasoDuplicadoDetalle,
     CasoDuplicadoLista,
     CiudadResponse,
     ComparacionCV,
     ConfigSmartMatching,
+    ConfigSmartMatchingUpdate,
+    DetalleCatalogoCreate,
+    DetalleCatalogoUpdate,
+    HistorialCargaCVArchivoItem,
+    HistorialCargaCVDetalle,
+    HistorialCargaCVItem,
+    HistorialCargaCVPagina,
+    LimpiarBDRequest,
+    LimpiarBDResponse,
+    MensajeResponse,
+    NombreCatalogoCreate,
+    NombreCatalogoUpdate,
+    PerfilPuestoResponse,
+    ProvinciaCreate,
+    ProvinciaUpdate,
     ContadoresEtapas,
     DesvinculacionCandidatoResponse,
     EtapaArchivoResponse,
@@ -1476,3 +1516,448 @@ async def resolver_candidato_duplicado(
 ):
     """Conserva el CV actual o actualiza la ficha con el CV nuevo."""
     return ResolucionCasoDuplicado(**CandidatoDuplicadoService.resolver(db, empresa_id, caso_id, datos.accion, current_user))
+
+
+# ---------------------------------------------------------------------------
+# Parámetros (ítem «parametros»): configuración, catálogos, archivos de CV e historial de cargas
+# ---------------------------------------------------------------------------
+
+
+async def _verificar_parametros(
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+) -> Usuario:
+    """Permiso del ítem Parámetros y, además, nada para el grupo EXTERNOS."""
+    await require_submodulo("recruiting", "parametros")(current_user, db, empresa_id)
+    exigir_parametros(db, current_user, empresa_id)
+    return current_user
+
+
+acceso_parametros = Depends(_verificar_parametros)
+# Operaciones de alcance global (todas las empresas, o destructivas): solo administradores
+solo_admin = Depends(require_admin)
+
+
+@router.get(
+    "/parametros/config",
+    response_model=ConfigSmartMatching,
+    operation_id="recruiting_parametros_config_obtener",
+    dependencies=[acceso_parametros],
+)
+async def obtener_config_parametros(db: Session = Depends(get_db), empresa_id: uuid.UUID = Depends(get_empresa_activa)):
+    """Porcentaje mínimo de Smart Matching de la empresa (50 si no lo configuró)."""
+    return ConfigSmartMatching(match_minimo_porcentaje=ConfigRecruitingService.obtener(db, empresa_id))
+
+
+@router.put(
+    "/parametros/config",
+    response_model=ConfigSmartMatching,
+    operation_id="recruiting_parametros_config_actualizar",
+    responses=responde(422),
+    dependencies=[acceso_parametros],
+)
+async def actualizar_config_parametros(
+    datos: ConfigSmartMatchingUpdate,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Guarda el porcentaje mínimo de Smart Matching de la empresa (1 a 100)."""
+    porcentaje = ConfigRecruitingService.actualizar(
+        db, empresa_id, datos.match_minimo_porcentaje, _email_usuario(current_user)
+    )
+    return ConfigSmartMatching(match_minimo_porcentaje=porcentaje)
+
+
+def _registrar_abm(ruta: str, servicio, crear, actualizar, respuesta, tipo_id) -> None:
+    """ABM de un catálogo de nombres únicos con baja lógica: listar (con inactivos y búsqueda), crear, editar y
+    desactivar. `operation_id` `recruiting_parametros_<ruta>_<acción>`."""
+    nombre = ruta.replace("-", "_")
+
+    @router.get(
+        f"/parametros/{ruta}",
+        response_model=List[respuesta],
+        operation_id=f"recruiting_parametros_{nombre}_listar",
+        dependencies=[acceso_parametros],
+    )
+    async def listar(
+        activo_only: bool = Query(False, description="Solo los activos"),
+        q: Optional[str] = Query(None, max_length=100, description="Búsqueda por nombre"),
+        db: Session = Depends(get_db),
+    ):
+        return [respuesta.model_validate(f) for f in servicio.listar(db, activo_only=activo_only, q=q)]
+
+    @router.post(
+        f"/parametros/{ruta}",
+        response_model=respuesta,
+        status_code=201,
+        operation_id=f"recruiting_parametros_{nombre}_crear",
+        responses=responde(400, 422),
+        dependencies=[acceso_parametros],
+    )
+    async def crear_registro(datos: crear, db: Session = Depends(get_db)):
+        return respuesta.model_validate(servicio.crear(db, datos))
+
+    @router.put(
+        f"/parametros/{ruta}/{{registro_id}}",
+        response_model=respuesta,
+        operation_id=f"recruiting_parametros_{nombre}_actualizar",
+        responses=responde(400, 404, 422),
+        dependencies=[acceso_parametros],
+    )
+    async def actualizar_registro(registro_id: tipo_id, datos: actualizar, db: Session = Depends(get_db)):
+        return respuesta.model_validate(servicio.actualizar(db, registro_id, datos))
+
+    @router.delete(
+        f"/parametros/{ruta}/{{registro_id}}",
+        response_model=respuesta,
+        operation_id=f"recruiting_parametros_{nombre}_desactivar",
+        responses=responde(404),
+        dependencies=[acceso_parametros],
+    )
+    async def desactivar_registro(registro_id: tipo_id, db: Session = Depends(get_db)):
+        """Baja lógica: queda inactivo, sin borrarse ni alterar lo que ya lo usa."""
+        return respuesta.model_validate(servicio.desactivar(db, registro_id))
+
+
+_registrar_abm("skills", SkillsAbm, DetalleCatalogoCreate, DetalleCatalogoUpdate, SkillCatalogoResponse, uuid.UUID)
+_registrar_abm(
+    "habilidades", HabilidadesAbm, DetalleCatalogoCreate, DetalleCatalogoUpdate, SkillCatalogoResponse, uuid.UUID
+)
+_registrar_abm("lideres", LideresAbm, NombreCatalogoCreate, NombreCatalogoUpdate, PersonaCatalogoResponse, uuid.UUID)
+_registrar_abm(
+    "reclutadores", ReclutadoresAbm, NombreCatalogoCreate, NombreCatalogoUpdate, PersonaCatalogoResponse, uuid.UUID
+)
+_registrar_abm(
+    "perfiles-puesto", PerfilesPuestoAbm, NombreCatalogoCreate, NombreCatalogoUpdate, PerfilPuestoResponse, int
+)
+
+
+@router.get(
+    "/parametros/provincias",
+    response_model=List[ProvinciaResponse],
+    operation_id="recruiting_parametros_provincias_listar",
+    dependencies=[acceso_parametros],
+)
+async def listar_provincias_parametros(db: Session = Depends(get_db)):
+    """Provincias con la cantidad de ciudades de cada una."""
+    return [ProvinciaResponse(**p) for p in ProvinciaService.listar(db)]
+
+
+@router.post(
+    "/parametros/provincias",
+    response_model=ProvinciaResponse,
+    status_code=201,
+    operation_id="recruiting_parametros_provincias_crear",
+    responses=responde(400, 409, 422),
+    dependencies=[acceso_parametros],
+)
+async def crear_provincia(datos: ProvinciaCreate, db: Session = Depends(get_db)):
+    """Alta de una provincia (409 si ya existe una equivalente, sin distinguir tildes ni mayúsculas)."""
+    return ProvinciaResponse(**ProvinciaService.crear(db, datos))
+
+
+@router.put(
+    "/parametros/provincias/{provincia_id}",
+    response_model=ProvinciaResponse,
+    operation_id="recruiting_parametros_provincias_actualizar",
+    responses=responde(404, 409, 422),
+    dependencies=[acceso_parametros],
+)
+async def actualizar_provincia(provincia_id: int, datos: ProvinciaUpdate, db: Session = Depends(get_db)):
+    return ProvinciaResponse(**ProvinciaService.actualizar(db, provincia_id, datos))
+
+
+@router.delete(
+    "/parametros/provincias/{provincia_id}",
+    response_model=MensajeResponse,
+    operation_id="recruiting_parametros_provincias_eliminar",
+    responses=responde(404, 409),
+    dependencies=[acceso_parametros],
+)
+async def eliminar_provincia(provincia_id: int, db: Session = Depends(get_db)):
+    """Borrado de una provincia sin ciudades (409 si tiene ciudades o está en uso)."""
+    ProvinciaService.eliminar(db, provincia_id)
+    return MensajeResponse(message="Provincia eliminada correctamente.")
+
+
+@router.get(
+    "/parametros/ciudades",
+    response_model=List[CiudadResponse],
+    operation_id="recruiting_parametros_ciudades_listar",
+    dependencies=[acceso_parametros],
+)
+async def listar_ciudades_parametros(provincia_id: Optional[int] = Query(None, ge=1), db: Session = Depends(get_db)):
+    return [CiudadResponse(**c) for c in CiudadService.listar(db, provincia_id)]
+
+
+@router.post(
+    "/parametros/ciudades",
+    response_model=CiudadResponse,
+    status_code=201,
+    operation_id="recruiting_parametros_ciudades_crear",
+    responses=responde(400, 409, 422),
+    dependencies=[acceso_parametros],
+)
+async def crear_ciudad(datos: CiudadCreate, db: Session = Depends(get_db)):
+    """Alta de una ciudad en una provincia (409 si ya existe una equivalente en esa provincia)."""
+    return CiudadResponse(**CiudadService.crear(db, datos))
+
+
+@router.put(
+    "/parametros/ciudades/{ciudad_id}",
+    response_model=CiudadResponse,
+    operation_id="recruiting_parametros_ciudades_actualizar",
+    responses=responde(400, 404, 409, 422),
+    dependencies=[acceso_parametros],
+)
+async def actualizar_ciudad(ciudad_id: int, datos: CiudadUpdate, db: Session = Depends(get_db)):
+    return CiudadResponse(**CiudadService.actualizar(db, ciudad_id, datos))
+
+
+@router.delete(
+    "/parametros/ciudades/{ciudad_id}",
+    response_model=MensajeResponse,
+    operation_id="recruiting_parametros_ciudades_eliminar",
+    responses=responde(404, 409),
+    dependencies=[acceso_parametros],
+)
+async def eliminar_ciudad(ciudad_id: int, db: Session = Depends(get_db)):
+    """Borrado de una ciudad (409 si está en uso)."""
+    CiudadService.eliminar(db, ciudad_id)
+    return MensajeResponse(message="Ciudad eliminada correctamente.")
+
+
+# ---- Archivos de CV -------------------------------------------------------------------------------------------------
+# Las rutas fijas (limpiar-bd, backup, importar) van antes de «{carpeta}» para que no las tome como una carpeta.
+
+
+@router.get(
+    "/parametros/archivos-cv",
+    response_model=List[CarpetaCVResumen],
+    operation_id="recruiting_parametros_archivos_cv_resumen",
+    dependencies=[acceso_parametros],
+)
+def listar_carpetas_cv():
+    """Cantidad de archivos y espacio ocupado de cv_procesados_ok, cv_duplicados y cv_errores (almacenamiento real)."""
+    return [CarpetaCVResumen(**c) for c in ArchivoCVService.resumen()]
+
+
+@router.post(
+    "/parametros/archivos-cv/limpiar-bd",
+    response_model=LimpiarBDResponse,
+    operation_id="recruiting_parametros_archivos_cv_limpiar_bd",
+    responses=responde(400, 403),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def limpiar_bd_recruiting(
+    datos: LimpiarBDRequest, db: Session = Depends(get_db), current_user: Usuario = Depends(get_current_user)
+):
+    """Elimina candidatos, búsquedas, pipeline, notificaciones de Recruiting y CV almacenados. Solo administradores."""
+    return LimpiarBDResponse(**LimpiezaRecruitingService.ejecutar(db, current_user, datos.confirmar))
+
+
+@router.post(
+    "/parametros/archivos-cv/backup/iniciar",
+    response_model=BackupEstadoResponse,
+    status_code=202,
+    operation_id="recruiting_parametros_archivos_cv_backup_iniciar",
+    responses=responde(403, 409),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def iniciar_backup_recruiting(current_user: Usuario = Depends(get_current_user)):
+    """Inicia en segundo plano el backup completo de Recruiting (base de datos y CV). Solo administradores; 409 si ya
+    hay uno en curso."""
+    return BackupEstadoResponse(**BackupRecruitingService.iniciar(current_user))
+
+
+@router.get(
+    "/parametros/archivos-cv/backup/{backup_id}/estado",
+    response_model=BackupEstadoResponse,
+    operation_id="recruiting_parametros_archivos_cv_backup_estado",
+    responses=responde(403, 404),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def estado_backup_recruiting(backup_id: str, current_user: Usuario = Depends(get_current_user)):
+    """Avance del backup y, al terminar, nombre, tamaño y SHA-256 del ZIP verificado."""
+    return BackupEstadoResponse(**BackupRecruitingService.obtener_estado(current_user, backup_id))
+
+
+@router.get(
+    "/parametros/archivos-cv/backup/{backup_id}/descargar",
+    operation_id="recruiting_parametros_archivos_cv_backup_descargar",
+    responses={**responde(403, 404, 409), 200: {"content": {"application/zip": {}}}},
+    dependencies=[acceso_parametros, solo_admin],
+)
+def descargar_backup_recruiting(backup_id: str, current_user: Usuario = Depends(get_current_user)):
+    """Descarga el ZIP de un backup finalizado y verificado, por bloques."""
+    ruta, nombre = BackupRecruitingService.ruta_descarga(current_user, backup_id)
+    return FileResponse(
+        ruta,
+        media_type="application/zip",
+        filename=nombre,
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.post(
+    "/parametros/archivos-cv/importar/subir",
+    response_model=ImportacionEstadoResponse,
+    status_code=202,
+    operation_id="recruiting_parametros_archivos_cv_importar_subir",
+    responses=responde(400, 403),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def subir_backup_recruiting(archivo: UploadFile = File(...), current_user: Usuario = Depends(get_current_user)):
+    """Recibe un backup .zip y lo valida en segundo plano sin modificar nada. Solo administradores."""
+    return ImportacionEstadoResponse(**ImportarBackupRecruitingService.subir(current_user, archivo))
+
+
+@router.get(
+    "/parametros/archivos-cv/importar/{importacion_id}/estado",
+    response_model=ImportacionEstadoResponse,
+    operation_id="recruiting_parametros_archivos_cv_importar_estado",
+    responses=responde(403, 404),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def estado_importacion_recruiting(importacion_id: str, current_user: Usuario = Depends(get_current_user)):
+    """Avance de la validación o la restauración y, al validar, la vista previa y las limitaciones del backup."""
+    return ImportacionEstadoResponse(**ImportarBackupRecruitingService.obtener_estado(current_user, importacion_id))
+
+
+@router.post(
+    "/parametros/archivos-cv/importar/{importacion_id}/confirmar",
+    response_model=ImportacionEstadoResponse,
+    status_code=202,
+    operation_id="recruiting_parametros_archivos_cv_importar_confirmar",
+    responses=responde(400, 403, 404, 409),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def confirmar_importacion_recruiting(
+    importacion_id: str, datos: ImportacionConfirmarRequest, current_user: Usuario = Depends(get_current_user)
+):
+    """Inicia la restauración, que reemplaza los datos actuales de Recruiting, tras la confirmación explícita (409 si hay
+    otro proceso en curso)."""
+    return ImportacionEstadoResponse(
+        **ImportarBackupRecruitingService.confirmar(
+            current_user, importacion_id, datos.confirmar, datos.texto_confirmacion, datos.aceptar_limitaciones
+        )
+    )
+
+
+@router.delete(
+    "/parametros/archivos-cv/importar/{importacion_id}",
+    response_model=MensajeResponse,
+    operation_id="recruiting_parametros_archivos_cv_importar_descartar",
+    responses=responde(403, 404, 409),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def descartar_importacion_recruiting(importacion_id: str, current_user: Usuario = Depends(get_current_user)):
+    """Descarta el backup subido (solo si la importación no está en curso)."""
+    resultado = ImportarBackupRecruitingService.descartar(current_user, importacion_id)
+    return MensajeResponse(message=str(resultado.get("message") or resultado.get("mensaje") or "Importación descartada."))
+
+
+@router.get(
+    "/parametros/archivos-cv/{carpeta}",
+    response_model=CarpetaCVDetalle,
+    operation_id="recruiting_parametros_archivos_cv_listar",
+    responses=responde(404),
+    dependencies=[acceso_parametros],
+)
+def listar_archivos_cv(
+    carpeta: str,
+    pagina: Optional[int] = Query(None, ge=1),
+    por_pagina: Optional[int] = Query(None, ge=1, le=200),
+    buscar: Optional[str] = Query(None, max_length=200),
+):
+    """Archivos de una carpeta de CV (nombre, tamaño y fecha), más recientes primero, con búsqueda y paginación."""
+    return CarpetaCVDetalle(**ArchivoCVService.listar(carpeta, pagina=pagina, por_pagina=por_pagina, buscar=buscar))
+
+
+@router.get(
+    "/parametros/archivos-cv/{carpeta}/descargar",
+    operation_id="recruiting_parametros_archivos_cv_descargar",
+    responses={**responde(400, 404), 200: {"content": {"application/octet-stream": {}}}},
+    dependencies=[acceso_parametros],
+)
+def descargar_archivo_cv(
+    carpeta: str, nombre: str = Query(..., min_length=1, max_length=255, description="Nombre del archivo en la carpeta")
+):
+    """Descarga el CV original (mismo nombre y extensión) sin modificarlo."""
+    archivo = ArchivoCVService.abrir_archivo(carpeta, nombre)
+    return FileResponse(
+        archivo["ruta"],
+        filename=archivo["nombre"],
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.get(
+    "/parametros/archivos-cv/{carpeta}/descargar-todos",
+    operation_id="recruiting_parametros_archivos_cv_descargar_todos",
+    responses={**responde(404), 200: {"content": {"application/zip": {}}}},
+    dependencies=[acceso_parametros],
+)
+def descargar_todos_los_cv(carpeta: str):
+    """Descarga en un ZIP todos los CV de la carpeta (armado en un temporal que se elimina solo)."""
+    zip_cv = ArchivoCVService.crear_zip(carpeta)
+    return StreamingResponse(
+        ArchivoCVService.iterar_y_cerrar(zip_cv["archivo"]),
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{zip_cv["nombre"]}"',
+            "Content-Length": str(zip_cv["tamano_bytes"]),
+            "X-Cantidad-Archivos": str(zip_cv["cantidad_archivos"]),
+            "Cache-Control": "no-store",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+# ---- Historial de cargas de CV ------------------------------------------------------------------------------------------
+
+
+@router.get(
+    "/parametros/historial-cargas-cv",
+    response_model=HistorialCargaCVPagina,
+    operation_id="recruiting_parametros_historial_cargas_cv_listar",
+    responses=responde(403),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def listar_historial_cargas_cv(
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    usuario: Optional[str] = Query(None, max_length=100),
+    tipo_carga: Optional[Literal["individual", "masiva"]] = Query(None),
+    resultado: Optional[Literal["completada", "parcial", "fallida", "cancelada"]] = Query(None),
+    pagina: int = Query(1, ge=1),
+    por_pagina: int = Query(POR_PAGINA, ge=1, le=MAXIMO),
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+):
+    """Operaciones de carga de CV de la empresa activa, de la más reciente a la más antigua. Solo administradores."""
+    datos = HistorialCargasConsultaService.listar(
+        db, empresa_id, fecha_desde, fecha_hasta, usuario, tipo_carga, resultado, pagina, por_pagina
+    )
+    datos["items"] = [HistorialCargaCVItem.model_validate(i) for i in datos["items"]]
+    return HistorialCargaCVPagina(**datos)
+
+
+@router.get(
+    "/parametros/historial-cargas-cv/{historial_id}",
+    response_model=HistorialCargaCVDetalle,
+    operation_id="recruiting_parametros_historial_cargas_cv_obtener",
+    responses=responde(403, 404),
+    dependencies=[acceso_parametros, solo_admin],
+)
+def detalle_historial_cargas_cv(
+    historial_id: uuid.UUID, db: Session = Depends(get_db), empresa_id: uuid.UUID = Depends(get_empresa_activa)
+):
+    """Archivos de una operación de carga (nombre, resultado y motivo). Solo administradores."""
+    datos = HistorialCargasConsultaService.detalle(db, empresa_id, historial_id)
+    return HistorialCargaCVDetalle(
+        operacion=HistorialCargaCVItem.model_validate(datos["operacion"]),
+        archivos=[HistorialCargaCVArchivoItem.model_validate(a) for a in datos["archivos"]],
+    )

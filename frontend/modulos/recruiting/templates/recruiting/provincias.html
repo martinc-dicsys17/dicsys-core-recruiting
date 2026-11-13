@@ -1,0 +1,368 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Parámetros: Provincias — Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<script>
+    function provinciasParametrosComponent() {
+        const BASE = '/recruiting/parametros/provincias/api';
+        return {
+            provincias: [],
+            cargandoProvincias: false,
+            modalProvinciaAbierto: false,
+            guardandoProvincia: false,
+            provinciaFormError: '',
+            esEdicionProvincia: false,
+            provinciaForm: { id: null, nombre: '' },
+
+            toastMsg: '',
+            toastType: 'success',
+            showToast: false,
+
+            notify(msg, type = 'success') {
+                this.toastMsg = msg;
+                this.toastType = type;
+                this.showToast = true;
+                setTimeout(() => { this.showToast = false; }, 3500);
+            },
+
+            init() {
+                this.cargarProvincias();
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                });
+            },
+
+            async cargarProvincias() {
+                this.cargandoProvincias = true;
+                try {
+                    const res = await fetch(BASE);
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.provincias = data.provincias || [];
+                    } else {
+                        this.notify(data.error || 'Error al cargar las provincias.', 'error');
+                    }
+                } catch (e) {
+                    this.notify('Error de conexión al cargar las provincias.', 'error');
+                } finally {
+                    this.cargandoProvincias = false;
+                    this.$nextTick(() => {
+                        if (window.lucide) lucide.createIcons();
+                    });
+                }
+            },
+
+            abrirModalNuevaProvincia() {
+                this.esEdicionProvincia = false;
+                this.provinciaFormError = '';
+                this.provinciaForm = { id: null, nombre: '' };
+                this.modalProvinciaAbierto = true;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                    const input = document.getElementById('provincia-input-nombre');
+                    if (input) input.focus();
+                });
+            },
+
+            abrirModalEditarProvincia(provincia) {
+                this.esEdicionProvincia = true;
+                this.provinciaFormError = '';
+                this.provinciaForm = { id: provincia.provincia_id, nombre: provincia.nombre || '' };
+                this.modalProvinciaAbierto = true;
+                this.$nextTick(() => {
+                    if (window.lucide) lucide.createIcons();
+                    const input = document.getElementById('provincia-input-nombre');
+                    if (input) input.focus();
+                });
+            },
+
+            async guardarProvincia() {
+                const nombre = (this.provinciaForm.nombre || '').trim();
+                if (!nombre) {
+                    this.provinciaFormError = 'El nombre de la provincia es obligatorio.';
+                    return;
+                }
+
+                this.guardandoProvincia = true;
+                this.provinciaFormError = '';
+                try {
+                    let url = BASE;
+                    let method = 'POST';
+                    if (this.esEdicionProvincia && this.provinciaForm.id) {
+                        url = `${BASE}/${this.provinciaForm.id}`;
+                        method = 'PUT';
+                    }
+                    const res = await fetch(url, {
+                        method: method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nombre: nombre })
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.notify(this.esEdicionProvincia ? 'Provincia actualizada correctamente.' : 'Provincia creada exitosamente.');
+                        this.modalProvinciaAbierto = false;
+                        await this.cargarProvincias();
+                    } else {
+                        this.provinciaFormError = data.error || 'Error al guardar la provincia.';
+                    }
+                } catch (e) {
+                    this.provinciaFormError = 'Error de conexión con el servidor.';
+                } finally {
+                    this.guardandoProvincia = false;
+                }
+            },
+
+            async eliminarProvincia(provincia) {
+                if (!confirm(`¿Estás seguro de eliminar la provincia '${provincia.nombre}'? Esta acción no se puede deshacer.`)) return;
+                try {
+                    const res = await fetch(`${BASE}/${provincia.provincia_id}`, {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.notify(`Provincia '${provincia.nombre}' eliminada exitosamente.`);
+                        await this.cargarProvincias();
+                    } else {
+                        this.notify(data.error || 'Error al eliminar la provincia.', 'error');
+                    }
+                } catch (e) {
+                    this.notify('Error de conexión.', 'error');
+                }
+            }
+        };
+    }
+</script>
+
+<div class="animate-fade-in space-y-6" x-data="provinciasParametrosComponent()">
+
+    <!-- Toast Notification -->
+    <div x-show="showToast"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold"
+         :class="toastType === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'"
+         x-cloak>
+        <i :data-lucide="toastType === 'success' ? 'check-circle' : 'alert-circle'" class="w-4 h-4 flex-shrink-0"></i>
+        <span x-text="toastMsg"></span>
+    </div>
+
+    <!-- Encabezado Principal y Pestañas de Navegación de Parámetros -->
+    <div class="space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-dark-900">Parámetros</h1>
+                <p class="text-sm text-dark-500 mt-1">Configuración y catálogos maestros del módulo de Reclutamiento</p>
+            </div>
+        </div>
+
+        <!-- Pestañas de Navegación entre pantallas de Parámetros -->
+        <div class="flex flex-wrap items-stretch gap-x-1 border-b border-dark-200/80 pt-2" data-testid="parametros-pestanas">
+            <a href="{{ url_for('recruiting.parametros') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="sparkles" class="w-3 h-3 shrink-0"></i>
+                <span>Porcentaje de Aceptación</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_skills_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Skills / Tecnologías</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_habilidades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Habilidades / Competencias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_provincias_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-bold border-b-2 border-primary-600 text-primary-600 transition-colors">
+                <i data-lucide="map" class="w-3 h-3 shrink-0"></i>
+                <span>Provincias</span>
+                <span class="shrink-0 px-1 py-0.5 text-[10px] font-semibold rounded-full bg-primary-50 text-primary-700" x-text="provincias.length"></span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_ciudades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
+                <span>Ciudades</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_lideres_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="user-check" class="w-3 h-3 shrink-0"></i>
+                <span>Líderes / Hiring Managers</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_reclutadores_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="users" class="w-3 h-3 shrink-0"></i>
+                <span>Reclutadores</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_perfiles_profesionales_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="briefcase" class="w-3 h-3 shrink-0"></i>
+                <span>Perfiles profesionales</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_archivos_cv_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="archive" class="w-3 h-3 shrink-0"></i>
+                <span>Archivos de CV</span>
+            </a>
+            {% if puede_ver_historial_cargas_cv %}
+            <a href="{{ url_for('recruiting.parametros_historial_cargas_cv_vista') }}" data-testid="parametros-pestana-historial-cargas-cv"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="history" class="w-3 h-3 shrink-0"></i>
+                <span>Historial de cargas de CV</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- ABM DE PROVINCIAS -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden">
+        <div class="p-6 border-b border-dark-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                    <i data-lucide="map" class="w-5 h-5"></i>
+                </span>
+                <div>
+                    <h2 class="text-base font-bold text-dark-900">Catálogo de Provincias</h2>
+                    <p class="text-xs text-dark-400 mt-0.5">Provincias disponibles para la ubicación de candidatos</p>
+                </div>
+            </div>
+
+            <button type="button"
+                    @click="abrirModalNuevaProvincia()"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer whitespace-nowrap">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Nueva Provincia</span>
+            </button>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-dark-100 bg-dark-50/60 text-xs font-semibold uppercase tracking-wider text-dark-500">
+                        <th class="px-6 py-3.5">Provincia</th>
+                        <th class="px-6 py-3.5 text-center">Ciudades</th>
+                        <th class="px-6 py-3.5 text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100 text-sm">
+                    <template x-if="cargandoProvincias">
+                        <tr>
+                            <td colspan="3" class="px-6 py-12 text-center text-dark-400">
+                                <div class="inline-flex items-center gap-2 text-xs">
+                                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-primary-600"></i>
+                                    <span>Cargando provincias desde la base de datos...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+
+                    <template x-if="!cargandoProvincias && provincias.length > 0">
+                        <template x-for="prov in provincias" :key="prov.provincia_id">
+                            <tr class="hover:bg-dark-50/50 transition-colors">
+                                <td class="px-6 py-3.5 font-semibold text-dark-800" x-text="prov.nombre"></td>
+                                <td class="px-6 py-3.5 text-center text-dark-600" x-text="prov.cantidad_ciudades"></td>
+                                <td class="px-6 py-3.5 text-right space-x-1.5 whitespace-nowrap">
+                                    <button type="button"
+                                            @click="abrirModalEditarProvincia(prov)"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-primary-600 bg-primary-50 hover:bg-primary-100 rounded-lg transition-colors cursor-pointer"
+                                            title="Editar Provincia">
+                                        <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                                        <span>Editar</span>
+                                    </button>
+                                    <button type="button"
+                                            @click="eliminarProvincia(prov)"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors cursor-pointer"
+                                            title="Eliminar Provincia">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                        <span>Eliminar</span>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+
+                    <template x-if="!cargandoProvincias && provincias.length === 0">
+                        <tr>
+                            <td colspan="3" class="px-6 py-10 text-center text-xs text-dark-400">No hay provincias registradas en el catálogo.</td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Modal Alta / Edición de Provincia -->
+    <div x-show="modalProvinciaAbierto"
+         x-cloak
+         @keydown.escape.window="modalProvinciaAbierto = false"
+         class="fixed inset-0 z-50 overflow-y-auto"
+         aria-labelledby="modal-provincia-title" role="dialog" aria-modal="true">
+
+        <div class="fixed inset-0 bg-dark-900/40 backdrop-blur-sm transition-opacity"
+             @click="modalProvinciaAbierto = false"></div>
+
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative transform overflow-hidden rounded-2xl bg-white text-left shadow-2xl transition-all w-full max-w-md p-6 border border-dark-100"
+                 @click.stop>
+
+                <div class="flex items-center justify-between pb-4 border-b border-dark-100">
+                    <div class="flex items-center gap-2.5">
+                        <span class="p-2 bg-primary-50 text-primary-600 rounded-xl">
+                            <i data-lucide="map" class="w-5 h-5"></i>
+                        </span>
+                        <h3 class="text-base font-bold text-dark-900" id="modal-provincia-title" x-text="esEdicionProvincia ? 'Editar Provincia' : 'Nueva Provincia'"></h3>
+                    </div>
+                    <button type="button"
+                            @click="modalProvinciaAbierto = false"
+                            class="text-dark-400 hover:text-dark-600 focus:outline-none p-1 rounded-lg hover:bg-dark-100 transition-colors">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+
+                <form @submit.prevent="guardarProvincia()" class="space-y-4 pt-4">
+                    <div x-show="provinciaFormError"
+                         x-cloak
+                         class="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl flex items-start gap-2">
+                        <i data-lucide="alert-circle" class="w-4 h-4 flex-shrink-0 mt-0.5"></i>
+                        <span x-text="provinciaFormError"></span>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-dark-700 mb-1">Nombre de la Provincia <span class="text-rose-500">*</span></label>
+                        <input type="text"
+                               id="provincia-input-nombre"
+                               x-model="provinciaForm.nombre"
+                               required
+                               maxlength="100"
+                               placeholder="Ej: Córdoba"
+                               class="w-full px-3.5 py-2 text-sm border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500">
+                        <p class="text-[11px] text-dark-400 mt-1">No se permiten nombres duplicados, con o sin acentos.</p>
+                    </div>
+
+                    <div class="flex justify-end gap-2.5 pt-4 border-t border-dark-100">
+                        <button type="button"
+                                @click="modalProvinciaAbierto = false"
+                                :disabled="guardandoProvincia"
+                                class="px-4 py-2 text-xs font-semibold text-dark-600 hover:bg-dark-100 rounded-xl transition-colors cursor-pointer">
+                            Cancelar
+                        </button>
+                        <button type="submit"
+                                :disabled="guardandoProvincia"
+                                class="inline-flex items-center gap-2 px-5 py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer disabled:opacity-50">
+                            <i x-show="!guardandoProvincia" data-lucide="check" class="w-4 h-4"></i>
+                            <i x-show="guardandoProvincia" data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>
+                            <span x-text="guardandoProvincia ? 'Guardando...' : (esEdicionProvincia ? 'Guardar Cambios' : 'Crear Provincia')"></span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

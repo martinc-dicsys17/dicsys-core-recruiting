@@ -1,0 +1,278 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Parámetros: Historial de cargas de CV — Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<script>
+    function historialCargasCvComponent() {
+        const BASE = '/recruiting/parametros/historial-cargas-cv/api';
+        const RESULTADOS = {
+            completada: { texto: 'Completada', clase: 'bg-emerald-50 text-emerald-700 border-emerald-200', icono: 'check-circle' },
+            parcial: { texto: 'Parcial', clase: 'bg-amber-50 text-amber-700 border-amber-200', icono: 'alert-triangle' },
+            fallida: { texto: 'Fallida', clase: 'bg-rose-50 text-rose-700 border-rose-200', icono: 'x-circle' },
+            cancelada: { texto: 'Cancelada', clase: 'bg-dark-100 text-dark-600 border-dark-200', icono: 'slash' }
+        };
+        const ARCHIVO = {
+            creado: { texto: 'Creado', clase: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+            duplicado: { texto: 'Duplicado', clase: 'bg-amber-50 text-amber-700 border-amber-200' },
+            sin_email: { texto: 'Sin email', clase: 'bg-orange-50 text-orange-700 border-orange-200' },
+            rechazado: { texto: 'Rechazado', clase: 'bg-rose-50 text-rose-700 border-rose-200' }
+        };
+        return {
+            items: [], total: 0, pagina: 1, totalPaginas: 1, porPagina: 20,
+            filtros: { fecha_desde: '', fecha_hasta: '', usuario: '', tipo_carga: '', resultado: '' },
+            cargando: false, error: '',
+            detalle: null, cargandoDetalle: false, errorDetalle: '',
+
+            init() { this.cargar(1); },
+
+            get desde() { return this.total === 0 ? 0 : (this.pagina - 1) * this.porPagina + 1; },
+            get hasta() { return Math.min(this.pagina * this.porPagina, this.total); },
+
+            resultado(r) { return RESULTADOS[r] || { texto: r, clase: 'bg-dark-100 text-dark-600 border-dark-200', icono: 'circle' }; },
+            archivo(r) { return ARCHIVO[r] || { texto: r, clase: 'bg-dark-100 text-dark-600 border-dark-200' }; },
+            tipo(t) { return t === 'masiva' ? 'Masiva' : (t === 'individual' ? 'Individual' : t); },
+            formatearFecha(f) {
+                if (!f) return '-';
+                const d = new Date(/(Z|[+-]\d\d:?\d\d)$/.test(f) ? f : f + 'Z');
+                return isNaN(d) ? f : d.toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+            },
+            refrescarIconos() { this.$nextTick(() => { if (window.lucide) lucide.createIcons(); }); },
+
+            async cargar(pagina) {
+                this.cargando = true; this.error = '';
+                const p = new URLSearchParams({ pagina: pagina, por_pagina: this.porPagina });
+                Object.entries(this.filtros).forEach(([k, v]) => { if (v) p.set(k, v); });
+                try {
+                    const r = await fetch(BASE + '?' + p.toString(), { headers: { Accept: 'application/json' } });
+                    const d = await r.json();
+                    if (!r.ok || !d.success) { this.error = d.error || 'No se pudo consultar el historial.'; this.items = []; this.total = 0; return; }
+                    const h = d.historial;
+                    this.items = h.items; this.total = h.total; this.pagina = h.pagina; this.totalPaginas = h.total_paginas;
+                } catch (e) {
+                    this.error = 'Error de conexión con el servidor.'; this.items = []; this.total = 0;
+                } finally {
+                    this.cargando = false; this.refrescarIconos();
+                }
+            },
+            aplicar() { this.cargar(1); },
+            limpiar() { this.filtros = { fecha_desde: '', fecha_hasta: '', usuario: '', tipo_carga: '', resultado: '' }; this.cargar(1); },
+            irAPagina(n) { if (n >= 1 && n <= this.totalPaginas) this.cargar(n); },
+
+            async verDetalle(op) {
+                this.detalle = { operacion: op, archivos: [] }; this.cargandoDetalle = true; this.errorDetalle = '';
+                try {
+                    const r = await fetch(BASE + '/' + encodeURIComponent(op.id), { headers: { Accept: 'application/json' } });
+                    const d = await r.json();
+                    if (!r.ok || !d.success) { this.errorDetalle = d.error || 'No se pudo consultar el detalle.'; return; }
+                    this.detalle = d.detalle;
+                } catch (e) {
+                    this.errorDetalle = 'Error de conexión con el servidor.';
+                } finally {
+                    this.cargandoDetalle = false; this.refrescarIconos();
+                }
+            },
+            cerrarDetalle() { this.detalle = null; }
+        };
+    }
+</script>
+
+<div class="animate-fade-in space-y-6" x-data="historialCargasCvComponent()" data-testid="historial-cargas-cv">
+
+    <!-- Encabezado Principal y Pestañas de Navegación de Parámetros -->
+    <div class="space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-dark-900">Parámetros</h1>
+                <p class="text-sm text-dark-500 mt-1">Configuración y catálogos maestros del módulo de Reclutamiento</p>
+            </div>
+        </div>
+
+        <!-- Pestañas de Navegación entre pantallas de Parámetros -->
+        <div class="flex flex-wrap items-stretch gap-x-1 border-b border-dark-200/80 pt-2" data-testid="parametros-pestanas">
+            <a href="{{ url_for('recruiting.parametros') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="sparkles" class="w-3 h-3 shrink-0"></i>
+                <span>Porcentaje de Aceptación</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_skills_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Skills / Tecnologías</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_habilidades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Habilidades / Competencias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_provincias_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map" class="w-3 h-3 shrink-0"></i>
+                <span>Provincias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_ciudades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
+                <span>Ciudades</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_lideres_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="user-check" class="w-3 h-3 shrink-0"></i>
+                <span>Líderes / Hiring Managers</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_reclutadores_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="users" class="w-3 h-3 shrink-0"></i>
+                <span>Reclutadores</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_perfiles_profesionales_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="briefcase" class="w-3 h-3 shrink-0"></i>
+                <span>Perfiles profesionales</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_archivos_cv_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="archive" class="w-3 h-3 shrink-0"></i>
+                <span>Archivos de CV</span>
+            </a>
+            {% if puede_ver_historial_cargas_cv %}
+            <a href="{{ url_for('recruiting.parametros_historial_cargas_cv_vista') }}" data-testid="parametros-pestana-historial-cargas-cv"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-bold border-b-2 border-primary-600 text-primary-600 transition-colors">
+                <i data-lucide="history" class="w-3 h-3 shrink-0"></i>
+                <span>Historial de cargas de CV</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Título de la pantalla -->
+    <div class="flex items-center gap-3">
+        <span class="p-2.5 bg-primary-50 text-primary-600 rounded-xl"><i data-lucide="history" class="w-5 h-5"></i></span>
+        <div>
+            <h2 class="text-base font-bold text-dark-900">Historial de cargas de CV</h2>
+            <p class="text-xs text-dark-400 mt-0.5">Consulta de las operaciones de carga individual y masiva (solo lectura)</p>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <form @submit.prevent="aplicar()" class="bg-white rounded-2xl border border-dark-100 shadow-soft p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end" data-testid="historial-filtros">
+        <label class="text-xs font-semibold text-dark-600">Desde
+            <input type="date" x-model="filtros.fecha_desde" data-testid="historial-filtro-desde" class="mt-1 w-full px-3 py-2 border border-dark-200 rounded-lg text-sm font-normal">
+        </label>
+        <label class="text-xs font-semibold text-dark-600">Hasta
+            <input type="date" x-model="filtros.fecha_hasta" data-testid="historial-filtro-hasta" class="mt-1 w-full px-3 py-2 border border-dark-200 rounded-lg text-sm font-normal">
+        </label>
+        <label class="text-xs font-semibold text-dark-600">Usuario
+            <input type="text" maxlength="100" x-model="filtros.usuario" placeholder="Nombre" data-testid="historial-filtro-usuario" class="mt-1 w-full px-3 py-2 border border-dark-200 rounded-lg text-sm font-normal">
+        </label>
+        <label class="text-xs font-semibold text-dark-600">Tipo de carga
+            <select x-model="filtros.tipo_carga" data-testid="historial-filtro-tipo" class="mt-1 w-full px-3 py-2 border border-dark-200 rounded-lg text-sm font-normal bg-white">
+                <option value="">Todos</option><option value="individual">Individual</option><option value="masiva">Masiva</option>
+            </select>
+        </label>
+        <label class="text-xs font-semibold text-dark-600">Resultado
+            <select x-model="filtros.resultado" data-testid="historial-filtro-resultado" class="mt-1 w-full px-3 py-2 border border-dark-200 rounded-lg text-sm font-normal bg-white">
+                <option value="">Todos</option><option value="completada">Completada</option><option value="parcial">Parcial</option><option value="fallida">Fallida</option><option value="cancelada">Cancelada</option>
+            </select>
+        </label>
+        <div class="flex gap-2">
+            <button type="submit" data-testid="historial-filtrar" class="flex-1 px-3 py-2 rounded-lg text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 cursor-pointer">Filtrar</button>
+            <button type="button" @click="limpiar()" data-testid="historial-limpiar" class="px-3 py-2 rounded-lg text-sm font-semibold border border-dark-200 text-dark-700 bg-white hover:bg-dark-50 cursor-pointer">Limpiar</button>
+        </div>
+    </form>
+
+    <div x-show="error" x-cloak class="p-4 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-sm" data-testid="historial-error" x-text="error"></div>
+
+    <!-- Tabla -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden">
+        <div class="overflow-x-auto" data-testid="historial-tabla">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-dark-100 bg-dark-50/60 text-xs font-semibold uppercase tracking-wider text-dark-500">
+                        <th class="px-4 py-3.5 whitespace-nowrap">Fecha y hora</th>
+                        <th class="px-4 py-3.5">Usuario</th>
+                        <th class="px-4 py-3.5">Tipo</th>
+                        <th class="px-4 py-3.5 text-right">Total</th>
+                        <th class="px-4 py-3.5 text-right">Creados</th>
+                        <th class="px-4 py-3.5 text-right">Duplicados</th>
+                        <th class="px-4 py-3.5 text-right">Sin email</th>
+                        <th class="px-4 py-3.5 text-right">Rechazados</th>
+                        <th class="px-4 py-3.5">Resultado</th>
+                        <th class="px-4 py-3.5 text-right">Acción</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100 text-sm">
+                    <tr x-show="cargando"><td colspan="10" class="px-6 py-12 text-center text-xs text-dark-400">Consultando el historial...</td></tr>
+                    <tr x-show="!cargando && !error && items.length === 0" data-testid="historial-vacio"><td colspan="10" class="px-6 py-12 text-center text-sm text-dark-500">No hay operaciones de carga para los filtros seleccionados.</td></tr>
+                    <template x-for="op in items" :key="op.id">
+                        <tr class="hover:bg-dark-50/50 transition-colors" data-testid="historial-fila">
+                            <td class="px-4 py-3.5 text-dark-700 whitespace-nowrap" x-text="formatearFecha(op.fecha_operacion)"></td>
+                            <td class="px-4 py-3.5 font-medium text-dark-800" x-text="op.usuario_nombre"></td>
+                            <td class="px-4 py-3.5 text-dark-600" x-text="tipo(op.tipo_carga)"></td>
+                            <td class="px-4 py-3.5 text-right text-dark-800 font-semibold" x-text="op.total_archivos"></td>
+                            <td class="px-4 py-3.5 text-right text-emerald-700" x-text="op.candidatos_creados"></td>
+                            <td class="px-4 py-3.5 text-right text-amber-700" x-text="op.duplicados"></td>
+                            <td class="px-4 py-3.5 text-right text-orange-700" x-text="op.sin_email"></td>
+                            <td class="px-4 py-3.5 text-right text-rose-700" x-text="op.rechazados"></td>
+                            <td class="px-4 py-3.5">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold" :class="resultado(op.resultado).clase" data-testid="historial-resultado">
+                                    <i :data-lucide="resultado(op.resultado).icono" class="w-3 h-3"></i><span x-text="resultado(op.resultado).texto"></span>
+                                </span>
+                            </td>
+                            <td class="px-4 py-3.5 text-right">
+                                <button type="button" @click="verDetalle(op)" data-testid="historial-ver-detalle" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-primary-600 hover:bg-primary-50 cursor-pointer">Ver detalle</button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        <div class="px-6 py-4 border-t border-dark-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-dark-500" x-show="total > 0" data-testid="historial-paginacion">
+            <span>Mostrando <span x-text="desde"></span>-<span x-text="hasta"></span> de <span x-text="total"></span> operaciones</span>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="irAPagina(pagina - 1)" :disabled="pagina <= 1 || cargando" data-testid="historial-anterior" class="px-3 py-1.5 border border-dark-200 rounded-lg font-semibold text-dark-700 bg-white hover:bg-dark-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+                <span class="font-semibold text-dark-700 whitespace-nowrap">Página <span x-text="pagina"></span> de <span x-text="totalPaginas"></span></span>
+                <button type="button" @click="irAPagina(pagina + 1)" :disabled="pagina >= totalPaginas || cargando" data-testid="historial-siguiente" class="px-3 py-1.5 border border-dark-200 rounded-lg font-semibold text-dark-700 bg-white hover:bg-dark-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detalle de la operación -->
+    <div x-show="detalle" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-dark-900/40 p-4" @keydown.escape.window="cerrarDetalle()" data-testid="historial-detalle">
+        <div class="bg-white rounded-2xl shadow-lg w-full max-w-3xl max-h-[85vh] flex flex-col" @click.outside="cerrarDetalle()">
+            <div class="px-6 py-4 border-b border-dark-100 flex items-start justify-between gap-3">
+                <div>
+                    <h3 class="text-base font-bold text-dark-900">Detalle de la carga</h3>
+                    <p class="text-xs text-dark-500 mt-0.5" x-show="detalle">
+                        <span x-text="detalle && formatearFecha(detalle.operacion.fecha_operacion)"></span> ·
+                        <span x-text="detalle && detalle.operacion.usuario_nombre"></span> ·
+                        <span x-text="detalle && tipo(detalle.operacion.tipo_carga)"></span>
+                    </p>
+                </div>
+                <button type="button" @click="cerrarDetalle()" aria-label="Cerrar" data-testid="historial-detalle-cerrar" class="p-2 rounded-lg text-dark-500 hover:bg-dark-50 cursor-pointer"><i data-lucide="x" class="w-4 h-4"></i></button>
+            </div>
+            <div class="overflow-auto">
+                <div x-show="errorDetalle" class="m-4 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-sm" x-text="errorDetalle"></div>
+                <p x-show="cargandoDetalle" class="px-6 py-10 text-center text-xs text-dark-400">Consultando el detalle...</p>
+                <table class="w-full text-left border-collapse" x-show="!cargandoDetalle && !errorDetalle">
+                    <thead>
+                        <tr class="border-b border-dark-100 bg-dark-50/60 text-xs font-semibold uppercase tracking-wider text-dark-500">
+                            <th class="px-4 py-3">Archivo</th><th class="px-4 py-3">Resultado</th><th class="px-4 py-3">Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-dark-100 text-sm">
+                        <tr x-show="detalle && detalle.archivos.length === 0"><td colspan="3" class="px-6 py-8 text-center text-xs text-dark-400">Esta operación no tiene archivos registrados.</td></tr>
+                        <template x-for="a in (detalle ? detalle.archivos : [])" :key="a.orden + a.nombre_archivo">
+                            <tr data-testid="historial-detalle-fila">
+                                <td class="px-4 py-3 font-medium text-dark-800 break-all" x-text="a.nombre_archivo"></td>
+                                <td class="px-4 py-3"><span class="inline-flex px-2 py-0.5 rounded-full border text-xs font-semibold" :class="archivo(a.resultado).clase" x-text="archivo(a.resultado).texto"></span></td>
+                                <td class="px-4 py-3 text-xs text-dark-600" :class="a.motivo ? '' : 'text-dark-400 italic'" x-text="a.motivo || (a.resultado === 'creado' ? '-' : 'Sin motivo registrado')"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

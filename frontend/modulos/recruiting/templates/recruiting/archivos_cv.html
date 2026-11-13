@@ -1,0 +1,1084 @@
+{% extends "recruiting/recruiting_base.html" %}
+
+{% block title %}Parámetros: Archivos de CV — Recruiting | {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<script>
+    function archivosCvComponent() {
+        const BASE = '/recruiting/parametros/archivos-cv';
+        // Presentación de cada carpeta (los nombres reales los define el backend; aquí solo etiquetas y colores)
+        const META = {
+            cv_procesados_ok: {
+                titulo: 'Procesados correctamente', detalle: 'CV importados correctamente', icono: 'check-circle',
+                tarjeta: 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300', activa: 'border-emerald-500 ring-2 ring-emerald-500/20 bg-emerald-50',
+                icono_caja: 'bg-emerald-100 text-emerald-600', cifra: 'text-emerald-700', boton: 'bg-emerald-600 hover:bg-emerald-700'
+            },
+            cv_duplicados: {
+                titulo: 'Duplicados', detalle: 'CV de candidatos que ya existen', icono: 'copy',
+                tarjeta: 'border-amber-200 bg-amber-50/40 hover:border-amber-300', activa: 'border-amber-500 ring-2 ring-amber-500/20 bg-amber-50',
+                icono_caja: 'bg-amber-100 text-amber-600', cifra: 'text-amber-700', boton: 'bg-amber-600 hover:bg-amber-700'
+            },
+            cv_errores: {
+                titulo: 'Con errores', detalle: 'CV rechazados por error de lectura o procesamiento', icono: 'alert-triangle',
+                tarjeta: 'border-rose-200 bg-rose-50/40 hover:border-rose-300', activa: 'border-rose-500 ring-2 ring-rose-500/20 bg-rose-50',
+                icono_caja: 'bg-rose-100 text-rose-600', cifra: 'text-rose-700', boton: 'bg-rose-600 hover:bg-rose-700'
+            }
+        };
+        const META_DEFECTO = {
+            titulo: 'Carpeta', detalle: '', icono: 'folder',
+            tarjeta: 'border-dark-200 bg-white hover:border-dark-300', activa: 'border-primary-500 ring-2 ring-primary-500/20 bg-primary-50',
+            icono_caja: 'bg-dark-100 text-dark-600', cifra: 'text-dark-700', boton: 'bg-primary-600 hover:bg-primary-700'
+        };
+
+        return {
+            carpetas: [],
+            seleccionada: null,
+            detalle: null,
+            cargandoResumen: false,
+            cargandoDetalle: false,
+            errorResumen: '',
+            errorDetalle: '',
+            filtro: '',
+            pagina: 1,
+            porPagina: 20,
+            totalPaginas: 1,
+            totalFiltrado: 0,
+            temporizadorBusqueda: null,
+            consultaId: 0,
+            modalBackupAbierto: false,
+            backup: null,
+            backupIniciando: false,
+            errorBackup: '',
+            temporizadorBackup: null,
+            fallosBackup: 0,
+            modalImportarAbierto: false,
+            importacion: null,
+            importSubiendo: false,
+            subidaPct: 0,
+            errorImportar: '',
+            pasoImportar: 'vista_previa',
+            textoConfirmacion: '',
+            aceptaLimitaciones: false,
+            confirmandoImportar: false,
+            temporizadorImportar: null,
+            recargarAlCerrarImportar: false,
+            fallosImportar: 0,
+            modalLimpiarAbierto: false,
+            limpiando: false,
+            errorLimpieza: '',
+            resumenLimpieza: null,
+            toastMsg: '',
+            toastType: 'success',
+            showToast: false,
+
+            notify(msg, type = 'success') {
+                this.toastMsg = msg;
+                this.toastType = type;
+                this.showToast = true;
+                setTimeout(() => { this.showToast = false; }, 4000);
+            },
+
+            iconos() {
+                this.$nextTick(() => { if (window.lucide) lucide.createIcons(); });
+            },
+
+            meta(carpeta) { return META[carpeta] || META_DEFECTO; },
+
+            async init() {
+                await this.cargarResumen();
+                if (this.carpetas.length) await this.seleccionar(this.carpetas[0].carpeta);
+                this.iconos();
+            },
+
+            async cargarResumen() {
+                this.cargandoResumen = true;
+                this.errorResumen = '';
+                try {
+                    const res = await fetch(`${BASE}/api`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        // Los duplicados se siguen registrando en el backend, pero no se muestran en esta pantalla
+                        this.carpetas = (data.carpetas || []).filter(c => c.carpeta !== 'cv_duplicados');
+                    } else {
+                        this.errorResumen = data.error || 'No se pudieron consultar las carpetas de CV.';
+                    }
+                } catch (e) {
+                    this.errorResumen = 'Error de conexión al consultar las carpetas de CV.';
+                } finally {
+                    this.cargandoResumen = false;
+                    this.iconos();
+                }
+            },
+
+            async seleccionar(carpeta) {
+                this.seleccionada = carpeta;
+                this.detalle = null;
+                this.filtro = '';
+                await this.cargarPagina(1);
+            },
+
+            // La paginacion y la busqueda las resuelve el backend: solo se piden los 20 archivos de la pagina
+            async cargarPagina(pagina) {
+                const carpeta = this.seleccionada;
+                const consulta = ++this.consultaId;
+                this.errorDetalle = '';
+                this.cargandoDetalle = true;
+                try {
+                    const params = new URLSearchParams({ pagina: String(pagina), por_pagina: String(this.porPagina) });
+                    if (this.filtro.trim()) params.set('buscar', this.filtro.trim());
+                    const res = await fetch(`${BASE}/api/${encodeURIComponent(carpeta)}?${params}`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (consulta !== this.consultaId) return;  // llego una consulta mas nueva (otra carpeta, pagina o busqueda)
+                    if (res.ok && data.success) {
+                        this.detalle = data.carpeta;
+                        this.pagina = data.carpeta.pagina || 1;
+                        this.totalPaginas = data.carpeta.total_paginas || 1;
+                        this.totalFiltrado = data.carpeta.total_filtrado || 0;
+                    } else {
+                        this.errorDetalle = data.error || 'No se pudo consultar el contenido de la carpeta.';
+                    }
+                } catch (e) {
+                    if (consulta === this.consultaId) this.errorDetalle = 'Error de conexión al consultar la carpeta.';
+                } finally {
+                    if (consulta === this.consultaId) this.cargandoDetalle = false;
+                    this.iconos();
+                }
+            },
+
+            buscar() {
+                // Cada busqueda vuelve a la primera pagina (con una pequena espera mientras se escribe)
+                clearTimeout(this.temporizadorBusqueda);
+                this.temporizadorBusqueda = setTimeout(() => this.cargarPagina(1), 300);
+            },
+
+            irAPagina(n) {
+                if (n < 1 || n > this.totalPaginas || n === this.pagina || this.cargandoDetalle) return;
+                this.cargarPagina(n);
+            },
+
+            get desde() { return this.totalFiltrado === 0 ? 0 : (this.pagina - 1) * this.porPagina + 1; },
+            get hasta() { return Math.min(this.pagina * this.porPagina, this.totalFiltrado); },
+
+            // ---- Backup completo de Recruiting (base de datos + CV). Solo administradores; el backend valida el usuario ----
+            get backupEnCurso() { return !!this.backup && ['preparando', 'generando', 'verificando'].includes(this.backup.estado); },
+            get backupFinalizado() { return !!this.backup && this.backup.estado === 'finalizado'; },
+            get backupConError() { return !!this.backup && this.backup.estado === 'error'; },
+            get porcentajeBackup() { return this.backup ? Math.max(0, Math.min(100, this.backup.porcentaje || 0)) : 0; },
+            get urlDescargaBackup() { return this.backup ? `${BASE}/backup/${encodeURIComponent(this.backup.backup_id)}/descargar` : '#'; },
+
+            tituloBackup() {
+                if (!this.backup) return 'Backup de Recruiting';
+                if (this.backupFinalizado) return 'Backup completado';
+                if (this.backupConError) return 'No se pudo generar el backup';
+                return ({ base_de_datos: 'Exportando la base de datos', archivos: 'Copiando los CV', verificando: 'Verificando la integridad' })[this.backup.fase] || 'Preparando el backup';
+            },
+
+            abrirBackup() {
+                this.errorBackup = '';
+                if (this.backupConError) this.backup = null;
+                this.modalBackupAbierto = true;
+                this.iconos();
+            },
+
+            // Cerrar el modal no detiene la generacion: sigue en el servidor y el boton muestra el avance
+            cerrarBackup() { this.modalBackupAbierto = false; },
+
+            async iniciarBackup() {
+                if (this.backupIniciando || this.backupEnCurso) return;
+                this.backupIniciando = true;
+                this.errorBackup = '';
+                this.backup = null;
+                try {
+                    const res = await fetch(`${BASE}/backup/iniciar`, { method: 'POST', headers: { 'Accept': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.backup = data.backup;
+                        this.fallosBackup = 0;
+                        this.seguirBackup();
+                    } else {
+                        this.errorBackup = data.error || 'No se pudo iniciar el backup.';
+                    }
+                } catch (e) {
+                    this.errorBackup = 'Error de conexión al iniciar el backup.';
+                } finally {
+                    this.backupIniciando = false;
+                    this.iconos();
+                }
+            },
+
+            seguirBackup() {
+                clearTimeout(this.temporizadorBackup);
+                this.temporizadorBackup = setTimeout(() => this.consultarBackup(), 1000);
+            },
+
+            async consultarBackup() {
+                if (!this.backup || !this.backupEnCurso) return;
+                try {
+                    const res = await fetch(`${BASE}/backup/${encodeURIComponent(this.backup.backup_id)}/estado`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.success) throw new Error(data.error || 'estado');
+                    this.backup = data.backup;
+                    this.fallosBackup = 0;
+                    if (!this.backupEnCurso) {
+                        this.notify(this.backupFinalizado ? 'Backup de Recruiting completado.' : 'No se pudo generar el backup.', this.backupFinalizado ? 'success' : 'error');
+                        this.iconos();
+                        return;
+                    }
+                } catch (e) {
+                    this.fallosBackup += 1;
+                    if (this.fallosBackup >= 5) {
+                        this.errorBackup = 'Se perdió la conexión con el servidor. El backup puede seguir generándose: volvé a abrir esta ventana en unos minutos.';
+                        this.backup = null;
+                        return;
+                    }
+                }
+                this.seguirBackup();
+            },
+
+            // ---- Importar backup completo de Recruiting (valida, muestra vista previa y restaura). Solo administradores; el backend valida el usuario ----
+            get importEnCurso() { return !!this.importacion && ['validando', 'restaurando'].includes(this.importacion.estado); },
+            get importRestaurando() { return !!this.importacion && this.importacion.estado === 'restaurando'; },
+            get importValidado() { return !!this.importacion && this.importacion.estado === 'validado'; },
+            get importFinalizado() { return !!this.importacion && this.importacion.estado === 'finalizado'; },
+            get importConError() { return !!this.importacion && ['rechazado', 'error'].includes(this.importacion.estado); },
+            get porcentajeImportar() { return this.importSubiendo ? this.subidaPct : (this.importacion ? Math.max(0, Math.min(100, this.importacion.porcentaje || 0)) : 0); },
+            get puedeConfirmarImportar() {
+                if (!this.importValidado || this.confirmandoImportar) return false;
+                if ((this.importacion.limitaciones || []).length && !this.aceptaLimitaciones) return false;
+                return this.textoConfirmacion.trim() === 'REEMPLAZAR';
+            },
+            get urlBackupSeguridad() {
+                const b = this.importacion && (this.importacion.backup_seguridad || (this.importacion.resultado && this.importacion.resultado.backup_seguridad));
+                return b ? `${BASE}/backup/${encodeURIComponent(b.backup_id)}/descargar` : '#';
+            },
+
+            tituloImportar() {
+                if (this.importSubiendo) return 'Subiendo el backup';
+                if (!this.importacion) return 'Importar backup de Recruiting';
+                const e = this.importacion.estado;
+                if (e === 'validando') return 'Validando el backup';
+                if (e === 'validado') return this.pasoImportar === 'confirmar' ? 'Confirmar restauración' : 'Vista previa del backup';
+                if (e === 'rechazado') return 'Backup no válido';
+                if (e === 'restaurando') return ({ comprobando: 'Comprobando el entorno', respaldo_seguridad: 'Generando backup de seguridad', preparando_archivos: 'Preparando los CV', base_de_datos: 'Restaurando la base de datos', reemplazando_archivos: 'Reemplazando los CV' })[this.importacion.fase] || 'Restaurando';
+                if (e === 'finalizado') return 'Restauración completada';
+                return 'No se pudo restaurar';
+            },
+
+            abrirImportar() {
+                this.errorImportar = '';
+                if (this.importacion && (this.importEnCurso || this.importValidado || this.importFinalizado)) {
+                    this.modalImportarAbierto = true;
+                    this.iconos();
+                    return;
+                }
+                this.$refs.archivoImportar.value = '';
+                this.$refs.archivoImportar.click();
+            },
+
+            // Tras una importacion exitosa se recarga la pantalla para mostrar carpetas y contadores restaurados.
+            // Si hay cuentas que deben restablecer credenciales, se espera a que el usuario cierre el aviso para no ocultarlo.
+            refrescarTrasImportar() {
+                const cuentas = (this.importacion && this.importacion.resultado && this.importacion.resultado.usuarios_sin_credenciales) || [];
+                if (cuentas.length) { this.recargarAlCerrarImportar = true; return; }
+                setTimeout(() => window.location.reload(), 1200);
+            },
+
+            cerrarImportar() {
+                // Cerrar no detiene la validacion ni la restauracion: siguen en el servidor
+                this.modalImportarAbierto = false;
+                if (this.recargarAlCerrarImportar) window.location.reload();
+                if (this.importConError) this.importacion = null;
+            },
+
+            elegirOtroBackup() {
+                this.importacion = null;
+                this.errorImportar = '';
+                this.$refs.archivoImportar.value = '';
+                this.$refs.archivoImportar.click();
+            },
+
+            subirImportacion(evento) {
+                const archivo = evento.target.files && evento.target.files[0];
+                if (!archivo) return;
+                this.errorImportar = '';
+                this.importacion = null;
+                if (!archivo.name.toLowerCase().endsWith('.zip')) {
+                    this.errorImportar = 'Seleccioná un backup en formato .zip generado por RECLUIT.';
+                    this.modalImportarAbierto = true;
+                    return;
+                }
+                this.pasoImportar = 'vista_previa';
+                this.textoConfirmacion = '';
+                this.aceptaLimitaciones = false;
+                this.importSubiendo = true;
+                this.subidaPct = 0;
+                this.modalImportarAbierto = true;
+                const datos = new FormData();
+                datos.append('archivo', archivo);
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', `${BASE}/importar/subir`);
+                xhr.setRequestHeader('Accept', 'application/json');
+                xhr.upload.onprogress = (e) => { if (e.lengthComputable) this.subidaPct = Math.round(100 * e.loaded / e.total); };
+                xhr.onload = () => {
+                    this.importSubiendo = false;
+                    let data = {};
+                    try { data = JSON.parse(xhr.responseText); } catch (e) { data = {}; }
+                    if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                        this.importacion = data.importacion;
+                        this.fallosImportar = 0;
+                        this.seguirImportar();
+                    } else {
+                        this.errorImportar = data.error || 'No se pudo subir el backup.';
+                    }
+                    this.iconos();
+                };
+                xhr.onerror = () => { this.importSubiendo = false; this.errorImportar = 'Error de conexión al subir el backup.'; this.iconos(); };
+                xhr.send(datos);
+                this.iconos();
+            },
+
+            seguirImportar() {
+                clearTimeout(this.temporizadorImportar);
+                this.temporizadorImportar = setTimeout(() => this.consultarImportar(), 1000);
+            },
+
+            async consultarImportar() {
+                if (!this.importacion || !this.importEnCurso) return;
+                try {
+                    const res = await fetch(`${BASE}/importar/${encodeURIComponent(this.importacion.importacion_id)}/estado`, { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok || !data.success) throw new Error(data.error || 'estado');
+                    this.importacion = data.importacion;
+                    this.fallosImportar = 0;
+                    if (!this.importEnCurso) {
+                        if (this.importFinalizado) this.notify('Restauración de Recruiting completada.', 'success');
+                        else if (this.importConError) this.notify('La importación no pudo completarse.', 'error');
+                        this.modalImportarAbierto = true;
+                        this.iconos();
+                        if (this.importFinalizado) this.refrescarTrasImportar();
+                        return;
+                    }
+                } catch (e) {
+                    this.fallosImportar += 1;
+                    if (this.fallosImportar >= 5) {
+                        this.errorImportar = 'Se perdió la conexión con el servidor. El proceso puede seguir en curso: volvé a abrir esta ventana en unos minutos.';
+                        return;
+                    }
+                }
+                this.seguirImportar();
+            },
+
+            async confirmarImportar() {
+                if (!this.puedeConfirmarImportar) return;
+                this.confirmandoImportar = true;
+                this.errorImportar = '';
+                try {
+                    const res = await fetch(`${BASE}/importar/${encodeURIComponent(this.importacion.importacion_id)}/confirmar`, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                        body: JSON.stringify({ confirmar: true, texto_confirmacion: this.textoConfirmacion.trim(), aceptar_limitaciones: this.aceptaLimitaciones }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.importacion = data.importacion;
+                        this.fallosImportar = 0;
+                        this.seguirImportar();
+                    } else {
+                        this.errorImportar = data.error || 'No se pudo iniciar la restauración.';
+                    }
+                } catch (e) {
+                    this.errorImportar = 'Error de conexión al iniciar la restauración.';
+                } finally {
+                    this.confirmandoImportar = false;
+                    this.iconos();
+                }
+            },
+
+            async descartarImportar() {
+                const imp = this.importacion;
+                this.modalImportarAbierto = false;
+                this.importacion = null;
+                if (imp && !this.importEnCurso) {
+                    try { await fetch(`${BASE}/importar/${encodeURIComponent(imp.importacion_id)}`, { method: 'DELETE', headers: { 'Accept': 'application/json' } }); } catch (e) { /* se limpia solo a las 24 h */ }
+                }
+            },
+
+            abrirLimpieza() {
+                this.errorLimpieza = '';
+                this.resumenLimpieza = null;
+                this.modalLimpiarAbierto = true;
+                this.iconos();
+            },
+
+            cerrarLimpieza() {
+                if (this.limpiando) return;
+                this.modalLimpiarAbierto = false;
+            },
+
+            // La autorizacion real se valida en el backend; este boton solo se muestra a administradores
+            async confirmarLimpieza() {
+                if (this.limpiando) return;
+                this.limpiando = true;
+                this.errorLimpieza = '';
+                try {
+                    const res = await fetch(`${BASE}/limpiar-bd`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                    const data = await res.json().catch(() => ({}));
+                    if (res.ok && data.success) {
+                        this.resumenLimpieza = data.resumen;
+                        this.detalle = null;
+                        this.filtro = '';
+                        await this.cargarResumen();
+                        const destino = this.carpetas.some(c => c.carpeta === this.seleccionada) ? this.seleccionada : (this.carpetas[0] && this.carpetas[0].carpeta);
+                        if (destino) await this.seleccionar(destino);
+                    } else {
+                        this.errorLimpieza = data.error || 'No se pudo completar la limpieza.';
+                    }
+                } catch (e) {
+                    this.errorLimpieza = 'Error de conexión al ejecutar la limpieza.';
+                } finally {
+                    this.limpiando = false;
+                    this.iconos();
+                }
+            },
+
+            etiquetaRegistro(clave) {
+                return ({
+                    recruiting_candidatos: 'Candidatos',
+                    recruiting_oportunidades: 'Búsquedas',
+                    recruiting_postulaciones: 'Postulaciones',
+                    recruiting_gestionBusqueda: 'Gestión del pipeline',
+                    recruiting_historial_pipeline: 'Historial del pipeline',
+                    recruiting_transiciones_estado: 'Transiciones de estado',
+                    recruiting_etapa_archivos: 'Adjuntos de etapas',
+                    recruiting_candidatos_duplicados: 'Casos de CV duplicado',
+                    core_notificaciones_internas: 'Notificaciones de Recruiting'
+                })[clave] || clave;
+            },
+
+            etiquetaArchivo(clave) {
+                return ({
+                    cv_candidatos: 'CV vinculados a candidatos',
+                    adjuntos_etapas: 'Adjuntos de etapas',
+                    cv_duplicados_pendientes: 'CV de duplicados pendientes',
+                    cv_procesados_ok: 'Carpeta cv_procesados_ok',
+                    cv_duplicados: 'Carpeta cv_duplicados',
+                    cv_errores: 'Carpeta cv_errores'
+                })[clave] || clave;
+            },
+
+            // La columna "Motivo del error" existe solo en la carpeta de errores
+            get esCarpetaErrores() { return this.seleccionada === 'cv_errores'; },
+            get columnas() { return this.esCarpetaErrores ? 5 : 4; },
+
+            get archivosVisibles() { return (this.detalle && this.detalle.archivos) || []; },
+
+            formatearFecha(iso) {
+                const f = new Date(iso);
+                if (isNaN(f.getTime())) return '-';
+                return f.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            },
+
+            urlDescarga(nombre) {
+                return `${BASE}/${encodeURIComponent(this.seleccionada)}/descargar?nombre=${encodeURIComponent(nombre)}`;
+            },
+
+            urlDescargaTodos() {
+                return `${BASE}/${encodeURIComponent(this.seleccionada)}/descargar-todos`;
+            },
+
+            avisarDescarga(nombre) {
+                this.notify(`Descargando «${nombre}» de ${this.seleccionada}.`);
+            },
+
+            avisarDescargaTodos() {
+                const d = this.detalle;
+                this.notify(`Descargando todos los CV de ${this.seleccionada} en un ZIP (${d.cantidad_archivos} archivo${d.cantidad_archivos === 1 ? '' : 's'}, ${d.tamano_total}).`);
+            }
+        };
+    }
+</script>
+
+<div class="animate-fade-in space-y-6" x-data="archivosCvComponent()" data-testid="archivos-cv">
+
+    <!-- Toast -->
+    <div x-show="showToast"
+         x-transition:enter="transition ease-out duration-300"
+         x-transition:enter-start="opacity-0 translate-y-2"
+         x-transition:enter-end="opacity-100 translate-y-0"
+         x-transition:leave="transition ease-in duration-200"
+         x-transition:leave-start="opacity-100"
+         x-transition:leave-end="opacity-0"
+         class="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-xl shadow-lg text-sm font-semibold max-w-md"
+         :class="toastType === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'"
+         data-testid="archivos-cv-aviso"
+         x-cloak>
+        <i :data-lucide="toastType === 'success' ? 'check-circle' : 'alert-circle'" class="w-4 h-4 flex-shrink-0"></i>
+        <span x-text="toastMsg"></span>
+    </div>
+
+    <!-- Encabezado Principal y Pestañas de Navegación de Parámetros -->
+    <div class="space-y-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-bold text-dark-900">Parámetros</h1>
+                <p class="text-sm text-dark-500 mt-1">Configuración y catálogos maestros del módulo de Reclutamiento</p>
+            </div>
+        </div>
+
+        <!-- Pestañas de Navegación entre pantallas de Parámetros -->
+        <div class="flex flex-wrap items-stretch gap-x-1 border-b border-dark-200/80 pt-2" data-testid="parametros-pestanas">
+            <a href="{{ url_for('recruiting.parametros') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="sparkles" class="w-3 h-3 shrink-0"></i>
+                <span>Porcentaje de Aceptación</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_skills_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Skills / Tecnologías</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_habilidades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="award" class="w-3 h-3 shrink-0"></i>
+                <span>Habilidades / Competencias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_provincias_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map" class="w-3 h-3 shrink-0"></i>
+                <span>Provincias</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_ciudades_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="map-pin" class="w-3 h-3 shrink-0"></i>
+                <span>Ciudades</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_lideres_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="user-check" class="w-3 h-3 shrink-0"></i>
+                <span>Líderes / Hiring Managers</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_reclutadores_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="users" class="w-3 h-3 shrink-0"></i>
+                <span>Reclutadores</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_perfiles_profesionales_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="briefcase" class="w-3 h-3 shrink-0"></i>
+                <span>Perfiles profesionales</span>
+            </a>
+            <a href="{{ url_for('recruiting.parametros_archivos_cv_vista') }}"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-bold border-b-2 border-primary-600 text-primary-600 transition-colors">
+                <i data-lucide="archive" class="w-3 h-3 shrink-0"></i>
+                <span>Archivos de CV</span>
+            </a>
+            {% if puede_ver_historial_cargas_cv %}
+            <a href="{{ url_for('recruiting.parametros_historial_cargas_cv_vista') }}" data-testid="parametros-pestana-historial-cargas-cv"
+               class="inline-flex flex-1 basis-0 items-center justify-center gap-1 px-1.5 py-2 text-[11px] leading-tight text-center font-medium border-b-2 border-transparent text-dark-500 hover:text-dark-700 hover:border-dark-300 transition-colors">
+                <i data-lucide="history" class="w-3 h-3 shrink-0"></i>
+                <span>Historial de cargas de CV</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Título de la pantalla -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <span class="p-2.5 bg-primary-50 text-primary-600 rounded-xl">
+                <i data-lucide="archive" class="w-5 h-5"></i>
+            </span>
+            <div>
+                <h2 class="text-base font-bold text-dark-900">Archivos de CV</h2>
+                <p class="text-xs text-dark-400 mt-0.5">Originales archivados por la carga individual y masiva. Solo consulta y descarga.</p>
+            </div>
+        </div>
+        {% if puede_limpiar_bd %}
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    @click="abrirBackup()"
+                    data-testid="archivos-cv-backup"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer">
+                <i data-lucide="database-backup" class="w-4 h-4"></i>
+                <span x-text="backupEnCurso ? 'Backup ' + porcentajeBackup + '%' : 'Backup'"></span>
+            </button>
+            <button type="button"
+                    @click="abrirImportar()"
+                    data-testid="archivos-cv-importar"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer">
+                <i data-lucide="database-zap" class="w-4 h-4"></i>
+                <span x-text="importEnCurso ? (importRestaurando ? 'Restaurando ' : 'Validando ') + porcentajeImportar + '%' : 'Importar'"></span>
+            </button>
+            <input type="file" x-ref="archivoImportar" accept=".zip,application/zip" class="hidden" data-testid="archivos-cv-importar-archivo" @change="subirImportacion($event)">
+            <button type="button"
+                    @click="abrirLimpieza()"
+                    data-testid="archivos-cv-limpiar-bd"
+                    class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span>Limpiar BD</span>
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Error al consultar las carpetas -->
+    <div x-show="errorResumen" x-cloak class="p-4 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-sm" data-testid="archivos-cv-error" x-text="errorResumen"></div>
+
+    <!-- Tarjetas: una por carpeta -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="archivos-cv-tarjetas">
+        <template x-if="cargandoResumen && carpetas.length === 0">
+            <div class="md:col-span-3 bg-white rounded-2xl border border-dark-100 shadow-soft p-8 text-center text-dark-400">
+                <div class="inline-flex items-center gap-2 text-xs">
+                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-primary-600"></i>
+                    <span>Consultando el almacenamiento...</span>
+                </div>
+            </div>
+        </template>
+        <template x-for="c in carpetas" :key="c.carpeta">
+            <button type="button"
+                    @click="seleccionar(c.carpeta)"
+                    :data-testid="'archivos-cv-tarjeta-' + c.carpeta"
+                    :aria-pressed="seleccionada === c.carpeta ? 'true' : 'false'"
+                    class="text-left rounded-2xl border p-5 shadow-soft transition-all cursor-pointer focus:outline-none"
+                    :class="seleccionada === c.carpeta ? meta(c.carpeta).activa : meta(c.carpeta).tarjeta">
+                <div class="flex items-start justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="p-2.5 rounded-xl flex-shrink-0" :class="meta(c.carpeta).icono_caja">
+                            <i :data-lucide="meta(c.carpeta).icono" class="w-5 h-5"></i>
+                        </span>
+                        <div class="min-w-0">
+                            <p class="text-sm font-bold text-dark-900" x-text="meta(c.carpeta).titulo"></p>
+                            <p class="text-xs font-mono text-dark-500 flex items-center gap-1 min-w-0">
+                                <i data-lucide="folder" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                                <span class="truncate" x-text="c.carpeta" data-testid="archivos-cv-nombre-carpeta"></span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-4 flex items-end justify-between gap-3">
+                    <div>
+                        <p class="text-3xl font-bold" :class="meta(c.carpeta).cifra" x-text="c.cantidad_archivos" data-testid="archivos-cv-cantidad"></p>
+                        <p class="text-xs text-dark-500" x-text="c.cantidad_archivos === 1 ? 'archivo' : 'archivos'"></p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-lg font-bold text-dark-800" x-text="c.tamano_total" data-testid="archivos-cv-espacio"></p>
+                        <p class="text-xs text-dark-500">espacio ocupado</p>
+                    </div>
+                </div>
+                <p class="mt-3 text-xs text-dark-400" x-text="meta(c.carpeta).detalle"></p>
+            </button>
+        </template>
+    </div>
+
+    <!-- Contenido de la carpeta seleccionada -->
+    <div class="bg-white rounded-2xl border border-dark-100 shadow-soft overflow-hidden" x-show="seleccionada" x-cloak data-testid="archivos-cv-detalle">
+        <div class="p-5 sm:p-6 border-b border-dark-100 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div class="min-w-0">
+                <p class="text-xs font-semibold uppercase tracking-wider text-dark-400">Carpeta seleccionada</p>
+                <h3 class="text-base font-bold text-dark-900 flex flex-wrap items-center gap-2">
+                    <span x-text="meta(seleccionada).titulo"></span>
+                    <span class="inline-flex items-center gap-1 text-xs font-mono font-medium px-2 py-0.5 rounded-lg bg-dark-100 text-dark-600">
+                        <i data-lucide="folder" class="w-3.5 h-3.5 flex-shrink-0"></i>
+                        <span x-text="seleccionada" data-testid="archivos-cv-carpeta-seleccionada"></span>
+                    </span>
+                </h3>
+                <p class="text-xs text-dark-500 mt-1" x-show="detalle">
+                    <span x-text="detalle ? detalle.cantidad_archivos : 0"></span> archivo(s) ·
+                    <span x-text="detalle ? detalle.tamano_total : '0 MB'"></span> ocupados
+                </p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                <div class="relative w-full sm:w-64" x-show="detalle && detalle.cantidad_archivos > 0">
+                    <i data-lucide="search" class="w-4 h-4 text-dark-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+                    <input type="text"
+                           x-model="filtro"
+                           @input="buscar()"
+                           placeholder="Buscar por nombre..."
+                           data-testid="archivos-cv-buscar"
+                           class="w-full pl-9 pr-3 py-2 text-xs border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 bg-white">
+                </div>
+
+                <!-- Descargar todos: ZIP con los archivos de la carpeta seleccionada -->
+                <template x-if="detalle && detalle.cantidad_archivos > 0">
+                    <a :href="urlDescargaTodos()"
+                       download
+                       @click="avisarDescargaTodos()"
+                       data-testid="archivos-cv-descargar-todos"
+                       :title="'Descargar en un ZIP los ' + (detalle ? detalle.cantidad_archivos : 0) + ' archivos de ' + seleccionada"
+                       class="inline-flex items-center justify-center gap-2 px-4 py-2 text-white text-xs font-semibold rounded-xl shadow-soft transition-colors cursor-pointer whitespace-nowrap"
+                       :class="meta(seleccionada).boton">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Descargar todos (ZIP)</span>
+                    </a>
+                </template>
+                <template x-if="detalle && detalle.cantidad_archivos === 0">
+                    <button type="button" disabled
+                            data-testid="archivos-cv-descargar-todos-deshabilitado"
+                            title="No hay archivos para descargar en esta carpeta"
+                            class="inline-flex items-center justify-center gap-2 px-4 py-2 bg-dark-100 text-dark-400 text-xs font-semibold rounded-xl cursor-not-allowed whitespace-nowrap">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        <span>Descargar todos (ZIP)</span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Error al consultar la carpeta -->
+        <div x-show="errorDetalle" x-cloak class="m-5 p-4 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-sm" x-text="errorDetalle"></div>
+
+        <div class="overflow-x-auto" data-testid="archivos-cv-tabla">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-dark-100 bg-dark-50/60 text-xs font-semibold uppercase tracking-wider text-dark-500">
+                        <th class="px-6 py-3.5">Nombre</th>
+                        <th class="px-6 py-3.5 whitespace-nowrap">Tamaño</th>
+                        <th class="px-6 py-3.5 whitespace-nowrap">Última modificación</th>
+                        <th class="px-6 py-3.5" x-show="esCarpetaErrores" x-cloak data-testid="archivos-cv-th-motivo">Motivo del error</th>
+                        <th class="px-6 py-3.5 text-right">Descargar</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-dark-100 text-sm">
+                    <template x-if="cargandoDetalle">
+                        <tr>
+                            <td :colspan="columnas" class="px-6 py-12 text-center text-dark-400">
+                                <div class="inline-flex items-center gap-2 text-xs">
+                                    <i data-lucide="loader-2" class="w-4 h-4 animate-spin text-primary-600"></i>
+                                    <span>Consultando la carpeta...</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+
+                    <!-- Carpeta vacía -->
+                    <template x-if="!cargandoDetalle && detalle && detalle.cantidad_archivos === 0">
+                        <tr data-testid="archivos-cv-vacia">
+                            <td :colspan="columnas" class="px-6 py-14 text-center">
+                                <div class="inline-flex flex-col items-center gap-2 text-dark-400">
+                                    <i data-lucide="folder-open" class="w-8 h-8"></i>
+                                    <p class="text-sm font-semibold text-dark-600">Esta carpeta no tiene archivos</p>
+                                    <p class="text-xs">Espacio ocupado: <span x-text="detalle ? detalle.tamano_total : '0 MB'"></span>. No hay archivos para descargar.</p>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+
+                    <!-- Búsqueda sin resultados -->
+                    <template x-if="!cargandoDetalle && detalle && detalle.cantidad_archivos > 0 && totalFiltrado === 0">
+                        <tr>
+                            <td :colspan="columnas" class="px-6 py-10 text-center text-xs text-dark-400">Ningún archivo coincide con la búsqueda.</td>
+                        </tr>
+                    </template>
+
+                    <template x-if="!cargandoDetalle">
+                        <template x-for="(a, i) in archivosVisibles" :key="a.nombre">
+                            <tr class="hover:bg-dark-50/50 transition-colors" data-testid="archivos-cv-fila">
+                                <td class="px-6 py-3.5 min-w-[14rem]">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <i data-lucide="file-text" class="w-4 h-4 text-dark-400 flex-shrink-0"></i>
+                                        <span class="font-medium text-dark-800 break-all" x-text="a.nombre"></span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-3.5 text-dark-600 whitespace-nowrap" x-text="a.tamano"></td>
+                                <td class="px-6 py-3.5 text-dark-600 whitespace-nowrap" x-text="formatearFecha(a.modificado)"></td>
+                                <td class="px-6 py-3.5 text-dark-700 max-w-xs" x-show="esCarpetaErrores" x-cloak>
+                                    <span class="block truncate text-xs"
+                                          :class="a.motivo_error ? '' : 'text-dark-400 italic'"
+                                          :title="a.motivo_detalle || a.motivo_error || 'Motivo no disponible'"
+                                          x-text="a.motivo_error || 'Motivo no disponible'"
+                                          data-testid="archivos-cv-motivo"></span>
+                                </td>
+                                <td class="px-6 py-3.5 text-right">
+                                    <a :href="urlDescarga(a.nombre)"
+                                       download
+                                       @click="avisarDescarga(a.nombre)"
+                                       :title="'Descargar ' + a.nombre"
+                                       :aria-label="'Descargar ' + a.nombre"
+                                       data-testid="archivos-cv-descargar"
+                                       class="inline-flex items-center justify-center p-2 rounded-lg text-primary-600 hover:bg-primary-50 transition-colors cursor-pointer">
+                                        <i data-lucide="download" class="w-4 h-4"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        </template>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginación (resuelta por el backend): 20 archivos por página -->
+        <div class="px-6 py-4 border-t border-dark-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 text-xs text-dark-500"
+             x-show="detalle && totalFiltrado > 0" data-testid="archivos-cv-paginacion">
+            <span data-testid="archivos-cv-rango">Mostrando <span x-text="desde"></span>-<span x-text="hasta"></span> de <span x-text="totalFiltrado"></span> archivos</span>
+            <div class="flex items-center gap-2">
+                <button type="button" @click="irAPagina(pagina - 1)" :disabled="pagina <= 1 || cargandoDetalle"
+                        data-testid="archivos-cv-anterior"
+                        class="px-3 py-1.5 border border-dark-200 rounded-lg font-semibold text-dark-700 bg-white hover:bg-dark-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                    Anterior
+                </button>
+                <span class="font-semibold text-dark-700 whitespace-nowrap" data-testid="archivos-cv-pagina">Página <span x-text="pagina"></span> de <span x-text="totalPaginas"></span></span>
+                <button type="button" @click="irAPagina(pagina + 1)" :disabled="pagina >= totalPaginas || cargandoDetalle"
+                        data-testid="archivos-cv-siguiente"
+                        class="px-3 py-1.5 border border-dark-200 rounded-lg font-semibold text-dark-700 bg-white hover:bg-dark-50 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                    Siguiente
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {% if puede_limpiar_bd %}
+    <!-- Backup completo de Recruiting (solo administradores; el backend valida el usuario) -->
+    <div x-show="modalBackupAbierto" x-cloak
+         @keydown.escape.window="cerrarBackup()"
+         class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" data-testid="modal-backup">
+        <div class="fixed inset-0 bg-dark-900/40 backdrop-blur-sm" @click="cerrarBackup()"></div>
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative overflow-hidden rounded-2xl bg-white text-left shadow-2xl w-full max-w-md p-6 border border-dark-100" @click.stop>
+                <div class="flex items-center gap-2.5 pb-4 border-b border-dark-100">
+                    <span class="p-2 rounded-xl" :class="backupConError ? 'bg-rose-50 text-rose-600' : (backupFinalizado ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600')">
+                        <i :data-lucide="backupConError ? 'alert-triangle' : (backupFinalizado ? 'check-circle' : 'database-backup')" class="w-5 h-5"></i>
+                    </span>
+                    <h3 class="text-base font-bold text-dark-900" x-text="tituloBackup()" data-testid="backup-titulo"></h3>
+                </div>
+
+                <template x-if="!backup">
+                    <div>
+                        <p class="mt-4 text-sm text-dark-600">Se generará un único archivo ZIP con <strong>toda la información de Recruiting</strong>: la base de datos (candidatos, búsquedas, pipeline, historiales, catálogos y demás tablas del módulo) y todos los CV de las carpetas <span class="font-mono text-xs">cv_procesados_ok</span>, <span class="font-mono text-xs">cv_duplicados</span> y <span class="font-mono text-xs">cv_errores</span>.</p>
+                        <p class="mt-2 text-xs text-dark-500">Es una copia de solo lectura: no modifica ni elimina ningún dato. Puede demorar varios minutos y podés cerrar esta ventana mientras se genera.</p>
+                        <p x-show="errorBackup" x-cloak class="mt-3 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs" data-testid="backup-error" x-text="errorBackup"></p>
+                        <div class="mt-6 flex justify-end gap-2">
+                            <button type="button" @click="cerrarBackup()" data-testid="backup-cancelar"
+                                    class="px-4 py-2 text-xs font-semibold bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 rounded-xl cursor-pointer">Cancelar</button>
+                            <button type="button" @click="iniciarBackup()" :disabled="backupIniciando" data-testid="backup-generar"
+                                    class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer disabled:opacity-60">
+                                <span x-text="backupIniciando ? 'Iniciando...' : 'Generar backup'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="backup">
+                    <div data-testid="backup-estado" :data-estado="backup.estado">
+                        <p class="mt-4 text-sm text-dark-700" x-text="backup.mensaje" data-testid="backup-mensaje"></p>
+                        <div class="mt-3 w-full h-3 rounded-full bg-dark-100 overflow-hidden" role="progressbar" aria-label="Progreso del backup"
+                             aria-valuemin="0" aria-valuemax="100" :aria-valuenow="porcentajeBackup" data-testid="backup-barra">
+                            <div class="barra-progreso-fill h-full rounded-full" :class="backupConError ? 'bg-rose-500' : (backupFinalizado ? 'bg-emerald-500' : 'bg-blue-600')"
+                                 :style="'width:' + porcentajeBackup + '%'" data-testid="backup-barra-relleno"></div>
+                        </div>
+                        <p class="mt-1 text-xs text-dark-500" data-testid="backup-porcentaje"><span x-text="porcentajeBackup"></span>%</p>
+                        <div x-show="backupFinalizado" x-cloak class="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1" data-testid="backup-resumen">
+                            <p>Archivo: <span class="font-mono" x-text="backup.nombre_archivo"></span></p>
+                            <p>Tamaño: <strong x-text="backup.tamano"></strong></p>
+                            <p class="break-all">SHA-256: <span class="font-mono" x-text="backup.sha256"></span></p>
+                            <p>Integridad verificada. El archivo permanece disponible para descargar durante 24 horas.</p>
+                        </div>
+                        <p x-show="backupConError" x-cloak class="mt-3 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs" data-testid="backup-error-generacion">No se generó ningún archivo. Podés intentarlo nuevamente.</p>
+                        <div class="mt-6 flex justify-end gap-2">
+                            <button type="button" @click="cerrarBackup()" data-testid="backup-cerrar"
+                                    class="px-4 py-2 text-xs font-semibold bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 rounded-xl cursor-pointer">Cerrar</button>
+                            <button type="button" x-show="backupConError" x-cloak @click="backup = null" data-testid="backup-reintentar"
+                                    class="px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer">Reintentar</button>
+                            <a x-show="backupFinalizado" x-cloak :href="urlDescargaBackup" download data-testid="backup-descargar"
+                               class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer">
+                                <i data-lucide="download" class="w-4 h-4"></i><span>Descargar backup</span>
+                            </a>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+
+    <!-- Importar backup completo de Recruiting (solo administradores; el backend valida el usuario) -->
+    <div x-show="modalImportarAbierto" x-cloak
+         @keydown.escape.window="cerrarImportar()"
+         class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" data-testid="modal-importar">
+        <div class="fixed inset-0 bg-dark-900/40 backdrop-blur-sm" @click="cerrarImportar()"></div>
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative overflow-hidden rounded-2xl bg-white text-left shadow-2xl w-full max-w-2xl p-6 border border-dark-100" @click.stop>
+                <div class="flex items-center gap-2.5 pb-4 border-b border-dark-100">
+                    <span class="p-2 rounded-xl" :class="importConError || errorImportar ? 'bg-rose-50 text-rose-600' : (importFinalizado ? 'bg-emerald-50 text-emerald-600' : 'bg-violet-50 text-violet-600')">
+                        <i :data-lucide="importConError || errorImportar ? 'alert-triangle' : (importFinalizado ? 'check-circle' : 'database-zap')" class="w-5 h-5"></i>
+                    </span>
+                    <h3 class="text-base font-bold text-dark-900" x-text="tituloImportar()" data-testid="importar-titulo"></h3>
+                </div>
+
+                <p x-show="errorImportar" x-cloak class="mt-4 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs" data-testid="importar-error" x-text="errorImportar"></p>
+
+                <!-- Subida y validacion / restauracion en curso -->
+                <div x-show="importSubiendo || importEnCurso" x-cloak data-testid="importar-progreso">
+                    <p class="mt-4 text-sm text-dark-700" x-text="importSubiendo ? 'Subiendo el archivo al servidor...' : (importacion && importacion.mensaje)" data-testid="importar-mensaje"></p>
+                    <div class="mt-3 w-full h-3 rounded-full bg-dark-100 overflow-hidden" role="progressbar" aria-label="Progreso de la importación"
+                         aria-valuemin="0" aria-valuemax="100" :aria-valuenow="porcentajeImportar" data-testid="importar-barra">
+                        <div class="barra-progreso-fill h-full rounded-full bg-violet-600" :style="'width:' + porcentajeImportar + '%'"></div>
+                    </div>
+                    <p class="mt-1 text-xs text-dark-500"><span x-text="porcentajeImportar"></span>%</p>
+                    <p x-show="importRestaurando" x-cloak class="mt-3 p-3 rounded-xl bg-amber-50 text-amber-900 border border-amber-200 text-xs">La restauración está en curso: no realices cargas de CV hasta que termine. Podés cerrar esta ventana; el proceso continúa en el servidor.</p>
+                </div>
+
+                <!-- Backup rechazado o error -->
+                <div x-show="importConError" x-cloak data-testid="importar-rechazo">
+                    <p class="mt-4 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs" x-text="importacion && importacion.mensaje"></p>
+                    <p x-show="importacion && importacion.estado === 'error' && importacion.revertido" x-cloak class="mt-2 text-xs text-dark-600">Se recuperó el estado anterior de Recruiting: no quedaron datos ni archivos a medio restaurar.</p>
+                    <p x-show="importacion && importacion.backup_seguridad" x-cloak class="mt-2 text-xs text-dark-600">Backup de seguridad disponible:
+                        <a :href="urlBackupSeguridad" download class="font-mono text-blue-700 underline" x-text="importacion && importacion.backup_seguridad && importacion.backup_seguridad.nombre_archivo"></a></p>
+                </div>
+
+                <!-- Vista previa del backup validado -->
+                <div x-show="importValidado && pasoImportar === 'vista_previa'" x-cloak data-testid="importar-vista-previa">
+                    <template x-if="importValidado">
+                        <div>
+                            <div class="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900" data-testid="importar-integridad">
+                                <strong>Integridad: verificada.</strong> <span x-text="importacion.preview.integridad.detalle"></span>
+                            </div>
+                            <dl class="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-dark-700">
+                                <dt class="text-dark-500">Fecha del backup (UTC)</dt><dd x-text="importacion.preview.generado_utc" data-testid="importar-fecha"></dd>
+                                <dt class="text-dark-500">Versión del formato</dt><dd x-text="importacion.preview.version_backup"></dd>
+                                <dt class="text-dark-500">Generado por</dt><dd x-text="importacion.preview.generado_por || '-'"></dd>
+                                <dt class="text-dark-500">Tamaño total</dt><dd x-text="importacion.preview.tamano_total + ' (ZIP: ' + importacion.preview.tamano_zip + ')'" data-testid="importar-tamano"></dd>
+                                <dt class="text-dark-500">Registros</dt><dd x-text="importacion.preview.total_registros + ' en ' + importacion.preview.total_tablas + ' tablas'"></dd>
+                            </dl>
+                            <h4 class="mt-4 text-xs font-bold text-dark-800">CV por carpeta</h4>
+                            <ul class="mt-1 text-xs text-dark-700 space-y-0.5" data-testid="importar-carpetas">
+                                <template x-for="c in importacion.preview.carpetas" :key="c.carpeta">
+                                    <li><span class="font-mono" x-text="c.carpeta"></span>: <strong x-text="c.cantidad"></strong> archivos (<span x-text="c.tamano"></span>)</li>
+                                </template>
+                            </ul>
+                            <h4 class="mt-4 text-xs font-bold text-dark-800">Registros por tabla</h4>
+                            <div class="mt-1 max-h-40 overflow-y-auto rounded-xl border border-dark-100 p-2" data-testid="importar-tablas">
+                                <table class="w-full text-xs text-dark-700">
+                                    <tbody>
+                                        <template x-for="t in importacion.preview.tablas" :key="t.tabla">
+                                            <tr><td class="font-mono py-0.5" x-text="t.tabla"></td><td class="text-right" x-text="t.registros"></td></tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div x-show="importacion.limitaciones.length" x-cloak class="mt-4 p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900" data-testid="importar-limitaciones">
+                                <p class="font-bold">Limitaciones de este backup</p>
+                                <ul class="mt-1 list-disc pl-4 space-y-0.5">
+                                    <template x-for="l in importacion.limitaciones" :key="l"><li x-text="l"></li></template>
+                                </ul>
+                            </div>
+                            <div x-show="importacion.avisos.length" x-cloak class="mt-3 p-3 rounded-xl bg-dark-50 border border-dark-100 text-xs text-dark-700" data-testid="importar-avisos">
+                                <ul class="list-disc pl-4 space-y-0.5"><template x-for="a in importacion.avisos" :key="a"><li x-text="a"></li></template></ul>
+                            </div>
+                            <div class="mt-6 flex justify-end gap-2">
+                                <button type="button" @click="descartarImportar()" data-testid="importar-cancelar"
+                                        class="px-4 py-2 text-xs font-semibold bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 rounded-xl cursor-pointer">Cancelar</button>
+                                <button type="button" @click="pasoImportar = 'confirmar'; iconos()" data-testid="importar-continuar"
+                                        class="px-4 py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-xl cursor-pointer">Continuar</button>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Segunda confirmacion explicita -->
+                <div x-show="importValidado && pasoImportar === 'confirmar'" x-cloak data-testid="importar-confirmacion">
+                    <p class="mt-4 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-sm font-semibold">Atención: se reemplazará TODA la información actual de Recruiting (candidatos, búsquedas, pipeline, historiales, parámetros y los CV de las tres carpetas) por la del backup. No se mezclan ni se duplican datos.</p>
+                    <ul class="mt-3 text-xs text-dark-600 list-disc pl-4 space-y-0.5">
+                        <li>Antes de empezar se genera automáticamente un backup de seguridad del estado actual; si no puede generarse, no se restaura nada.</li>
+                        <li>Si ocurre un error, se recupera el estado anterior.</li>
+                        <li>No se modifican usuarios, contraseñas ni otros módulos.</li>
+                    </ul>
+                    <label x-show="importacion && importacion.limitaciones.length" x-cloak class="mt-4 flex items-start gap-2 text-xs text-dark-700">
+                        <input type="checkbox" x-model="aceptaLimitaciones" data-testid="importar-acepta-limitaciones" class="mt-0.5">
+                        <span>Entiendo y acepto las limitaciones de este backup.</span>
+                    </label>
+                    <label class="mt-4 block text-xs font-semibold text-dark-700">Para confirmar escribí <span class="font-mono">REEMPLAZAR</span>
+                        <input type="text" x-model="textoConfirmacion" autocomplete="off" data-testid="importar-texto-confirmacion"
+                               class="mt-1 w-full px-3 py-2 text-sm border border-dark-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-violet-500/30">
+                    </label>
+                    <div class="mt-6 flex justify-end gap-2">
+                        <button type="button" @click="pasoImportar = 'vista_previa'; textoConfirmacion = ''; iconos()" data-testid="importar-volver"
+                                class="px-4 py-2 text-xs font-semibold bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 rounded-xl cursor-pointer">Volver</button>
+                        <button type="button" @click="confirmarImportar()" :disabled="!puedeConfirmarImportar" data-testid="importar-confirmar"
+                                class="px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                            <span x-text="confirmandoImportar ? 'Iniciando...' : 'Importar y reemplazar'"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Resultado final -->
+                <div x-show="importFinalizado" x-cloak data-testid="importar-resultado">
+                    <template x-if="importFinalizado && importacion.resultado">
+                        <div class="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-900 space-y-1">
+                            <p><strong x-text="importacion.resultado.total_registros"></strong> registros restaurados y <strong x-text="importacion.resultado.total_archivos"></strong> CV recuperados.</p>
+                            <p>Backup de seguridad del estado anterior:
+                                <a :href="urlBackupSeguridad" download class="font-mono underline" x-text="importacion.resultado.backup_seguridad.nombre_archivo"></a>
+                                (<span x-text="importacion.resultado.backup_seguridad.tamano"></span>, disponible 24 horas).</p>
+                            <p x-show="importacion.resultado.archivos_storage" x-cloak><strong x-text="importacion.resultado.archivos_storage"></strong> archivos del almacenamiento (CV vinculados y adjuntos) recuperados.</p>
+                            <div x-show="(importacion.resultado.usuarios_sin_credenciales || []).length" x-cloak class="p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900" data-testid="importar-usuarios-sin-credenciales">
+                                <p class="font-bold">Cuentas creadas sin contraseña: deben restablecerla</p>
+                                <p>No se restauran contraseñas ni secretos. Estas cuentas no existían en este servidor: ingresan con «Olvidé mi contraseña» o un administrador les genera un enlace de acceso.</p>
+                                <ul class="mt-1 list-disc pl-4"><template x-for="u in importacion.resultado.usuarios_sin_credenciales" :key="u.id"><li class="font-mono" x-text="u.email"></li></template></ul>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <div class="mt-6 flex justify-end gap-2" x-show="!importValidado && !importSubiendo" x-cloak>
+                    <button type="button" x-show="importConError || errorImportar" x-cloak @click="elegirOtroBackup()" data-testid="importar-otro"
+                            class="px-4 py-2 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white rounded-xl cursor-pointer">Elegir otro backup</button>
+                    <button type="button" @click="cerrarImportar()" data-testid="importar-cerrar"
+                            class="px-4 py-2 text-xs font-semibold bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 rounded-xl cursor-pointer">Cerrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmación y resumen de "Limpiar BD" (solo administradores; el backend valida el usuario) -->
+    <div x-show="modalLimpiarAbierto" x-cloak
+         @keydown.escape.window="cerrarLimpieza()"
+         class="fixed inset-0 z-50 overflow-y-auto" role="dialog" aria-modal="true" data-testid="modal-limpiar-bd">
+        <div class="fixed inset-0 bg-dark-900/40 backdrop-blur-sm" @click="cerrarLimpieza()"></div>
+        <div class="flex min-h-full items-center justify-center p-4 text-center">
+            <div class="relative overflow-hidden rounded-2xl bg-white text-left shadow-2xl w-full max-w-md p-6 border border-dark-100" @click.stop>
+                <template x-if="!resumenLimpieza">
+                    <div>
+                        <div class="flex items-center gap-2.5 pb-4 border-b border-dark-100">
+                            <span class="p-2 bg-rose-50 text-rose-600 rounded-xl"><i data-lucide="alert-triangle" class="w-5 h-5"></i></span>
+                            <h3 class="text-base font-bold text-dark-900">Limpiar base de datos de Recruiting</h3>
+                        </div>
+                        <p class="mt-4 text-sm text-dark-600">Se eliminarán <strong>definitivamente</strong> todos los candidatos, búsquedas, registros del pipeline, notificaciones de Recruiting y los CV almacenados (<span class="font-mono text-xs">cv_procesados_ok</span>, <span class="font-mono text-xs">cv_errores</span> y <span class="font-mono text-xs">cv_duplicados</span>), con sus archivos físicos. Usuarios, roles, empresas, parámetros y catálogos no se tocan.</p>
+                        <p class="mt-2 text-sm font-semibold text-rose-700">Esta acción no se puede deshacer.</p>
+                        <p x-show="errorLimpieza" x-cloak class="mt-3 p-3 rounded-xl bg-rose-50 text-rose-800 border border-rose-200 text-xs" data-testid="limpiar-bd-error" x-text="errorLimpieza"></p>
+                        <div class="mt-6 flex justify-end gap-2">
+                            <button type="button" @click="cerrarLimpieza()" :disabled="limpiando" data-testid="limpiar-bd-cancelar"
+                                    class="px-4 py-2 text-xs font-semibold bg-white border border-dark-200 hover:bg-dark-50 text-dark-700 rounded-xl cursor-pointer disabled:opacity-60">Cancelar</button>
+                            <button type="button" @click="confirmarLimpieza()" :disabled="limpiando" data-testid="limpiar-bd-confirmar"
+                                    class="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white rounded-xl cursor-pointer disabled:opacity-60">
+                                <span x-text="limpiando ? 'Limpiando...' : 'Sí, eliminar todo'"></span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <template x-if="resumenLimpieza">
+                    <div data-testid="limpiar-bd-resumen">
+                        <div class="flex items-center gap-2.5 pb-4 border-b border-dark-100">
+                            <span class="p-2 bg-emerald-50 text-emerald-600 rounded-xl"><i data-lucide="check-circle" class="w-5 h-5"></i></span>
+                            <h3 class="text-base font-bold text-dark-900">Limpieza completada</h3>
+                        </div>
+                        <p class="mt-4 text-xs font-semibold text-dark-500 uppercase">Registros eliminados: <span x-text="resumenLimpieza.total_registros" data-testid="limpiar-bd-total-registros"></span></p>
+                        <ul class="mt-2 text-sm text-dark-700 space-y-1">
+                            <template x-for="[clave, n] in Object.entries(resumenLimpieza.registros)" :key="clave">
+                                <li class="flex justify-between"><span x-text="etiquetaRegistro(clave)"></span><strong x-text="n"></strong></li>
+                            </template>
+                        </ul>
+                        <p class="mt-4 text-xs font-semibold text-dark-500 uppercase">Archivos eliminados: <span x-text="resumenLimpieza.total_archivos" data-testid="limpiar-bd-total-archivos"></span></p>
+                        <ul class="mt-2 text-sm text-dark-700 space-y-1">
+                            <template x-for="[clave, n] in Object.entries(resumenLimpieza.archivos)" :key="clave">
+                                <li class="flex justify-between"><span x-text="etiquetaArchivo(clave)"></span><strong x-text="n"></strong></li>
+                            </template>
+                        </ul>
+                        <div class="mt-6 flex justify-end">
+                            <button type="button" @click="cerrarLimpieza()" data-testid="limpiar-bd-aceptar"
+                                    class="px-4 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 text-white rounded-xl cursor-pointer">Aceptar</button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

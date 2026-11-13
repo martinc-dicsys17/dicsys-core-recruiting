@@ -3,6 +3,7 @@ Aplicación principal FastAPI.
 """
 
 import tempfile
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -89,6 +90,10 @@ async def lifespan(app: FastAPI):
     init_llm_directories()
     print("📁 Directorios de archivos inicializados")
 
+    # Recuperación de una restauración de backup de Recruiting que quedó a medias por una caída o un reinicio: devuelve
+    # las carpetas y el storage originales (o confirma lo ya confirmado) y libera el bloqueo. Un fallo no frena el arranque.
+    _recuperar_restauraciones_de_recruiting()
+
     # Inicializar servicio de email
     init_email_service()
     if settings.sendgrid_api_key:
@@ -125,6 +130,23 @@ async def lifespan(app: FastAPI):
 
 
 LOCK_SEEDS = 4242421337 + 1  # advisory lock de Postgres de los seeds, arbitrario pero estable
+
+
+def _recuperar_restauraciones_de_recruiting() -> None:
+    try:
+        from backend.modules.recruiting.importacion_backup_services import ImportarBackupRecruitingService
+
+        for r in ImportarBackupRecruitingService.recuperar_interrumpidas():
+            print(f"♻️ Restauración de Recruiting interrumpida {r['importacion_id']}: {r['resultado']}")
+        # Si el reinicio fue inmediato a la caída, el latido de la restauración aún parece vivo: se reintenta al caducar
+        reintento = threading.Timer(
+            ImportarBackupRecruitingService.CADUCIDAD_LATIDO_SEGUNDOS + 15,
+            ImportarBackupRecruitingService._recuperar_sin_fallar,
+        )
+        reintento.daemon = True
+        reintento.start()
+    except Exception as e:
+        print(f"⚠️ No se pudo revisar las restauraciones de Recruiting interrumpidas: {e}")
 
 
 def _seeds_de_desarrollo() -> None:
