@@ -545,3 +545,325 @@ class PermisosCandidatos(BaseModel):
     puede_eliminar_candidatos: bool
     puede_cargar_cv_general: bool
     puede_carga_masiva: bool
+
+
+# ---------------------------------------------------------------------------
+# Búsquedas (oportunidades): recruiting_oportunidades
+# ---------------------------------------------------------------------------
+
+
+def lista_de_textos(valor) -> List[str]:
+    """Skills y habilidades se guardan como JSON: siempre una lista de textos sin vacíos."""
+    if isinstance(valor, str):
+        valor = valor.split(",")
+    if not isinstance(valor, list):
+        return []
+    return [texto for texto in (str(v).strip() for v in valor) if texto]
+
+
+def _tipo_de_busqueda(valor: Optional[str]) -> Optional[str]:
+    """Potencial o Efectiva, sin distinguir mayúsculas; vacío = sin valor (el servicio pone el predeterminado)."""
+    texto = (valor or "").strip()
+    if not texto:
+        return None
+    if texto.casefold() in ("potencial", "efectiva"):
+        return texto.capitalize()
+    raise ValueError("El tipo de búsqueda debe ser «Potencial» o «Efectiva»")
+
+
+class OportunidadCreate(BaseModel):
+    """Alta de una búsqueda. La fecha de creación y la de asignación las fija siempre el backend."""
+
+    id_busqueda: Optional[str] = Field(None, max_length=50)
+    cliente: str = Field(..., min_length=2, max_length=150)
+    titulo: str = Field(..., min_length=2, max_length=200)
+    estado: str = Field("Abierta", max_length=50)
+    recruiter_nombre: Optional[str] = Field(None, max_length=150)
+    lider_nombre: Optional[str] = Field(None, max_length=150)
+    area: Optional[str] = Field("Operaciones / IT", max_length=150)
+    puesto: Optional[str] = Field(None, max_length=150, description="Perfil de puesto del catálogo")
+    seniority: Optional[str] = Field("Senior", max_length=50)
+    modalidad: Optional[str] = Field("Remoto", max_length=50)
+    vacantes: Optional[int] = Field(1, ge=1)
+    rango: Optional[str] = Field(None, max_length=100)
+    prioridad: Optional[str] = Field("Alta", max_length=50)
+    tipo: Optional[str] = Field("Efectiva", max_length=50, description="Potencial o Efectiva")
+    skills: List[str] = Field(default_factory=list)
+    habilidades: List[str] = Field(default_factory=list)
+    skills_deseadas: List[str] = Field(default_factory=list)
+    descripcion: Optional[str] = Field(None, max_length=10000)
+
+    @field_validator("tipo")
+    @classmethod
+    def validar_tipo(cls, v):
+        return _tipo_de_busqueda(v)
+
+    @field_validator("skills", "habilidades", "skills_deseadas", mode="before")
+    @classmethod
+    def validar_lista(cls, v):
+        return lista_de_textos(v)
+
+
+class OportunidadUpdate(BaseModel):
+    """Edición parcial de una búsqueda: solo cambia lo que viene. La fecha de creación nunca se modifica."""
+
+    id_busqueda: Optional[str] = Field(None, max_length=50)
+    cliente: Optional[str] = Field(None, min_length=2, max_length=150)
+    titulo: Optional[str] = Field(None, min_length=2, max_length=200)
+    estado: Optional[str] = Field(None, max_length=50)
+    recruiter_nombre: Optional[str] = Field(None, max_length=150)
+    lider_nombre: Optional[str] = Field(None, max_length=150)
+    area: Optional[str] = Field(None, max_length=150)
+    puesto: Optional[str] = Field(None, max_length=150)
+    seniority: Optional[str] = Field(None, max_length=50)
+    modalidad: Optional[str] = Field(None, max_length=50)
+    vacantes: Optional[int] = Field(None, ge=1)
+    rango: Optional[str] = Field(None, max_length=100)
+    prioridad: Optional[str] = Field(None, max_length=50)
+    tipo: Optional[str] = Field(None, max_length=50)
+    skills: Optional[List[str]] = None
+    habilidades: Optional[List[str]] = None
+    skills_deseadas: Optional[List[str]] = None
+    descripcion: Optional[str] = Field(None, max_length=10000)
+
+    @field_validator("tipo")
+    @classmethod
+    def validar_tipo(cls, v):
+        return _tipo_de_busqueda(v)
+
+    @field_validator("skills", "habilidades", "skills_deseadas", mode="before")
+    @classmethod
+    def validar_lista(cls, v):
+        return None if v is None else lista_de_textos(v)
+
+
+class OportunidadResponse(BaseModel):
+    """Una búsqueda con sus contadores del Pipeline y el usuario externo asignado."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    empresa_id: str
+    id_busqueda: str
+    cliente: str
+    titulo: str
+    estado: str
+    recruiter_nombre: Optional[str] = None
+    lider_nombre: Optional[str] = None
+    fecha_asignacion: Optional[datetime] = None
+    fecha_creacion: Optional[date] = None
+    dias_abierta: int = 0
+    dias_reclutador: Optional[int] = None
+    area: Optional[str] = None
+    puesto: Optional[str] = None
+    seniority: Optional[str] = None
+    modalidad: Optional[str] = None
+    vacantes: int = 1
+    rango: Optional[str] = None
+    prioridad: Optional[str] = None
+    tipo: str = "Efectiva"
+    skills: List[str] = Field(default_factory=list)
+    habilidades: List[str] = Field(default_factory=list)
+    skills_deseadas: List[str] = Field(default_factory=list)
+    descripcion: Optional[str] = None
+    candidatos_pipeline: int = 0
+    coordinando_entrevista: int = 0
+    entrevistados_rrhh: int = 0
+    presentacion_lider: int = 0
+    feedback_lider: int = 0
+    presentacion_cliente: int = 0
+    q_activos: int = 0
+    creador_id: Optional[str] = None
+    recruiter_id: Optional[str] = None
+    lider_id: Optional[str] = None
+    externo_id: Optional[str] = None
+    externo_nombre: Optional[str] = None
+    externo_email: Optional[str] = None
+    activo: bool = True
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_model(cls, obj) -> "OportunidadResponse":
+        def id_texto(valor):
+            return str(valor) if valor else None
+
+        externo = obj.externo_rel if obj.externo_id else None
+        return cls(
+            id=str(obj.id),
+            empresa_id=str(obj.empresa_id),
+            id_busqueda=obj.id_busqueda or str(obj.id)[:8],
+            cliente=obj.cliente,
+            titulo=obj.titulo,
+            estado=obj.estado,
+            recruiter_nombre=obj.recruiter_nombre,
+            lider_nombre=obj.lider_nombre,
+            fecha_asignacion=obj.fecha_asignacion,
+            fecha_creacion=obj.fecha_creacion,
+            dias_abierta=obj.dias_abierta,
+            dias_reclutador=obj.dias_reclutador,
+            area=obj.area,
+            puesto=obj.puesto,
+            seniority=obj.seniority,
+            modalidad=obj.modalidad,
+            vacantes=int(obj.vacantes or 1),
+            rango=obj.rango,
+            prioridad=obj.prioridad,
+            tipo=obj.tipo or "Efectiva",
+            skills=lista_de_textos(obj.skills),
+            habilidades=lista_de_textos(obj.habilidades),
+            skills_deseadas=lista_de_textos(obj.skills_deseadas),
+            descripcion=obj.descripcion,
+            candidatos_pipeline=int(obj.candidatos_pipeline or 0),
+            coordinando_entrevista=int(obj.coordinando_entrevista or 0),
+            entrevistados_rrhh=int(obj.entrevistados_rrhh or 0),
+            presentacion_lider=int(obj.presentacion_lider or 0),
+            feedback_lider=int(obj.feedback_lider or 0),
+            presentacion_cliente=int(obj.presentacion_cliente or 0),
+            q_activos=int(obj.q_activos or 0),
+            creador_id=id_texto(obj.creador_id),
+            recruiter_id=id_texto(obj.recruiter_id),
+            lider_id=id_texto(obj.lider_id),
+            externo_id=id_texto(obj.externo_id),
+            externo_nombre=" ".join(filter(None, [externo.nombre, externo.apellido])) if externo else None,
+            externo_email=externo.email if externo else None,
+            activo=obj.activo,
+            created_at=obj.created_at,
+            updated_at=obj.updated_at,
+        )
+
+
+class OportunidadPagina(Pagina[OportunidadResponse]):
+    """Página del listado de búsquedas."""
+
+
+class AsignarReclutadorRequest(BaseModel):
+    """Reclutador responsable de una búsqueda: un nombre activo del catálogo de Reclutadores."""
+
+    recruiter_nombre: str = Field(..., min_length=1, max_length=150)
+
+
+class AsignarExternoRequest(BaseModel):
+    """Usuario externo (grupo EXTERNOS) que se asigna a una búsqueda."""
+
+    externo_id: uuid.UUID
+
+
+class ExternoDisponibleResponse(BaseModel):
+    id: str
+    nombre: str
+    email: str
+
+
+class PersonaCatalogoResponse(BaseModel):
+    """Un líder o un reclutador del catálogo de Recruiting (para los combos del formulario)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    nombre: str
+    activo: bool = True
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def id_a_texto(cls, v):
+        return str(v)
+
+
+class PermisosBusquedas(BaseModel):
+    """Acciones de Búsquedas que la interfaz muestra u oculta; el backend las valida igual en cada endpoint."""
+
+    puede_crear_busquedas: bool
+    puede_eliminar_busquedas: bool
+    puede_ver_lider_tipo_fecha_busqueda: bool
+    puede_ver_smart_matching: bool
+    puede_asignar_candidatos: bool
+    puede_asignar_reclutador: bool
+    puede_administrar_externos: bool
+    es_externo: bool
+
+
+class ConfigSmartMatching(BaseModel):
+    """Umbral mínimo de coincidencia de Smart Matching de la empresa (por defecto 50)."""
+
+    match_minimo_porcentaje: int
+
+
+class CandidatoEnBusqueda(BaseModel):
+    """Un candidato en el pipeline de una búsqueda (recruiting_gestionBusqueda + recruiting_candidatos). Para un
+    usuario del grupo EXTERNOS los candidatos que no presentó salen anónimos (OcultadorCandidatosEnBusqueda)."""
+
+    id: str
+    gestion_id: str
+    candidato_id: str
+    oportunidad_id: str
+    codigo: Optional[str] = None
+    nombre: str
+    nombre_pila: Optional[str] = None
+    apellido: str
+    email: str
+    telefono: Optional[str] = None
+    ubicacion: Optional[str] = None
+    headline: Optional[str] = None
+    seniority: Optional[str] = None
+    etapa: str
+    etapa_actual: str
+    estado: str
+    motivo_descarte: Optional[str] = None
+    feedback_etapa: Optional[str] = None
+    pretension_salarial_bruta_ars: Optional[int] = None
+    fecha_cambio_etapa: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    cv_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    es_anonimo: bool = False
+    es_externo: bool = False
+    presentado_por: Optional[str] = None
+
+
+class CandidatoCompatible(BaseModel):
+    """Candidato sugerido por Smart Matching para una búsqueda, con su porcentaje de coincidencia."""
+
+    id: str
+    codigo: Optional[str] = None
+    nombre: str
+    apellido: str
+    nombre_completo: str
+    email: str
+    headline: Optional[str] = None
+    seniority: Optional[str] = None
+    skills: List[str] = Field(default_factory=list)
+    habilidades: List[str] = Field(default_factory=list)
+    skills_coincidentes: List[str] = Field(default_factory=list)
+    habilidades_coincidentes: List[str] = Field(default_factory=list)
+    porcentaje_match: int = 0
+    match_porcentaje: int = 0
+    ya_asignado: bool = False
+
+
+class AsignarCandidatoRequest(BaseModel):
+    """Candidato que se suma a una búsqueda, con la etapa y el estado iniciales."""
+
+    candidato_id: uuid.UUID
+    etapa: Optional[str] = Field("Coordinando entrevista", max_length=50)
+    estado: Optional[str] = Field("En proceso", max_length=50)
+    observaciones: Optional[str] = Field(None, max_length=1000)
+
+
+class AsignacionCandidatoResponse(BaseModel):
+    """La postulación creada al sumar un candidato a una búsqueda."""
+
+    id: str
+    candidato_id: str
+    solicitud_id: Optional[str] = None
+    etapa: Optional[str] = None
+    estado: str
+    fecha_asignacion: Optional[datetime] = None
+
+
+class DesvinculacionCandidatoResponse(BaseModel):
+    ok: bool = True
+    mensaje: str
+    candidato_id: str
+    oportunidad_id: str

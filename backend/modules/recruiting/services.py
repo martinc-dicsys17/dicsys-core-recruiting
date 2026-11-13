@@ -20,7 +20,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import and_, exists, false, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from backend.core.utils import utc_now
 from backend.database import SessionLocal, engine
@@ -34,19 +35,27 @@ from backend.modules.recruiting.models import (
     Postulacion,
     Provincia,
     RecruitingHabilidad,
+    RecruitingLider,
     RecruitingNivelSeniority,
     RecruitingPerfilPuesto,
+    RecruitingReclutador,
     RecruitingSkill,
+    RecrutingConfig,
     Solicitud,
     TransicionEstado,
+    fecha_hoy,
 )
 from backend.modules.recruiting.schemas import (
+    AsignarCandidatoRequest,
     CandidatoCreate,
     CandidatoUpdate,
+    OportunidadCreate,
+    OportunidadUpdate,
     RecruitingDashboard,
     RecruitingDashboardAviso,
     RecruitingDashboardKpis,
     RecruitingDashboardResumen,
+    lista_de_textos,
 )
 from backend.modules.usuarios.models import Usuario
 
@@ -5012,3 +5021,965 @@ class _ArchivoEnMemoria:
 
     async def read(self) -> bytes:
         return self._contenido
+
+
+# ---------------------------------------------------------------------------
+# Búsquedas (oportunidades): permisos de asignación
+# ---------------------------------------------------------------------------
+
+# Roles que pueden asignar o reasignar el reclutador responsable de una búsqueda
+ROLES_ASIGNAN_RECLUTADOR = (ROL_ADMIN, ROL_RECRUITER)
+
+
+def usuario_puede_administrar_externos(
+    db: Session, user: Optional[Usuario], empresa_id: Optional[uuid.UUID] = None
+) -> bool:
+    """True si el usuario es admin o de un grupo de Recruiting: puede asignar y quitar usuarios externos de una
+    búsqueda."""
+    if not user:
+        return False
+    if getattr(user, "rol", "") == "admin":
+        return True
+    return incluye_grupo_recruiting(_nombres_de_grupos(db, user, empresa_id))
+
+
+def usuario_puede_asignar_reclutador(
+    db: Session, user: Optional[Usuario], empresa_id: Optional[uuid.UUID] = None
+) -> bool:
+    """True si el usuario puede asignar o reasignar el reclutador de una búsqueda; el grupo EXTERNOS nunca."""
+    if not user:
+        return False
+    if getattr(user, "rol", "") == "admin":
+        return True
+    if usuario_es_grupo_externos(db, user, empresa_id):
+        return False
+    return obtener_rol_recruiting(db, user, empresa_id) in ROLES_ASIGNAN_RECLUTADOR
+
+
+def _nombre_completo(usuario: Usuario) -> str:
+    return f"{usuario.nombre} {usuario.apellido}".strip() if usuario.apellido else usuario.nombre
+
+
+class OportunidadService:
+    """Búsquedas de Recruiting (recruiting_oportunidades): listado, alta, edición, asignaciones y catálogos de los
+    combos del formulario. Origen: SolicitudService del módulo original."""
+
+    ESTADOS_VALIDOS = ("Abierta", "Pre-ingreso", "Suspendida", "Ganada", "Cancelada")
+    ESTADO_GANADA = "Ganada"
+    ESTADO_CANCELADA = "Cancelada"
+    MENSAJE_BUSQUEDA_GANADA = "La búsqueda está Ganada y cerrada: no admite cambios en su proceso de selección."
+
+    # ---- reglas de acceso -------------------------------------------------
+
+    @staticmethod
+    def permisos(db: Session, empresa_id: uuid.UUID, current_user: Usuario) -> Dict[str, bool]:
+        """Acciones habilitadas en Búsquedas: el grupo EXTERNOS ni crea ni cancela búsquedas, ni asigna candidatos, ni
+        ve el líder, el tipo o Smart Matching."""
+        no_externo = not usuario_es_grupo_externos(db, current_user, empresa_id)
+        return {
+            "puede_crear_busquedas": no_externo,
+            "puede_eliminar_busquedas": no_externo,
+            "puede_ver_lider_tipo_fecha_busqueda": no_externo,
+            "puede_ver_smart_matching": no_externo,
+            "puede_asignar_candidatos": no_externo,
+            "puede_asignar_reclutador": usuario_puede_asignar_reclutador(db, current_user, empresa_id),
+            "puede_administrar_externos": usuario_puede_administrar_externos(db, current_user, empresa_id),
+            "es_externo": not no_externo,
+        }
+
+    @staticmethod
+    def exigir_no_externo(db: Session, empresa_id: uuid.UUID, current_user: Usuario, detalle: str) -> None:
+        if usuario_es_grupo_externos(db, current_user, empresa_id):
+            raise HTTPException(status_code=403, detail=detalle)
+
+    @staticmethod
+    def es_ganada(solicitud: Solicitud) -> bool:
+        return (solicitud.estado or "").strip().casefold() == OportunidadService.ESTADO_GANADA.casefold()
+
+    @staticmethod
+    def validar_no_ganada(solicitud: Solicitud) -> None:
+        """Una búsqueda Ganada está cerrada: solo se consulta (409)."""
+        if OportunidadService.es_ganada(solicitud):
+            raise HTTPException(status_code=409, detail=OportunidadService.MENSAJE_BUSQUEDA_GANADA)
+
+    @staticmethod
+    def marcar_ganada(solicitud: Solicitud, usuario: Optional[str] = None) -> None:
+        """Cierre automático al llegar un candidato a Ingreso (una sola vacante); el commit lo hace quien llama."""
+        solicitud.estado = OportunidadService.ESTADO_GANADA
+        solicitud.updated_at = utc_now()
+        solicitud.updated_by = usuario
+
+    # ---- consulta ----------------------------------------------------------
+
+    @staticmethod
+    def consulta(
+        db: Session,
+        empresa_id: uuid.UUID,
+        busqueda: Optional[str] = None,
+        estado: Optional[str] = None,
+        cliente: Optional[str] = None,
+        tipo: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ):
+        """Búsquedas de la empresa activa que el usuario puede ver (el grupo EXTERNOS, solo las que tiene asignadas),
+        con filtros opcionales; el router la pagina con paginar(). Más recientes primero."""
+        query = (
+            db.query(Solicitud)
+            .options(joinedload(Solicitud.externo_rel))
+            .filter(Solicitud.empresa_id == empresa_id, Solicitud.deleted_at.is_(None), Solicitud.activo.is_(True))
+        )
+        alcance = AlcanceRecruiting.de(db, current_user, empresa_id)
+        for condicion in alcance.filtro_busquedas():
+            query = query.filter(condicion)
+
+        estado_limpio = (estado or "").strip()
+        if estado_limpio and estado_limpio.casefold() != "todos":
+            query = query.filter(Solicitud.estado == estado_limpio)
+
+        cliente_limpio = (cliente or "").strip()
+        if cliente_limpio:
+            query = query.filter(Solicitud.cliente == cliente_limpio)
+
+        tipo_limpio = (tipo or "").strip().casefold()
+        if tipo_limpio and tipo_limpio not in ("todas", "todos"):
+            query = query.filter(func.lower(Solicitud.tipo) == tipo_limpio)
+
+        termino = (busqueda or "").strip()
+        if termino:
+            patron = f"%{termino}%"
+            condiciones = [
+                Solicitud.id_busqueda.ilike(patron),
+                Solicitud.titulo.ilike(patron),
+                Solicitud.cliente.ilike(patron),
+                Solicitud.recruiter_nombre.ilike(patron),
+            ]
+            if not alcance.es_externo:
+                condiciones.append(Solicitud.lider_nombre.ilike(patron))
+            query = query.filter(or_(*condiciones))
+
+        return query.order_by(Solicitud.created_at.desc())
+
+    @staticmethod
+    def get_by_id(
+        db: Session, empresa_id: uuid.UUID, id: uuid.UUID, current_user: Optional[Usuario] = None
+    ) -> Solicitud:
+        """Una búsqueda de la empresa activa (404 si no existe o es de otra empresa). El grupo EXTERNOS solo accede a
+        las que tiene asignadas (403). `q_activos` sale de los candidatos vigentes del pipeline."""
+        solicitud = (
+            db.query(Solicitud)
+            .options(joinedload(Solicitud.externo_rel))
+            .filter(Solicitud.id == id, Solicitud.empresa_id == empresa_id, Solicitud.deleted_at.is_(None))
+            .first()
+        )
+        if not solicitud:
+            raise HTTPException(status_code=404, detail="La búsqueda no existe.")
+        if current_user and usuario_es_grupo_externos(db, current_user, empresa_id):
+            if solicitud.externo_id != current_user.id:
+                raise HTTPException(status_code=403, detail="No tenés acceso a esta búsqueda: no la tenés asignada.")
+        # Valor de la respuesta: no se marca como cambio para que un commit posterior no lo guarde
+        q_activos = (
+            db.query(func.count(GestionBusqueda.id))
+            .filter(
+                GestionBusqueda.empresa_id == empresa_id,
+                GestionBusqueda.oportunidad_id == solicitud.id,
+                GestionBusqueda.activo.is_(True),
+                GestionBusqueda.deleted_at.is_(None),
+                or_(GestionBusqueda.estado != "Descartado", GestionBusqueda.estado.is_(None)),
+            )
+            .scalar()
+            or 0
+        )
+        set_committed_value(solicitud, "q_activos", q_activos)
+        return solicitud
+
+    # ---- alta y edición ----------------------------------------------------
+
+    @staticmethod
+    def _validar_puesto(db: Session, puesto: Optional[str], actual: Optional[str] = None) -> Optional[str]:
+        """El puesto de una búsqueda es un perfil activo del catálogo (se guarda su nombre canónico). Vacío = sin
+        puesto. Si coincide con el valor ya guardado se conserva, para que editar otros datos no rechace un perfil
+        histórico (desactivado o ya inexistente)."""
+        limpio = " ".join((puesto or "").split())
+        if not limpio:
+            return None
+        if actual and limpio.casefold() == " ".join(actual.split()).casefold():
+            return actual
+        perfil = (
+            db.query(RecruitingPerfilPuesto)
+            .filter(
+                RecruitingPerfilPuesto.activo.is_(True), func.lower(RecruitingPerfilPuesto.nombre) == limpio.lower()
+            )
+            .first()
+        )
+        if not perfil:
+            raise HTTPException(
+                status_code=400, detail=f"El perfil / puesto «{limpio}» no corresponde a un perfil profesional activo."
+            )
+        return perfil.nombre
+
+    @staticmethod
+    def _validar_estado(estado: str) -> None:
+        if estado not in OportunidadService.ESTADOS_VALIDOS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Estado «{estado}» no válido. Opciones: {', '.join(OportunidadService.ESTADOS_VALIDOS)}.",
+            )
+
+    @staticmethod
+    def create(
+        db: Session,
+        empresa_id: uuid.UUID,
+        datos: OportunidadCreate,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """Crea una búsqueda. Quien la crea queda como creador y, según su rol, como líder o reclutador."""
+        OportunidadService.exigir_no_externo(
+            db, empresa_id, current_user, "Los usuarios del grupo EXTERNOS no pueden crear búsquedas"
+        )
+        OportunidadService._validar_estado(datos.estado)
+
+        cliente = datos.cliente.strip()
+        titulo = datos.titulo.strip()
+        existente = (
+            db.query(Solicitud.id)
+            .filter(
+                Solicitud.empresa_id == empresa_id,
+                Solicitud.deleted_at.is_(None),
+                func.lower(func.trim(Solicitud.cliente)) == cliente.lower(),
+                func.lower(func.trim(Solicitud.titulo)) == titulo.lower(),
+            )
+            .first()
+        )
+        if existente:
+            raise HTTPException(
+                status_code=400, detail="Ya existe una búsqueda con este título para el cliente seleccionado"
+            )
+
+        rol = obtener_rol_recruiting(db, current_user, empresa_id) if current_user else ROL_RECRUITER
+        creador_id = current_user.id if current_user else None
+        lider_id = recruiter_id = None
+        lider_nombre = (datos.lider_nombre or "").strip() or None
+        recruiter_nombre = (datos.recruiter_nombre or "").strip() or None
+        if current_user and rol == ROL_LIDER:
+            lider_id = creador_id
+            lider_nombre = lider_nombre or _nombre_completo(current_user)
+        elif current_user and rol == ROL_RECRUITER:
+            recruiter_id = creador_id
+            recruiter_nombre = recruiter_nombre or _nombre_completo(current_user)
+
+        solicitud = Solicitud(
+            empresa_id=empresa_id,
+            id_busqueda=(datos.id_busqueda or "").strip() or f"OP-{uuid.uuid4().hex[:6].upper()}",
+            cliente=cliente,
+            titulo=titulo,
+            estado=datos.estado,
+            creador_id=creador_id,
+            recruiter_id=recruiter_id,
+            lider_id=lider_id,
+            recruiter_nombre=recruiter_nombre,
+            lider_nombre=lider_nombre,
+            # La fecha de asignación la fija siempre el backend (la del cliente se ignora)
+            fecha_asignacion=utc_now() if (recruiter_nombre or recruiter_id) else None,
+            fecha_creacion=fecha_hoy(),
+            puesto=OportunidadService._validar_puesto(db, datos.puesto),
+            area=(datos.area or "").strip() or "Operaciones / IT",
+            seniority=(datos.seniority or "").strip() or "Senior",
+            modalidad=(datos.modalidad or "").strip() or "Remoto",
+            vacantes=datos.vacantes or 1,
+            rango=(datos.rango or "").strip() or None,
+            prioridad=(datos.prioridad or "").strip() or "Alta",
+            tipo=datos.tipo or "Efectiva",
+            skills=datos.skills,
+            habilidades=datos.habilidades,
+            skills_deseadas=datos.skills_deseadas,
+            descripcion=(datos.descripcion or "").strip() or None,
+            updated_by=usuario,
+        )
+        db.add(solicitud)
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    @staticmethod
+    def update(
+        db: Session,
+        empresa_id: uuid.UUID,
+        id: uuid.UUID,
+        datos: OportunidadUpdate,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """Edita una búsqueda (409 si está Ganada). El reclutador solo cambia con permiso de asignación y nunca se
+        borra por esta vía (para eso está desasignar); la fecha de asignación la fija el backend."""
+        solicitud = OportunidadService.get_by_id(db, empresa_id, id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+
+        cambios = datos.model_dump(exclude_unset=True)
+        if "estado" in cambios and cambios["estado"]:
+            OportunidadService._validar_estado(cambios["estado"])
+            if cambios["estado"] == OportunidadService.ESTADO_CANCELADA:
+                OportunidadService.exigir_no_externo(
+                    db,
+                    empresa_id,
+                    current_user,
+                    "Los usuarios del grupo EXTERNOS no pueden eliminar ni cancelar búsquedas",
+                )
+        else:
+            cambios.pop("estado", None)
+        for obligatorio in ("cliente", "titulo"):
+            if obligatorio in cambios:
+                cambios[obligatorio] = (cambios[obligatorio] or "").strip() or None
+                if not cambios[obligatorio]:
+                    cambios.pop(obligatorio)
+        # Columnas que no admiten NULL: un valor vacío no las cambia
+        for no_nulo in ("tipo", "vacantes"):
+            if cambios.get(no_nulo) is None:
+                cambios.pop(no_nulo, None)
+
+        if "puesto" in cambios:
+            cambios["puesto"] = OportunidadService._validar_puesto(db, cambios["puesto"], actual=solicitud.puesto)
+        if "descripcion" in cambios:
+            cambios["descripcion"] = (cambios["descripcion"] or "").strip() or None
+
+        if "recruiter_nombre" in cambios:
+            nuevo = " ".join((cambios["recruiter_nombre"] or "").split())
+            if not nuevo or nuevo.casefold() == (solicitud.recruiter_nombre or "").strip().casefold():
+                cambios.pop("recruiter_nombre")
+            elif not usuario_puede_asignar_reclutador(db, current_user, empresa_id):
+                raise HTTPException(
+                    status_code=403, detail="No tenés permisos para cambiar el reclutador de una búsqueda."
+                )
+            else:
+                cambios["recruiter_nombre"] = nuevo
+                cambios["fecha_asignacion"] = utc_now()
+
+        for clave, valor in cambios.items():
+            setattr(solicitud, clave, valor)
+        solicitud.updated_at = utc_now()
+        solicitud.updated_by = usuario
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    # ---- asignaciones ------------------------------------------------------
+
+    @staticmethod
+    def tomar_asignacion(
+        db: Session,
+        empresa_id: uuid.UUID,
+        id: uuid.UUID,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """El reclutador toma la búsqueda: queda como responsable y se fija la fecha de asignación. Volver a tomarla
+        quien ya era el responsable no reinicia la fecha ni los días abiertos."""
+        solicitud = OportunidadService.get_by_id(db, empresa_id, id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+
+        if obtener_rol_recruiting(db, current_user, empresa_id) != ROL_RECRUITER:
+            raise HTTPException(status_code=403, detail="Solo los usuarios con rol Reclutador pueden tomar búsquedas.")
+        if solicitud.recruiter_id and solicitud.recruiter_id != current_user.id:
+            raise HTTPException(status_code=400, detail="Esta búsqueda ya está asignada a otro reclutador.")
+
+        nombre_anterior = (solicitud.recruiter_nombre or "").strip().casefold()
+        solicitud.recruiter_id = current_user.id
+        solicitud.recruiter_nombre = _nombre_completo(current_user)
+        mismo_responsable = (
+            solicitud.fecha_asignacion is not None and solicitud.recruiter_nombre.strip().casefold() == nombre_anterior
+        )
+        if not mismo_responsable:
+            solicitud.fecha_asignacion = utc_now()
+        solicitud.updated_at = utc_now()
+        solicitud.updated_by = usuario
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    @staticmethod
+    def asignar_reclutador(
+        db: Session,
+        empresa_id: uuid.UUID,
+        id: uuid.UUID,
+        recruiter_nombre: str,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """Asigna o reasigna el reclutador con una persona activa del catálogo de Reclutadores. Si el nombre no
+        cambia no se toca nada (se conserva la asignación y su fecha)."""
+        solicitud = OportunidadService.get_by_id(db, empresa_id, id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+        if not usuario_puede_asignar_reclutador(db, current_user, empresa_id):
+            raise HTTPException(status_code=403, detail="No tenés permisos para asignar el reclutador de una búsqueda.")
+
+        nombre = " ".join((recruiter_nombre or "").split())
+        if not nombre:
+            raise HTTPException(status_code=400, detail="Seleccioná un reclutador del catálogo.")
+        reclutador = (
+            db.query(RecruitingReclutador)
+            .filter(func.lower(RecruitingReclutador.nombre) == nombre.lower(), RecruitingReclutador.activo.is_(True))
+            .first()
+        )
+        if not reclutador:
+            raise HTTPException(
+                status_code=400, detail="El reclutador seleccionado no existe o está inactivo en Parámetros."
+            )
+        if (solicitud.recruiter_nombre or "").strip().casefold() == reclutador.nombre.casefold():
+            return solicitud
+
+        solicitud.recruiter_nombre = reclutador.nombre
+        # El catálogo no está vinculado a usuarios: se limpia el vínculo previo para no dejar un recruiter_id viejo
+        solicitud.recruiter_id = None
+        solicitud.fecha_asignacion = utc_now()
+        solicitud.updated_at = utc_now()
+        solicitud.updated_by = usuario
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    @staticmethod
+    def desasignar(
+        db: Session,
+        empresa_id: uuid.UUID,
+        id: uuid.UUID,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """Libera la búsqueda para que otro reclutador pueda tomarla. Solo un admin o el reclutador asignado."""
+        solicitud = OportunidadService.get_by_id(db, empresa_id, id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+
+        rol = obtener_rol_recruiting(db, current_user, empresa_id)
+        if rol not in (ROL_RECRUITER, ROL_ADMIN):
+            raise HTTPException(
+                status_code=403, detail="Solo el reclutador asignado o un administrador pueden desasignar la búsqueda."
+            )
+        if rol != ROL_ADMIN and solicitud.recruiter_id and solicitud.recruiter_id != current_user.id:
+            raise HTTPException(status_code=403, detail="No podés desasignar una búsqueda que no tenés asignada a vos.")
+
+        solicitud.fecha_asignacion = None
+        solicitud.recruiter_id = None
+        solicitud.recruiter_nombre = None
+        solicitud.updated_at = utc_now()
+        solicitud.updated_by = usuario
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    @staticmethod
+    def _exigir_administrar_externos(db: Session, empresa_id: uuid.UUID, current_user: Optional[Usuario]) -> None:
+        if not usuario_puede_administrar_externos(db, current_user, empresa_id):
+            raise HTTPException(
+                status_code=403, detail="No tenés permisos para administrar los usuarios externos de una búsqueda."
+            )
+
+    @staticmethod
+    def _query_externos(db: Session, empresa_id: uuid.UUID):
+        """Usuarios habilitados de la empresa que pertenecen al grupo EXTERNOS."""
+        return (
+            db.query(Usuario)
+            .join(usuario_grupo, usuario_grupo.c.usuario_id == Usuario.id)
+            .join(Grupo, Grupo.id == usuario_grupo.c.grupo_id)
+            .filter(
+                usuario_grupo.c.empresa_id == empresa_id,
+                func.upper(func.trim(Grupo.nombre)) == GRUPO_EXTERNOS,
+                Grupo.activo.is_(True),
+                Grupo.deleted_at.is_(None),
+                Usuario.activo.is_(True),
+                Usuario.deleted_at.is_(None),
+            )
+        )
+
+    @staticmethod
+    def listar_externos_disponibles(
+        db: Session, empresa_id: uuid.UUID, current_user: Optional[Usuario] = None
+    ) -> List[Dict[str, Any]]:
+        """Usuarios del grupo EXTERNOS que se pueden asignar a una búsqueda (solo para quien administra externos)."""
+        OportunidadService._exigir_administrar_externos(db, empresa_id, current_user)
+        usuarios = OportunidadService._query_externos(db, empresa_id).order_by(Usuario.nombre, Usuario.apellido).all()
+        return [
+            {"id": str(u.id), "nombre": " ".join(filter(None, [u.nombre, u.apellido])), "email": u.email}
+            for u in usuarios
+        ]
+
+    @staticmethod
+    def asignar_externo(
+        db: Session,
+        empresa_id: uuid.UUID,
+        id: uuid.UUID,
+        externo_id: uuid.UUID,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """Asigna (o reemplaza) el usuario externo de la búsqueda; solo acepta usuarios habilitados del grupo EXTERNOS."""
+        OportunidadService._exigir_administrar_externos(db, empresa_id, current_user)
+        solicitud = OportunidadService.get_by_id(db, empresa_id, id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+
+        externo = OportunidadService._query_externos(db, empresa_id).filter(Usuario.id == externo_id).first()
+        if not externo:
+            raise HTTPException(
+                status_code=400,
+                detail="El usuario seleccionado no existe, está inactivo o no pertenece al grupo Externos.",
+            )
+        if solicitud.externo_id == externo.id:
+            return solicitud
+        solicitud.externo_id = externo.id
+        solicitud.updated_at = utc_now()
+        solicitud.updated_by = usuario
+        db.commit()
+        db.refresh(solicitud)
+        return solicitud
+
+    @staticmethod
+    def quitar_externo(
+        db: Session,
+        empresa_id: uuid.UUID,
+        id: uuid.UUID,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Solicitud:
+        """Quita la asignación del usuario externo; no elimina la búsqueda ni sus candidatos."""
+        OportunidadService._exigir_administrar_externos(db, empresa_id, current_user)
+        solicitud = OportunidadService.get_by_id(db, empresa_id, id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+        if solicitud.externo_id is not None:
+            solicitud.externo_id = None
+            solicitud.updated_at = utc_now()
+            solicitud.updated_by = usuario
+            db.commit()
+            db.refresh(solicitud)
+        return solicitud
+
+    # ---- catálogos de solo lectura -----------------------------------------
+
+    @staticmethod
+    def personas(db: Session, modelo) -> list:
+        """Líderes o reclutadores activos del catálogo, por nombre (su ABM es de Parámetros)."""
+        return db.query(modelo).filter(modelo.activo.is_(True)).order_by(func.lower(modelo.nombre)).all()
+
+    @staticmethod
+    def lideres(db: Session) -> list:
+        return OportunidadService.personas(db, RecruitingLider)
+
+    @staticmethod
+    def reclutadores(db: Session) -> list:
+        return OportunidadService.personas(db, RecruitingReclutador)
+
+    @staticmethod
+    def match_minimo(db: Session, empresa_id: uuid.UUID) -> int:
+        """Umbral de Smart Matching de la empresa; 50 si no lo configuró."""
+        config = db.query(RecrutingConfig).filter(RecrutingConfig.empresa_id == empresa_id).first()
+        return config.match_minimo_porcentaje if config else 50
+
+
+# ---------------------------------------------------------------------------
+# Candidatos de una búsqueda: pipeline, Smart Matching, alta y baja
+# ---------------------------------------------------------------------------
+
+
+def _coincidencias(requeridos: List[str], del_candidato: List[str]) -> List[str]:
+    """Del candidato, lo que coincide (igual o contenido, sin distinguir mayúsculas) con cada requerido."""
+    por_clave = {s.lower(): s for s in del_candidato}
+    encontradas = []
+    for requerido in (r.lower() for r in requeridos):
+        for clave, original in por_clave.items():
+            if requerido == clave or requerido in clave or clave in requerido:
+                encontradas.append(original)
+                break
+    return encontradas
+
+
+class CandidatosDeBusquedaService:
+    """Los candidatos de una búsqueda: los del pipeline (recruiting_gestionBusqueda), los que sugiere Smart Matching,
+    y sumar o quitar uno. El cambio de etapa y el kanban son de Pipeline."""
+
+    ETAPAS_INICIALES = ("Coordinando entrevista", "Postulado", "Candidato")
+
+    @staticmethod
+    def _filtro_visibilidad(query, db, empresa_id, current_user):
+        """El grupo EXTERNOS ve todos los candidatos de sus búsquedas (los que no presentó, anónimos); el resto, la
+        visibilidad de Candidatos."""
+        if usuario_es_grupo_externos(db, current_user, empresa_id):
+            return query
+        rol = obtener_rol_recruiting(db, current_user, empresa_id)
+        return aplicar_filtro_ownership_candidatos(query, current_user, rol, db, empresa_id)
+
+    @staticmethod
+    def listar(
+        db: Session, empresa_id: uuid.UUID, oportunidad_id: uuid.UUID, current_user: Optional[Usuario] = None
+    ) -> List[Dict[str, Any]]:
+        """Candidatos vigentes de la búsqueda, con su etapa y estado."""
+        solicitud = OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
+        query = (
+            db.query(GestionBusqueda, Candidato)
+            .join(Candidato, GestionBusqueda.candidato_id == Candidato.id)
+            .filter(
+                GestionBusqueda.empresa_id == empresa_id,
+                GestionBusqueda.oportunidad_id == solicitud.id,
+                GestionBusqueda.activo.is_(True),
+                GestionBusqueda.deleted_at.is_(None),
+                Candidato.deleted_at.is_(None),
+            )
+        )
+        query = CandidatosDeBusquedaService._filtro_visibilidad(query, db, empresa_id, current_user)
+        filas = query.order_by(GestionBusqueda.created_at.desc()).all()
+
+        ids_externos = {u.id for u in OportunidadService._query_externos(db, empresa_id).all()}
+        ids_creadores = {c.creador_id for _, c in filas if c.creador_id}
+        presentadores = {}
+        if ids_creadores:
+            for u in db.query(Usuario).filter(Usuario.id.in_(ids_creadores)).all():
+                presentadores[u.id] = " ".join(f"{u.nombre or ''} {u.apellido or ''}".split()) or u.email
+        ocultador = OcultadorCandidatosEnBusqueda(db, empresa_id, current_user)
+
+        resultado = []
+        for g, c in filas:
+            resultado.append(
+                ocultador.aplicar(
+                    {
+                        "es_externo": c.creador_id in ids_externos,
+                        "presentado_por": presentadores.get(c.creador_id, "Sin identificar"),
+                        "id": str(c.id),
+                        "gestion_id": str(g.id),
+                        "candidato_id": str(c.id),
+                        "oportunidad_id": str(g.oportunidad_id),
+                        "codigo": c.codigo,
+                        "nombre": f"{c.nombre} {c.apellido}".strip(),
+                        "nombre_pila": c.nombre,
+                        "apellido": c.apellido,
+                        "email": c.email,
+                        "telefono": c.telefono,
+                        "ubicacion": c.ubicacion,
+                        "headline": c.headline,
+                        "seniority": c.seniority or "Senior",
+                        "etapa": g.etapa_actual,
+                        "etapa_actual": g.etapa_actual,
+                        "estado": g.estado,
+                        # El grupo EXTERNOS (ya resuelto por el ocultador) no ve el motivo de descarte ni el feedback
+                        "motivo_descarte": None if ocultador.activo else g.motivo_descarte,
+                        "feedback_etapa": None if ocultador.activo else g.feedback_etapa,
+                        "pretension_salarial_bruta_ars": g.pretension_salarial_bruta_ars,
+                        "fecha_cambio_etapa": g.fecha_cambio_etapa or g.updated_at,
+                        "created_at": g.created_at,
+                        "updated_at": g.updated_at,
+                        "cv_url": c.cv_url,
+                        "linkedin_url": c.linkedin_url,
+                    },
+                    c,
+                    g,
+                )
+            )
+        return resultado
+
+    @staticmethod
+    def compatibles(
+        db: Session,
+        empresa_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
+        busqueda: Optional[str] = None,
+        limite: int = 15,
+        current_user: Optional[Usuario] = None,
+    ) -> List[Dict[str, Any]]:
+        """Smart Matching: candidatos activos que el usuario ve y que comparten skills o habilidades con la búsqueda
+        (nombre, apellido, código o email opcionales), sin los ya asignados; el de mayor coincidencia primero."""
+        OportunidadService.exigir_no_externo(
+            db, empresa_id, current_user, "Los usuarios del grupo EXTERNOS no tienen acceso a Smart Matching"
+        )
+        solicitud = OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
+
+        asignados = {
+            fila[0]
+            for fila in db.query(Postulacion.candidato_id).filter(
+                Postulacion.empresa_id == empresa_id,
+                Postulacion.solicitud_id == solicitud.id,
+                Postulacion.deleted_at.is_(None),
+            )
+        } | {
+            fila[0]
+            for fila in db.query(GestionBusqueda.candidato_id).filter(
+                GestionBusqueda.empresa_id == empresa_id,
+                GestionBusqueda.oportunidad_id == solicitud.id,
+                GestionBusqueda.activo.is_(True),
+                GestionBusqueda.deleted_at.is_(None),
+            )
+        }
+
+        skills_busqueda = lista_de_textos(solicitud.skills)
+        habilidades_busqueda = lista_de_textos(solicitud.habilidades)
+
+        query = db.query(Candidato).filter(
+            Candidato.empresa_id == empresa_id, Candidato.activo.is_(True), Candidato.deleted_at.is_(None)
+        )
+        query = CandidatosDeBusquedaService._filtro_visibilidad(query, db, empresa_id, current_user)
+        termino = (busqueda or "").strip()
+        if termino:
+            patron = f"%{termino}%"
+            query = query.filter(
+                or_(
+                    Candidato.nombre.ilike(patron),
+                    Candidato.apellido.ilike(patron),
+                    (Candidato.nombre + " " + Candidato.apellido).ilike(patron),
+                    (Candidato.apellido + " " + Candidato.nombre).ilike(patron),
+                    Candidato.codigo.ilike(patron),
+                    Candidato.email.ilike(patron),
+                )
+            )
+
+        resultados = []
+        for candidato in query.order_by(Candidato.created_at.desc()).limit(100).all():
+            if candidato.id in asignados:
+                continue
+            skills = lista_de_textos(candidato.skills)
+            habilidades = lista_de_textos(getattr(candidato, "habilidades", None))
+            skills_ok = _coincidencias(skills_busqueda, skills)
+            habilidades_ok = _coincidencias(habilidades_busqueda, habilidades)
+            requeridos = len(skills_busqueda) + len(habilidades_busqueda)
+            coincidentes = len(skills_ok) + len(habilidades_ok)
+            if requeridos and not coincidentes:
+                continue
+            porcentaje = int(coincidentes / requeridos * 100) if requeridos else 100
+            seniority = candidato.seniority or "Senior"
+            resultados.append(
+                {
+                    "id": str(candidato.id),
+                    "codigo": candidato.codigo,
+                    "nombre": candidato.nombre,
+                    "apellido": candidato.apellido,
+                    "nombre_completo": f"{candidato.nombre or ''} {candidato.apellido or ''}".strip() or "Candidato",
+                    "email": candidato.email,
+                    "headline": candidato.headline or f"{seniority} Developer",
+                    "seniority": seniority,
+                    "skills": skills,
+                    "habilidades": habilidades,
+                    "skills_coincidentes": skills_ok,
+                    "habilidades_coincidentes": habilidades_ok,
+                    "porcentaje_match": porcentaje,
+                    "match_porcentaje": porcentaje,
+                    "ya_asignado": False,
+                }
+            )
+        resultados.sort(key=lambda r: (-r["porcentaje_match"], r["apellido"] or "", r["nombre"] or ""))
+        return resultados[:limite]
+
+    @staticmethod
+    def recalcular_metricas(db: Session, solicitud: Solicitud) -> None:
+        """Deja en la búsqueda los contadores del embudo (los que muestra el listado), calculados sobre todas sus
+        postulaciones vigentes: no dependen de quién consulta."""
+        filas = (
+            db.query(Postulacion.etapa, Postulacion.estado)
+            .join(Candidato, Postulacion.candidato_id == Candidato.id)
+            .filter(
+                Postulacion.empresa_id == solicitud.empresa_id,
+                Postulacion.solicitud_id == solicitud.id,
+                Postulacion.deleted_at.is_(None),
+                Candidato.deleted_at.is_(None),
+            )
+            .all()
+        )
+        contadores = {"coordinando": 0, "rrhh": 0, "lider": 0, "feedback": 0, "cliente": 0, "activos": 0}
+        for etapa, estado in filas:
+            etapa = (etapa or "").lower()
+            if "coordinando" in etapa:
+                contadores["coordinando"] += 1
+            elif "rrhh" in etapa:
+                contadores["rrhh"] += 1
+            elif "presentacion lider" in etapa or "presentación líder" in etapa:
+                contadores["lider"] += 1
+            elif "feedback" in etapa:
+                contadores["feedback"] += 1
+            elif "cliente" in etapa:
+                contadores["cliente"] += 1
+            if (estado or "").lower() == "en proceso":
+                contadores["activos"] += 1
+        solicitud.candidatos_pipeline = len(filas)
+        solicitud.coordinando_entrevista = contadores["coordinando"]
+        solicitud.entrevistados_rrhh = contadores["rrhh"]
+        solicitud.presentacion_lider = contadores["lider"]
+        solicitud.feedback_lider = contadores["feedback"]
+        solicitud.presentacion_cliente = contadores["cliente"]
+        solicitud.q_activos = contadores["activos"]
+        db.commit()
+
+    @staticmethod
+    def asignar(
+        db: Session,
+        empresa_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
+        datos: AsignarCandidatoRequest,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Postulacion:
+        """Suma un candidato a una búsqueda Abierta: crea su postulación y su fila del pipeline, y deja la traza. Sumarlo
+        directo en Ingreso cierra la búsqueda (Ganada)."""
+        OportunidadService.exigir_no_externo(
+            db, empresa_id, current_user, "Los usuarios del grupo EXTERNOS no pueden asignar candidatos a búsquedas"
+        )
+        solicitud = OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
+        candidato = CandidatoService.get_by_id(db, empresa_id, str(datos.candidato_id), current_user=current_user)
+
+        if solicitud.estado != ESTADO_BUSQUEDA_ABIERTA:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No se puede asignar el candidato: la búsqueda está en estado «{solicitud.estado}», "
+                f"solo se permiten búsquedas en estado «{ESTADO_BUSQUEDA_ABIERTA}».",
+            )
+        ya_asignado = (
+            db.query(Postulacion.id)
+            .filter(
+                Postulacion.empresa_id == empresa_id,
+                Postulacion.solicitud_id == solicitud.id,
+                Postulacion.candidato_id == candidato.id,
+                Postulacion.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if ya_asignado:
+            raise HTTPException(
+                status_code=400,
+                detail=f"El candidato {candidato.nombre} {candidato.apellido} ya está asignado a esta búsqueda.",
+            )
+
+        ahora = utc_now()
+        etapa = (datos.etapa or "").strip() or CandidatosDeBusquedaService.ETAPAS_INICIALES[0]
+        estado = (datos.estado or "").strip() or ESTADO_EN_PROCESO
+        observaciones = (datos.observaciones or "").strip() or None
+        etapa_pipeline = "Candidato" if etapa in CandidatosDeBusquedaService.ETAPAS_INICIALES else etapa
+
+        postulacion = Postulacion(
+            empresa_id=empresa_id,
+            candidato_id=candidato.id,
+            solicitud_id=solicitud.id,
+            solicitud_titulo=solicitud.titulo,
+            solicitud_cliente=solicitud.cliente,
+            etapa=etapa,
+            estado=estado,
+            fecha_asignacion=ahora,
+            fecha_etapa=ahora,
+            observaciones=observaciones,
+            activo=True,
+            updated_by=usuario,
+        )
+        db.add(postulacion)
+
+        # Una sola fila por candidato y búsqueda (restricción única): si estuvo desvinculado se reactiva la baja lógica
+        gestion = (
+            db.query(GestionBusqueda)
+            .filter(
+                GestionBusqueda.empresa_id == empresa_id,
+                GestionBusqueda.oportunidad_id == solicitud.id,
+                GestionBusqueda.candidato_id == candidato.id,
+            )
+            .first()
+        )
+        if gestion:
+            gestion.deleted_at = None
+            gestion.activo = True
+            gestion.etapa_actual = etapa_pipeline
+            gestion.estado = estado
+            gestion.fecha_cambio_etapa = ahora
+            gestion.updated_at = ahora
+            gestion.updated_by = usuario
+        else:
+            db.add(
+                GestionBusqueda(
+                    empresa_id=empresa_id,
+                    oportunidad_id=solicitud.id,
+                    candidato_id=candidato.id,
+                    etapa_actual=etapa_pipeline,
+                    estado=estado,
+                    feedback_etapa=observaciones,
+                    fecha_cambio_etapa=ahora,
+                    activo=True,
+                    updated_by=usuario,
+                )
+            )
+        if etapa_pipeline.casefold() == "ingreso":
+            OportunidadService.marcar_ganada(solicitud, usuario)
+
+        db.flush()
+        db.add(
+            TransicionEstado(
+                empresa_id=empresa_id,
+                candidato_id=candidato.id,
+                postulacion_id=postulacion.id,
+                estado_anterior=None,
+                estado_nuevo=f"{estado} ({etapa})",
+                observaciones=observaciones,
+                usuario=usuario,
+            )
+        )
+        db.commit()
+        db.refresh(postulacion)
+        CandidatosDeBusquedaService.recalcular_metricas(db, solicitud)
+        return postulacion
+
+    @staticmethod
+    def desvincular(
+        db: Session,
+        empresa_id: uuid.UUID,
+        oportunidad_id: uuid.UUID,
+        candidato_id: uuid.UUID,
+        usuario: Optional[str] = None,
+        current_user: Optional[Usuario] = None,
+    ) -> Dict[str, Any]:
+        """Quita al candidato de la búsqueda (baja lógica de su postulación y de su fila del pipeline) sin tocar su ficha
+        del Banco de Talentos."""
+        solicitud = OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
+        OportunidadService.validar_no_ganada(solicitud)
+        candidato = CandidatoService.validar_operable(db, empresa_id, str(candidato_id), current_user=current_user)
+
+        postulaciones = (
+            db.query(Postulacion)
+            .filter(
+                Postulacion.empresa_id == empresa_id,
+                Postulacion.solicitud_id == solicitud.id,
+                Postulacion.candidato_id == candidato.id,
+                Postulacion.deleted_at.is_(None),
+            )
+            .all()
+        )
+        if not postulaciones:
+            raise HTTPException(status_code=404, detail="El candidato no se encuentra asignado a esta búsqueda")
+
+        ahora = utc_now()
+        for p in postulaciones:
+            db.add(
+                TransicionEstado(
+                    empresa_id=empresa_id,
+                    candidato_id=candidato.id,
+                    postulacion_id=p.id,
+                    estado_anterior=f"{p.estado} ({p.etapa})",
+                    estado_nuevo="Desvinculado de la búsqueda",
+                    observaciones=f"Desvinculado de la búsqueda {solicitud.titulo}",
+                    usuario=usuario,
+                    created_at=ahora,
+                )
+            )
+            p.deleted_at = ahora
+            p.activo = False
+            p.updated_at = ahora
+            p.updated_by = usuario
+        gestiones = (
+            db.query(GestionBusqueda)
+            .filter(
+                GestionBusqueda.empresa_id == empresa_id,
+                GestionBusqueda.oportunidad_id == solicitud.id,
+                GestionBusqueda.candidato_id == candidato.id,
+                GestionBusqueda.deleted_at.is_(None),
+            )
+            .all()
+        )
+        for g in gestiones:
+            g.deleted_at = ahora
+            g.activo = False
+            g.updated_at = ahora
+            g.updated_by = usuario
+        db.commit()
+        CandidatosDeBusquedaService.recalcular_metricas(db, solicitud)
+        return {
+            "ok": True,
+            "mensaje": f"Candidato {candidato.nombre} {candidato.apellido} desvinculado de la búsqueda.",
+            "candidato_id": str(candidato.id),
+            "oportunidad_id": str(solicitud.id),
+        }

@@ -12,7 +12,8 @@ Código: `backend/modules/recruiting/` (`models.py`, `routers.py`, `schemas.py`,
 |---|---|
 | Dashboard Recruiting (y Manager Dashboard, solo administradores) | migrado |
 | Candidatos | migrado (ver abajo) |
-| Búsquedas, Pipeline, Parámetros | pendientes |
+| Búsquedas | migrado, sin etapas (ver abajo) |
+| Pipeline, Parámetros | pendientes |
 
 ## Candidatos (`recruiting.candidatos`, `/recruiting/candidatos`)
 
@@ -55,8 +56,54 @@ las páginas escaneadas de un PDF; el modelo de reconocimiento se descarga y ver
 imagen) y `libreoffice-writer` (vista previa en PDF de un CV Word, `GET/POST /storage/preview-pdf`). Si falta una,
 la carga sigue con lo que tenga: el OCR y la vista previa nunca hacen fallar una carga.
 
-### Lo que queda para Búsquedas y Pipeline
+### Lo que queda para Pipeline
 
-Asignar un candidato a una búsqueda (Smart Matching), ver sus pipelines y postulaciones, rechazar una postulación, el
-alta de candidatos desde una búsqueda asignada (EXTERNOS) y la revisión de CV duplicados derivados por esos usuarios
-(`CandidatoDuplicado`). El listado no ofrece esas acciones hasta entonces.
+Asignar un candidato a una búsqueda desde el listado de Candidatos (`busquedas-elegibles`; desde la búsqueda ya se
+puede, con Smart Matching), ver los pipelines y las postulaciones de un candidato, rechazar una postulación, el alta de
+candidatos desde una búsqueda asignada (EXTERNOS) y la revisión de CV duplicados derivados por esos usuarios
+(`CandidatoDuplicado`). El listado y la ficha de Candidatos no ofrecen esas acciones hasta entonces.
+
+## Búsquedas (`recruiting.oportunidades`, `/recruiting/oportunidades`)
+
+La tabla es `recruiting_oportunidades` (modelo `Solicitud`, alias `Oportunidad`); no hubo cambios de esquema.
+
+Pantallas: listado con filtros (texto, estado, tipo) y paginación del servidor, alta, ficha (ver y editar en el
+lugar) y, dentro de la ficha, asignar reclutador (del catálogo de Parámetros) o tomar y liberar la búsqueda, asignar o
+quitar el usuario externo, los candidatos de la búsqueda y las sugerencias de Smart Matching con el botón de postular.
+Cancelar una búsqueda es pasarla al estado Cancelada (nunca se borra).
+
+### API (`/api/v1/recruiting`, `operation_id` `recruiting_oportunidades_<acción>`)
+
+| Método y ruta | Qué hace |
+|---|---|
+| `GET /oportunidades` | Listado paginado (`pagina`, `por_pagina`) con `busqueda`, `estado`, `cliente`, `tipo` |
+| `POST /oportunidades` | Alta (403 para EXTERNOS; 400 si el estado o el puesto no son válidos o ya existe el título para el cliente) |
+| `GET/PUT /oportunidades/{id}` | Ficha y edición parcial (409 si está Ganada) |
+| `POST /oportunidades/{id}/asignar`, `/desasignar` | El reclutador toma la búsqueda o la libera |
+| `POST /oportunidades/{id}/reclutador` | Asigna o reasigna el reclutador con un nombre activo del catálogo |
+| `PUT/DELETE /oportunidades/{id}/externo` | Asigna, reemplaza o quita el usuario externo (admin y grupos de Recruiting) |
+| `GET /oportunidades/{id}/candidatos` | Candidatos del pipeline de la búsqueda (anónimos los que un EXTERNOS no presentó) |
+| `GET /oportunidades/{id}/candidatos-compatibles` | Smart Matching (`q` opcional); 403 para EXTERNOS |
+| `POST /oportunidades/{id}/candidatos` | Suma un candidato a una búsqueda Abierta (postulación y pipeline) |
+| `DELETE /oportunidades/{id}/candidatos/{candidato_id}` | Lo quita de la búsqueda sin tocar su ficha |
+| `GET /oportunidades/permisos`, `/externos-disponibles`, `/lideres`, `/reclutadores`, `/config` | Acciones habilitadas y catálogos de solo lectura (el umbral de Smart Matching se edita en Parámetros) |
+
+### Reglas
+
+- **Empresa activa del JWT**: una búsqueda de otra empresa responde 404.
+- **Visibilidad**: todos los usuarios con el ítem ven todas las búsquedas; el grupo EXTERNOS solo las que tiene
+  asignadas (`externo_id`, 403 al abrir otra) y solo las de tipo Efectiva. No crea, cancela ni asigna candidatos ni
+  reclutadores, y no ve el líder, el tipo ni Smart Matching.
+- **Búsqueda Ganada = cerrada**: no admite cambios, asignaciones ni candidatos (409). Pasa a Ganada sola cuando un
+  candidato llega a Ingreso.
+- **Contadores del embudo** (`candidatos_pipeline`, `coordinando_entrevista`...): se recalculan al sumar o quitar un
+  candidato, sobre todas las postulaciones vigentes (no dependen de quién consulta).
+- **Modalidad y prioridad** se guardan sin tildes (`Hibrido`, `Critica`) y la pantalla las muestra con su tilde.
+- **Dependencia de permisos**: los combos del formulario (skills, habilidades, perfiles de puesto) salen de los
+  catálogos de Candidatos, así que quien usa Búsquedas necesita también `recruiting.candidatos`.
+
+### Lo que queda para Pipeline
+
+Cambio de etapa, kanban y motivos de descarte, y la pantalla «Agregar candidato» (se llega desde el Pipeline). La
+carga de CV y el alta de candidatos desde una búsqueda asignada (EXTERNOS) se migran con la revisión de CV
+duplicados, que es lo que recibe los casos que ese flujo deriva.

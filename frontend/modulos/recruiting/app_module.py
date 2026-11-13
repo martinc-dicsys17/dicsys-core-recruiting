@@ -1,5 +1,5 @@
 """
-Módulo Recruiting: Dashboard, Manager Dashboard y Candidatos. Búsquedas, Pipeline y Parámetros se migran después.
+Módulo Recruiting: Dashboard, Manager Dashboard, Candidatos y Búsquedas. Pipeline y Parámetros se migran después.
 """
 
 import logging
@@ -706,3 +706,394 @@ def candidato_cargar_masivo_cv_estado(lote_id):
 def candidato_cargar_masivo_cv_cancelar(lote_id):
     data, status = _reenviar_archivos("POST", f"/candidatos/cargar-cv-masivo/{quote(lote_id, safe='')}/cancelar")
     return _responder_lote(data, status)
+
+
+# === BÚSQUEDAS (oportunidades) ===
+# Todas las rutas exigen 'recruiting.oportunidades'; el backend valida el acceso de verdad en cada llamada y esta capa
+# solo orienta la interfaz. El cambio de etapa, el kanban y «agregar candidato» desde el Pipeline se migran con
+# Pipeline; la carga de CV desde una búsqueda asignada (EXTERNOS), con la revisión de CV duplicados.
+
+ESTADOS_BUSQUEDA = ["Abierta", "Pre-ingreso", "Suspendida", "Ganada", "Cancelada"]
+POR_PAGINA_BUSQUEDAS = (20, 50, 100)
+ERROR_BUSQUEDAS = "No se pudo cargar el listado de búsquedas."
+
+# Valores iniciales del formulario de una búsqueda nueva (los demás campos arrancan vacíos)
+BUSQUEDA_NUEVA = {
+    "id": "",
+    "titulo": "",
+    "puesto": "",
+    "cliente": "",
+    "vacantes": 1,
+    "prioridad": "Alta",
+    "tipo": "Efectiva",
+    "seniority": "Senior",
+    "modalidad": "Hibrido",
+    "rango": "",
+    "descripcion": "",
+}
+
+
+def _permisos_busquedas():
+    """Acciones que el usuario ve en Búsquedas; restrictivo si no se puede consultar el backend."""
+    permisos = {
+        "puede_crear_busquedas": False,
+        "puede_eliminar_busquedas": False,
+        "puede_ver_lider_tipo_fecha_busqueda": False,
+        "puede_ver_smart_matching": False,
+        "puede_asignar_candidatos": False,
+        "puede_asignar_reclutador": False,
+        "puede_administrar_externos": False,
+        "es_externo": False,
+    }
+    try:
+        data, status = get_api_request_func()("GET", "/recruiting/oportunidades/permisos", token=session.get("token"))
+        if status == 200 and isinstance(data, dict):
+            for clave in permisos:
+                permisos[clave] = bool(data.get(clave))
+    except Exception:
+        pass
+    return permisos
+
+
+def _externos_disponibles(api_request, token):
+    """Usuarios del grupo Externos que se pueden asignar a una búsqueda (el backend valida el permiso)."""
+    try:
+        data, status = api_request("GET", "/recruiting/externos-disponibles", token=token)
+        if status == 200 and isinstance(data, list):
+            return [u for u in data if isinstance(u, dict) and u.get("id")]
+    except Exception:
+        pass
+    return []
+
+
+def _opciones_de_personas(api_request, token, ruta):
+    """Nombres activos del catálogo de líderes o reclutadores, para los combos."""
+    return _lista_de_nombres(api_request, token, f"/recruiting/{ruta}", ordenar=False)
+
+
+# El formulario llama «hm» al líder y «reclutador» al reclutador
+ALIAS_OPORTUNIDAD = {"lider_nombre": "hm", "recruiter_nombre": "reclutador"}
+TEXTOS_OPORTUNIDAD = (
+    "titulo",
+    "cliente",
+    "estado",
+    "puesto",
+    "area",
+    "seniority",
+    "modalidad",
+    "rango",
+    "prioridad",
+    "tipo",
+    "lider_nombre",
+    "recruiter_nombre",
+    "id_busqueda",
+)
+
+
+def _payload_de_oportunidad(body, solo_enviados=False):
+    """Cuerpo de OportunidadCreate (alta) o de OportunidadUpdate (edición: solo viaja lo que vino) desde el JSON del
+    formulario. Lo vacío no se manda: el backend aplica sus valores predeterminados (Abierta, Efectiva, Senior...)."""
+
+    def valor(campo):
+        return body[campo] if campo in body else body.get(ALIAS_OPORTUNIDAD.get(campo))
+
+    def enviado(campo):
+        return campo in body or ALIAS_OPORTUNIDAD.get(campo) in body
+
+    payload = {}
+    for campo in TEXTOS_OPORTUNIDAD:
+        if solo_enviados and not enviado(campo):
+            continue
+        texto = valor(campo)
+        texto = texto.strip() if isinstance(texto, str) else None
+        if texto or solo_enviados or campo in ("lider_nombre", "recruiter_nombre"):
+            payload[campo] = texto or None
+    vacantes = _entero_o_none(body.get("vacantes"))
+    if vacantes or not solo_enviados:
+        payload["vacantes"] = vacantes or 1
+    for campo in ("skills", "habilidades", "skills_deseadas"):
+        if campo in body or not solo_enviados:
+            payload[campo] = _lista_desde_texto(body.get(campo))
+    if "descripcion" in body or not solo_enviados:
+        descripcion = body.get("descripcion")
+        payload["descripcion"] = (descripcion.strip() or None) if isinstance(descripcion, str) else None
+    return payload
+
+
+def _respuesta_de_busqueda(data, status, mensaje_ok, error_por_defecto, **extra):
+    """Respuesta JSON de las acciones sobre una búsqueda: lo que espera la pantalla (success y ok, o error)."""
+    if status in (200, 201) and isinstance(data, dict):
+        return jsonify({"success": True, "ok": True, "oportunidad": data, "message": mensaje_ok, **extra}), 200
+    return jsonify({"success": False, "ok": False, "error": _detalle_de_error(data, error_por_defecto)}), status or 400
+
+
+@recruiting_bp.route("/oportunidades", methods=["GET"])
+@require_permiso("recruiting.oportunidades")
+def oportunidades():
+    api_request = get_api_request_func()
+    token = session.get("token")
+    permisos = _permisos_busquedas()
+
+    busqueda = (request.args.get("busqueda") or "").strip()
+    estado = request.args.get("estado") or "Abierta"
+    if estado != "todos" and estado not in ESTADOS_BUSQUEDA:
+        estado = "Abierta"
+    # El tipo solo se elige con permiso (el grupo EXTERNOS solo ve las efectivas)
+    tipo = request.args.get("tipo") or "Efectiva"
+    if tipo not in ("Efectiva", "Potencial", "Todas") or not permisos["puede_ver_lider_tipo_fecha_busqueda"]:
+        tipo = "Efectiva"
+    try:
+        pagina = max(1, int(request.args.get("pagina") or 1))
+    except ValueError, TypeError:
+        pagina = 1
+    try:
+        limite = int(request.args.get("por_pagina") or POR_PAGINA_BUSQUEDAS[0])
+    except ValueError, TypeError:
+        limite = POR_PAGINA_BUSQUEDAS[0]
+    limite = next((o for o in POR_PAGINA_BUSQUEDAS if limite <= o), POR_PAGINA_BUSQUEDAS[-1])
+
+    parametros = [("pagina", pagina), ("por_pagina", limite), ("estado", estado), ("tipo", tipo)]
+    if busqueda:
+        parametros.append(("busqueda", busqueda))
+    data, status = api_request("GET", f"/recruiting/oportunidades?{urlencode(parametros)}", token=token)
+
+    items, total, total_paginas = [], 0, 1
+    if status == 200 and isinstance(data, dict):
+        items = data.get("items", [])
+        total = data.get("total", len(items))
+        total_paginas = data.get("total_paginas", 1)
+        pagina = data.get("pagina", pagina)
+        limite = data.get("por_pagina", limite)
+
+    def url_pagina(numero):
+        filtros = {"estado": estado, "tipo": tipo, "por_pagina": limite, "pagina": numero}
+        if busqueda:
+            filtros["busqueda"] = busqueda
+        return url_for("recruiting.oportunidades", **filtros)
+
+    return render_template(
+        "recruiting/oportunidades.html",
+        oportunidades=items,
+        estados=ESTADOS_BUSQUEDA,
+        filtro_busqueda=busqueda,
+        filtro_estado=estado,
+        filtro_tipo=tipo,
+        total_registros=total,
+        total_paginas=total_paginas,
+        pagina_actual=pagina,
+        limite_actual=limite,
+        registro_inicio=(pagina - 1) * limite + 1 if total else 0,
+        registro_fin=min(pagina * limite, total),
+        url_pagina=url_pagina,
+        error_listado=None if status == 200 else _detalle_de_error(data, ERROR_BUSQUEDAS),
+        puede_administrar_externos=permisos["puede_administrar_externos"],
+        externos_disponibles=_externos_disponibles(api_request, token)
+        if permisos["puede_administrar_externos"]
+        else [],
+        puede_crear_busquedas=permisos["puede_crear_busquedas"],
+        puede_eliminar_busquedas=permisos["puede_eliminar_busquedas"],
+        puede_ver_lider_tipo_fecha=permisos["puede_ver_lider_tipo_fecha_busqueda"],
+    )
+
+
+@recruiting_bp.route("/oportunidades/nueva", methods=["GET"])
+@require_permiso("recruiting.oportunidades")
+def nueva_oportunidad():
+    if not _permisos_busquedas()["puede_crear_busquedas"]:
+        flash("No tenés permisos para crear búsquedas.", "error")
+        return redirect(url_for("recruiting.oportunidades"))
+    api_request = get_api_request_func()
+    token = session.get("token")
+    perfiles, perfiles_ok = _cargar_perfiles_puesto(api_request, token)
+    return render_template(
+        "recruiting/oportunidad_form.html",
+        oportunidad=dict(BUSQUEDA_NUEVA),
+        is_edit=False,
+        perfiles_puesto_catalogo=perfiles,
+        perfiles_puesto_ok=perfiles_ok,
+        skills_catalogo=_lista_de_nombres(api_request, token, "/recruiting/skills"),
+        habilidades_catalogo=_lista_de_nombres(api_request, token, "/recruiting/habilidades"),
+        lideres_catalogo=_opciones_de_personas(api_request, token, "lideres"),
+        reclutadores_catalogo=_opciones_de_personas(api_request, token, "reclutadores"),
+    )
+
+
+@recruiting_bp.route("/oportunidades", methods=["POST"])
+@recruiting_bp.route("/oportunidades/nueva", methods=["POST"])
+@require_permiso("recruiting.oportunidades")
+def crear_oportunidad():
+    """Reenvía el alta al backend; el backend valida y es dueño de las reglas."""
+    body = request.get_json(silent=True) or {}
+    data, status = get_api_request_func()(
+        "POST", "/recruiting/oportunidades", data=_payload_de_oportunidad(body), token=session.get("token")
+    )
+    return _respuesta_de_busqueda(
+        data,
+        status,
+        "Búsqueda creada exitosamente.",
+        "Error al crear la búsqueda",
+        redirect=url_for("recruiting.oportunidades"),
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>", methods=["GET"])
+@require_permiso("recruiting.oportunidades")
+def oportunidad_detalle(id):
+    api_request = get_api_request_func()
+    token = session.get("token")
+
+    op, status = api_request("GET", f"/recruiting/oportunidades/{id}", token=token)
+    if status != 200 or not isinstance(op, dict):
+        flash(
+            "No tenés acceso a esta búsqueda: no la tenés asignada."
+            if status == 403
+            else "La búsqueda solicitada no existe o no fue encontrada.",
+            "error",
+        )
+        return redirect(url_for("recruiting.oportunidades"))
+
+    permisos = _permisos_busquedas()
+    # Búsqueda Ganada = cerrada: se muestra para consulta, sin acciones que modifiquen el proceso
+    ganada = str(op.get("estado") or "").strip().lower() == "ganada"
+    ve_smart_matching = permisos["puede_ver_smart_matching"] and not ganada
+    puede_administrar_externos = permisos["puede_administrar_externos"] and not ganada
+
+    candidatos, estado_candidatos = api_request("GET", f"/recruiting/oportunidades/{id}/candidatos", token=token)
+    sugeridos, match_minimo = [], 50
+    if ve_smart_matching:
+        datos_sug, estado_sug = api_request(
+            "GET", f"/recruiting/oportunidades/{id}/candidatos-compatibles", token=token
+        )
+        if estado_sug == 200 and isinstance(datos_sug, list):
+            sugeridos = datos_sug
+        config, estado_config = api_request("GET", "/recruiting/config", token=token)
+        if estado_config == 200 and isinstance(config, dict):
+            match_minimo = config.get("match_minimo_porcentaje", 50)
+
+    perfiles, perfiles_ok = _cargar_perfiles_puesto(api_request, token)
+    return render_template(
+        "recruiting/oportunidad_detalle.html",
+        op=op,
+        oportunidad=op,
+        busqueda_ganada=ganada,
+        perfiles_puesto_catalogo=perfiles,
+        perfiles_puesto_ok=perfiles_ok,
+        candidatos_proceso=candidatos if estado_candidatos == 200 and isinstance(candidatos, list) else [],
+        candidatos_sugeridos=sugeridos,
+        match_minimo=match_minimo,
+        skills_catalogo=_lista_de_nombres(api_request, token, "/recruiting/skills"),
+        habilidades_catalogo=_lista_de_nombres(api_request, token, "/recruiting/habilidades"),
+        puede_asignar_reclutador=permisos["puede_asignar_reclutador"] and not ganada,
+        puede_ver_lider_tipo_fecha=permisos["puede_ver_lider_tipo_fecha_busqueda"],
+        puede_ver_smart_matching=ve_smart_matching,
+        puede_administrar_externos=puede_administrar_externos,
+        es_usuario_externo=permisos["es_externo"],
+        externos_disponibles=_externos_disponibles(api_request, token) if puede_administrar_externos else [],
+        reclutadores_catalogo=_opciones_de_personas(api_request, token, "reclutadores"),
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/editar", methods=["GET"])
+@require_permiso("recruiting.oportunidades")
+def editar_oportunidad(id):
+    return redirect(url_for("recruiting.oportunidad_detalle", id=id, edit="true"))
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>", methods=["PUT"])
+@require_permiso("recruiting.oportunidades")
+def actualizar_oportunidad(id):
+    body = request.get_json(silent=True) or {}
+    data, status = get_api_request_func()(
+        "PUT",
+        f"/recruiting/oportunidades/{id}",
+        data=_payload_de_oportunidad(body, solo_enviados=True),
+        token=session.get("token"),
+    )
+    return _respuesta_de_busqueda(
+        data, status, "Búsqueda actualizada correctamente.", "Error al actualizar la búsqueda"
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/asignar", methods=["POST"])
+@require_permiso("recruiting.oportunidades")
+def asignar_oportunidad(id):
+    """El reclutador toma la búsqueda: queda como responsable con la fecha de asignación."""
+    data, status = get_api_request_func()("POST", f"/recruiting/oportunidades/{id}/asignar", token=session.get("token"))
+    return _respuesta_de_busqueda(
+        data,
+        status,
+        "Búsqueda asignada correctamente.",
+        "Error al asignar la búsqueda",
+        fecha_asignacion=data.get("fecha_asignacion") if isinstance(data, dict) else None,
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/desasignar", methods=["POST"])
+@require_permiso("recruiting.oportunidades")
+def desasignar_oportunidad(id):
+    """Libera la búsqueda para que otro reclutador pueda tomarla."""
+    data, status = get_api_request_func()(
+        "POST", f"/recruiting/oportunidades/{id}/desasignar", token=session.get("token")
+    )
+    return _respuesta_de_busqueda(
+        data,
+        status,
+        "Búsqueda desasignada correctamente. Queda libre para ser tomada.",
+        "Error al desasignar la búsqueda",
+        fecha_asignacion=None,
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/reclutador", methods=["POST"])
+@require_permiso("recruiting.oportunidades")
+def asignar_reclutador_oportunidad(id):
+    """Asigna o reasigna el reclutador responsable con una persona activa del catálogo de Reclutadores."""
+    body = request.get_json(silent=True) or {}
+    data, status = get_api_request_func()(
+        "POST",
+        f"/recruiting/oportunidades/{id}/reclutador",
+        data={"recruiter_nombre": (body.get("recruiter_nombre") or "").strip()},
+        token=session.get("token"),
+    )
+    return _respuesta_de_busqueda(data, status, "Reclutador asignado correctamente.", "Error al asignar el reclutador")
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/externo", methods=["POST"])
+@require_permiso("recruiting.oportunidades")
+def asignar_externo_oportunidad(id):
+    """Asigna o cambia el usuario externo (grupo Externos) de la búsqueda."""
+    body = request.get_json(silent=True) or {}
+    data, status = get_api_request_func()(
+        "PUT",
+        f"/recruiting/oportunidades/{id}/externo",
+        data={"externo_id": (body.get("externo_id") or "").strip()},
+        token=session.get("token"),
+    )
+    return _respuesta_de_busqueda(
+        data, status, "Usuario externo asignado correctamente.", "Error al asignar el usuario externo"
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/externo", methods=["DELETE"])
+@require_permiso("recruiting.oportunidades")
+def quitar_externo_oportunidad(id):
+    """Quita la asignación del usuario externo; la búsqueda y sus candidatos no se modifican."""
+    data, status = get_api_request_func()(
+        "DELETE", f"/recruiting/oportunidades/{id}/externo", token=session.get("token")
+    )
+    return _respuesta_de_busqueda(
+        data, status, "Asignación del usuario externo quitada.", "Error al quitar la asignación del usuario externo"
+    )
+
+
+@recruiting_bp.route("/oportunidades/<uuid:id>/candidatos", methods=["POST"])
+@require_permiso("recruiting.oportunidades")
+def asignar_candidato_oportunidad(id):
+    """Suma un candidato (Smart Matching) a la búsqueda."""
+    body = request.get_json(silent=True) or {}
+    data, status = get_api_request_func()(
+        "POST", f"/recruiting/oportunidades/{id}/candidatos", data=body, token=session.get("token")
+    )
+    if status in (200, 201):
+        return jsonify({"success": True, "data": data}), status
+    return jsonify({"success": False, "error": _detalle_de_error(data, "Error al asignar el candidato")}), status or 400

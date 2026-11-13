@@ -1,7 +1,7 @@
 """Routers del módulo Recruiting.
 
 Montado en main.py con require_modulo('recruiting'); cada endpoint exige además el permiso de su ítem del menú
-('recruiting.<codigo>'). Dashboard, Manager Dashboard (solo administradores) y Candidatos.
+('recruiting.<codigo>'). Dashboard, Manager Dashboard (solo administradores), Candidatos y Búsquedas (oportunidades).
 """
 
 import logging
@@ -19,8 +19,14 @@ from backend.database import get_db
 from backend.dependencies import get_current_user, get_empresa_activa, require_admin, require_submodulo
 from backend.modules.recruiting.manager_dashboard import ManagerDashboardService
 from backend.modules.recruiting.schemas import (
+    AsignacionCandidatoResponse,
+    AsignarCandidatoRequest,
+    AsignarExternoRequest,
+    AsignarReclutadorRequest,
+    CandidatoCompatible,
     CandidatoCreate,
     CandidatoEliminado,
+    CandidatoEnBusqueda,
     CandidatoPagina,
     CandidatoResponse,
     CandidatoUpdate,
@@ -30,21 +36,32 @@ from backend.modules.recruiting.schemas import (
     CargaMasivaResponse,
     CiudadResponse,
     ComparacionCV,
+    ConfigSmartMatching,
+    DesvinculacionCandidatoResponse,
+    ExternoDisponibleResponse,
     LoteCargaMasivaResponse,
     ManagerDashboard,
     ManagerDashboardFiltros,
     NivelSeniorityResponse,
+    OportunidadCreate,
+    OportunidadPagina,
+    OportunidadResponse,
+    OportunidadUpdate,
+    PermisosBusquedas,
     PermisosCandidatos,
+    PersonaCatalogoResponse,
     ProvinciaResponse,
     RecruitingDashboard,
     SkillCatalogoResponse,
 )
 from backend.modules.recruiting.services import (
     MENSAJE_ERROR_INTERNO,
+    CandidatosDeBusquedaService,
     CandidatoService,
     CatalogoCandidatosService,
     CVDuplicadoDistintoError,
     DashboardService,
+    OportunidadService,
 )
 from backend.modules.usuarios.models import Usuario
 
@@ -530,3 +547,369 @@ async def listar_provincias(db: Session = Depends(get_db)):
 async def listar_ciudades(provincia_id: Optional[int] = Query(None, ge=1), db: Session = Depends(get_db)):
     """Ciudades del catálogo, opcionalmente solo las de una provincia."""
     return CatalogoCandidatosService.ciudades(db, provincia_id)
+
+
+# ---------------------------------------------------------------------------
+# Búsquedas (oportunidades)
+# ---------------------------------------------------------------------------
+
+acceso_busquedas = Depends(require_submodulo("recruiting", "oportunidades"))
+
+
+@router.get(
+    "/oportunidades/permisos",
+    response_model=PermisosBusquedas,
+    operation_id="recruiting_oportunidades_permisos",
+    dependencies=[acceso_busquedas],
+)
+async def permisos_busquedas(
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Qué acciones de Búsquedas puede hacer el usuario (el grupo EXTERNOS tiene menos)."""
+    return OportunidadService.permisos(db, empresa_id, current_user)
+
+
+@router.get(
+    "/oportunidades",
+    response_model=OportunidadPagina,
+    operation_id="recruiting_oportunidades_listar",
+    dependencies=[acceso_busquedas],
+)
+async def listar_oportunidades(
+    busqueda: Optional[str] = Query(None, description="ID, título, cliente, reclutador o líder"),
+    estado: Optional[str] = Query(None, description="Abierta, Pre-ingreso, Suspendida, Ganada, Cancelada o todos"),
+    cliente: Optional[str] = Query(None),
+    tipo: Optional[str] = Query(None, description="Efectiva, Potencial o Todas"),
+    pagina: int = Query(1, ge=1),
+    por_pagina: int = Query(POR_PAGINA, ge=1, le=MAXIMO),
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Búsquedas de la empresa activa que el usuario puede ver (el grupo EXTERNOS, solo las que tiene asignadas), con
+    filtros y paginación."""
+    consulta = OportunidadService.consulta(
+        db, empresa_id, busqueda=busqueda, estado=estado, cliente=cliente, tipo=tipo, current_user=current_user
+    )
+    items, datos = paginar(consulta, pagina, por_pagina)
+    return OportunidadPagina(items=[OportunidadResponse.from_model(o) for o in items], **datos)
+
+
+@router.post(
+    "/oportunidades",
+    response_model=OportunidadResponse,
+    status_code=201,
+    operation_id="recruiting_oportunidades_crear",
+    responses=responde(400, 422),
+    dependencies=[acceso_busquedas],
+)
+async def crear_oportunidad(
+    datos: OportunidadCreate,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Crea una búsqueda. 403 para el grupo EXTERNOS; 400 si el estado o el puesto no son válidos o si ya existe una con
+    ese título para el cliente."""
+    solicitud = OportunidadService.create(
+        db, empresa_id, datos, usuario=_email_usuario(current_user), current_user=current_user
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.get(
+    "/externos-disponibles",
+    response_model=List[ExternoDisponibleResponse],
+    operation_id="recruiting_oportunidades_externos_disponibles",
+    dependencies=[acceso_busquedas],
+)
+async def listar_externos_disponibles(
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Usuarios habilitados del grupo EXTERNOS que se pueden asignar a una búsqueda (admin y grupos de Recruiting)."""
+    return OportunidadService.listar_externos_disponibles(db, empresa_id, current_user)
+
+
+@router.get(
+    "/lideres",
+    response_model=List[PersonaCatalogoResponse],
+    operation_id="recruiting_lideres_listar",
+    dependencies=[acceso_busquedas],
+)
+async def listar_lideres(db: Session = Depends(get_db)):
+    """Líderes activos del catálogo, para el combo del formulario de una búsqueda."""
+    return [PersonaCatalogoResponse.model_validate(p) for p in OportunidadService.lideres(db)]
+
+
+@router.get(
+    "/reclutadores",
+    response_model=List[PersonaCatalogoResponse],
+    operation_id="recruiting_reclutadores_listar",
+    dependencies=[acceso_busquedas],
+)
+async def listar_reclutadores(db: Session = Depends(get_db)):
+    """Reclutadores activos del catálogo, para el combo del formulario de una búsqueda y para asignarla."""
+    return [PersonaCatalogoResponse.model_validate(p) for p in OportunidadService.reclutadores(db)]
+
+
+@router.get(
+    "/config",
+    response_model=ConfigSmartMatching,
+    operation_id="recruiting_config_obtener",
+    dependencies=[acceso_busquedas],
+)
+async def obtener_config(db: Session = Depends(get_db), empresa_id: uuid.UUID = Depends(get_empresa_activa)):
+    """Umbral mínimo de Smart Matching de la empresa activa (50 si no lo configuró). Su edición es de Parámetros."""
+    return ConfigSmartMatching(match_minimo_porcentaje=OportunidadService.match_minimo(db, empresa_id))
+
+
+@router.get(
+    "/oportunidades/{oportunidad_id}",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_obtener",
+    responses=responde(404),
+    dependencies=[acceso_busquedas],
+)
+async def obtener_oportunidad(
+    oportunidad_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Una búsqueda de la empresa activa; 404 si es de otra empresa y 403 si el usuario EXTERNOS no la tiene asignada."""
+    return OportunidadResponse.from_model(
+        OportunidadService.get_by_id(db, empresa_id, oportunidad_id, current_user=current_user)
+    )
+
+
+@router.put(
+    "/oportunidades/{oportunidad_id}",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_actualizar",
+    responses=responde(400, 404, 409, 422),
+    dependencies=[acceso_busquedas],
+)
+async def actualizar_oportunidad(
+    oportunidad_id: uuid.UUID,
+    datos: OportunidadUpdate,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Edita una búsqueda (409 si está Ganada). Cancelarla (estado Cancelada) no está permitido al grupo EXTERNOS."""
+    solicitud = OportunidadService.update(
+        db, empresa_id, oportunidad_id, datos, usuario=_email_usuario(current_user), current_user=current_user
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.post(
+    "/oportunidades/{oportunidad_id}/asignar",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_tomar",
+    responses=responde(400, 404, 409),
+    dependencies=[acceso_busquedas],
+)
+async def tomar_oportunidad(
+    oportunidad_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """El reclutador toma la búsqueda: queda como responsable y se registra la fecha de asignación."""
+    solicitud = OportunidadService.tomar_asignacion(
+        db, empresa_id, oportunidad_id, usuario=_email_usuario(current_user), current_user=current_user
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.post(
+    "/oportunidades/{oportunidad_id}/desasignar",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_desasignar",
+    responses=responde(404, 409),
+    dependencies=[acceso_busquedas],
+)
+async def desasignar_oportunidad(
+    oportunidad_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Libera la búsqueda para que otro reclutador pueda tomarla (un administrador o el reclutador asignado)."""
+    solicitud = OportunidadService.desasignar(
+        db, empresa_id, oportunidad_id, usuario=_email_usuario(current_user), current_user=current_user
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.post(
+    "/oportunidades/{oportunidad_id}/reclutador",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_asignar_reclutador",
+    responses=responde(400, 404, 409, 422),
+    dependencies=[acceso_busquedas],
+)
+async def asignar_reclutador_oportunidad(
+    oportunidad_id: uuid.UUID,
+    datos: AsignarReclutadorRequest,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Asigna o reasigna el reclutador con una persona activa del catálogo de Reclutadores."""
+    solicitud = OportunidadService.asignar_reclutador(
+        db,
+        empresa_id,
+        oportunidad_id,
+        datos.recruiter_nombre,
+        usuario=_email_usuario(current_user),
+        current_user=current_user,
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.put(
+    "/oportunidades/{oportunidad_id}/externo",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_asignar_externo",
+    responses=responde(400, 404, 409, 422),
+    dependencies=[acceso_busquedas],
+)
+async def asignar_externo_oportunidad(
+    oportunidad_id: uuid.UUID,
+    datos: AsignarExternoRequest,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Asigna o cambia el usuario externo (grupo EXTERNOS) de la búsqueda."""
+    solicitud = OportunidadService.asignar_externo(
+        db,
+        empresa_id,
+        oportunidad_id,
+        datos.externo_id,
+        usuario=_email_usuario(current_user),
+        current_user=current_user,
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.delete(
+    "/oportunidades/{oportunidad_id}/externo",
+    response_model=OportunidadResponse,
+    operation_id="recruiting_oportunidades_quitar_externo",
+    responses=responde(404, 409),
+    dependencies=[acceso_busquedas],
+)
+async def quitar_externo_oportunidad(
+    oportunidad_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Quita la asignación del usuario externo; la búsqueda y sus candidatos no se modifican."""
+    solicitud = OportunidadService.quitar_externo(
+        db, empresa_id, oportunidad_id, usuario=_email_usuario(current_user), current_user=current_user
+    )
+    return OportunidadResponse.from_model(solicitud)
+
+
+@router.get(
+    "/oportunidades/{oportunidad_id}/candidatos",
+    response_model=List[CandidatoEnBusqueda],
+    operation_id="recruiting_oportunidades_candidatos_listar",
+    responses=responde(404),
+    dependencies=[acceso_busquedas],
+)
+async def listar_candidatos_oportunidad(
+    oportunidad_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Candidatos vigentes de la búsqueda con su etapa y estado (anónimos los que un usuario EXTERNOS no presentó)."""
+    filas = CandidatosDeBusquedaService.listar(db, empresa_id, oportunidad_id, current_user)
+    return [CandidatoEnBusqueda(**fila) for fila in filas]
+
+
+@router.get(
+    "/oportunidades/{oportunidad_id}/candidatos-compatibles",
+    response_model=List[CandidatoCompatible],
+    operation_id="recruiting_oportunidades_candidatos_compatibles",
+    responses=responde(404),
+    dependencies=[acceso_busquedas],
+)
+async def listar_candidatos_compatibles(
+    oportunidad_id: uuid.UUID,
+    q: Optional[str] = Query(None, description="Nombre, apellido, código o email"),
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Smart Matching: candidatos que comparten skills o habilidades con la búsqueda y todavía no están asignados.
+    403 para el grupo EXTERNOS."""
+    filas = CandidatosDeBusquedaService.compatibles(
+        db, empresa_id, oportunidad_id, busqueda=q, current_user=current_user
+    )
+    return [CandidatoCompatible(**fila) for fila in filas]
+
+
+@router.post(
+    "/oportunidades/{oportunidad_id}/candidatos",
+    response_model=AsignacionCandidatoResponse,
+    status_code=201,
+    operation_id="recruiting_oportunidades_candidatos_asignar",
+    responses=responde(400, 404, 422),
+    dependencies=[acceso_busquedas],
+)
+async def asignar_candidato_oportunidad(
+    oportunidad_id: uuid.UUID,
+    datos: AsignarCandidatoRequest,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Suma un candidato a una búsqueda Abierta. 400 si ya está asignado o la búsqueda no está Abierta; 403 para el grupo
+    EXTERNOS."""
+    postulacion = CandidatosDeBusquedaService.asignar(
+        db, empresa_id, oportunidad_id, datos, usuario=_email_usuario(current_user), current_user=current_user
+    )
+    return AsignacionCandidatoResponse(
+        id=str(postulacion.id),
+        candidato_id=str(postulacion.candidato_id),
+        solicitud_id=str(postulacion.solicitud_id),
+        etapa=postulacion.etapa,
+        estado=postulacion.estado,
+        fecha_asignacion=postulacion.fecha_asignacion,
+    )
+
+
+@router.delete(
+    "/oportunidades/{oportunidad_id}/candidatos/{candidato_id}",
+    response_model=DesvinculacionCandidatoResponse,
+    operation_id="recruiting_oportunidades_candidatos_desvincular",
+    responses=responde(404, 409),
+    dependencies=[acceso_busquedas],
+)
+async def desvincular_candidato_oportunidad(
+    oportunidad_id: uuid.UUID,
+    candidato_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    empresa_id: uuid.UUID = Depends(get_empresa_activa),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Quita al candidato de la búsqueda sin eliminarlo del Banco de Talentos (409 si la búsqueda está Ganada)."""
+    resultado = CandidatosDeBusquedaService.desvincular(
+        db,
+        empresa_id,
+        oportunidad_id,
+        candidato_id,
+        usuario=_email_usuario(current_user),
+        current_user=current_user,
+    )
+    return DesvinculacionCandidatoResponse(**resultado)
