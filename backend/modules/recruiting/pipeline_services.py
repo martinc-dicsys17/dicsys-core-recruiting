@@ -27,6 +27,7 @@ from backend.modules.recruiting.models import (
     HistorialPipeline,
     Postulacion,
     RecruitingEtapa,
+    RecruitingMotivoBlacklist,
     RecruitingMotivoDescarte,
     RecruitingMotivoDescarteEtapa,
     RecrutingConfig,
@@ -984,6 +985,15 @@ class MotivoDescarteService:
             MotivoDescarteService._consulta(db, etapa).filter(RecruitingMotivoDescarte.motivo == motivo).first()
             is not None
         )
+
+
+class MotivoBlacklistService:
+    """Catálogo de motivos de Blacklist."""
+
+    @staticmethod
+    def listar(db: Session) -> List[RecruitingMotivoBlacklist]:
+        """Todos los motivos, en el orden en que se cargaron (id ascendente)."""
+        return db.query(RecruitingMotivoBlacklist).order_by(RecruitingMotivoBlacklist.id.asc()).all()
 
 
 class PostulacionService:

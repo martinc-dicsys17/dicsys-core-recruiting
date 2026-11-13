@@ -43,6 +43,7 @@ from backend.modules.recruiting.parametros_services import (
 from backend.modules.recruiting.pipeline_services import (
     AltaEnBusquedaService,
     CandidatoDuplicadoService,
+    MotivoBlacklistService,
     MotivoDescarteService,
     PipelineService,
     PostulacionService,
@@ -100,6 +101,7 @@ from backend.modules.recruiting.schemas import (
     LoteCargaMasivaResponse,
     ManagerDashboard,
     ManagerDashboardFiltros,
+    MotivoBlacklistResponse,
     MotivoDescarteResponse,
     NivelSeniorityResponse,
     OportunidadCreate,
@@ -1133,6 +1135,17 @@ async def listar_motivos_descarte(
 ):
     """Motivos de descarte disponibles para la etapa indicada, en su orden de presentación."""
     return [MotivoDescarteResponse(id=m.id, motivo=m.motivo) for m in MotivoDescarteService.listar(db, etapa)]
+
+
+@router.get(
+    "/blacklist/motivos",
+    response_model=List[MotivoBlacklistResponse],
+    operation_id="recruiting_blacklist_motivos",
+    dependencies=[acceso_pipeline],
+)
+async def listar_motivos_blacklist(db: Session = Depends(get_db)):
+    """Motivos de Blacklist del catálogo, en su orden de presentación."""
+    return MotivoBlacklistService.listar(db)
 
 
 @router.put(

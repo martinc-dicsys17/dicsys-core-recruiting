@@ -1,5 +1,15 @@
 import { PERSONAS_DEMO } from '../demo/blacklist.demo-data'
-import type { PersonaBlacklist } from '../types'
+import type { MotivoBlacklist, PersonaBlacklist } from '../types'
+
+/**
+ * Catálogo de motivos: viene del backend (tabla recruiting_motivos_blacklist), por el proxy /api/v1 de Flask,
+ * que agrega el token de la sesión. No hay textos fijos.
+ */
+export async function listarMotivos(): Promise<MotivoBlacklist[]> {
+  const respuesta = await fetch('/api/v1/recruiting/blacklist/motivos', { headers: { Accept: 'application/json' } })
+  if (!respuesta.ok) throw new Error('No se pudieron cargar los motivos.')
+  return (await respuesta.json()) as MotivoBlacklist[]
+}
 
 /**
  * Contrato de acceso a datos de Blacklist. Desde esta pantalla solo se consulta el listado y se

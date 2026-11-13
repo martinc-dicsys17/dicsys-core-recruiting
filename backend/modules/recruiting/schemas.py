@@ -1034,6 +1034,15 @@ class MotivoDescarteResponse(BaseModel):
     motivo: str
 
 
+class MotivoBlacklistResponse(BaseModel):
+    """Motivo de Blacklist del catálogo."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    motivo: str
+
+
 class PostulacionResponse(BaseModel):
     """Participación de un candidato en una búsqueda."""
 

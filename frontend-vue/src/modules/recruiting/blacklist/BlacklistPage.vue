@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { FlaskConical, Search, ShieldBan } from '@lucide/vue'
+import { Search, ShieldBan } from '@lucide/vue'
 import Button from 'primevue/button'
 import IconField from 'primevue/iconfield'
 import InputIcon from 'primevue/inputicon'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import Tag from 'primevue/tag'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import { computed, defineAsyncComponent, ref, watch } from 'vue'
@@ -13,8 +12,9 @@ import { computed, defineAsyncComponent, ref, watch } from 'vue'
 import BlacklistTable from './components/BlacklistTable.vue'
 import { useBlacklist } from './composables/useBlacklist'
 import { coincidePorDigitos, normalizarTexto } from './busqueda'
+import { useMotivosBlacklist } from './composables/useMotivosBlacklist'
 import { ESTILO_MOTIVO } from './presentacion'
-import { MOTIVOS, type MotivoBlacklist, type PersonaBlacklist } from './types'
+import type { PersonaBlacklist } from './types'
 
 // Lazy loading del componente modal de detalle: solo se descarga en el navegador
 // cuando el usuario hace clic por primera vez en una persona del listado.
@@ -27,8 +27,9 @@ const toast = useToast()
 const personas = computed(() => listado.data.value ?? [])
 
 const busqueda = ref('')
-type FiltroMotivoValor = MotivoBlacklist | 'todos'
-const filtroMotivo = ref<FiltroMotivoValor>('todos')
+const TODOS = 'todos'
+// 'todos' o el texto del motivo (el que viene del catálogo y el que guarda cada persona)
+const filtroMotivo = ref<string>(TODOS)
 const primeraFila = ref(0)
 const enDetalle = ref<PersonaBlacklist | null>(null)
 const detalleCargado = ref(false)
@@ -39,24 +40,21 @@ watch(enDetalle, (nueva) => {
 })
 
 interface OpcionMotivo {
-  valor: FiltroMotivoValor
+  valor: string
   etiqueta: string
 }
-const opcionesMotivo: OpcionMotivo[] = [
-  { valor: 'todos', etiqueta: 'Todos los motivos' },
-  { valor: 'conducta', etiqueta: MOTIVOS.conducta },
-  { valor: 'datos_falsos', etiqueta: MOTIVOS.datos_falsos },
-  { valor: 'abandono_proceso', etiqueta: MOTIVOS.abandono_proceso },
-  { valor: 'incumplimiento', etiqueta: MOTIVOS.incumplimiento },
-  { valor: 'conflicto_interes', etiqueta: MOTIVOS.conflicto_interes },
-  { valor: 'otro', etiqueta: MOTIVOS.otro },
-]
+// Las opciones salen del catálogo de la base (GET /recruiting/blacklist/motivos), sin textos fijos.
+const { motivos } = useMotivosBlacklist()
+const opcionesMotivo = computed<OpcionMotivo[]>(() => [
+  { valor: TODOS, etiqueta: 'Todos los motivos' },
+  ...(motivos.data.value ?? []).map((m) => ({ valor: m.motivo, etiqueta: m.motivo })),
+])
 
 const filtradas = computed(() => {
   const termino = normalizarTexto(busqueda.value.trim())
   return personas.value.filter(
     (p) =>
-      (!filtroMotivo.value || filtroMotivo.value === 'todos' || p.motivo === filtroMotivo.value) &&
+      (!filtroMotivo.value || filtroMotivo.value === TODOS || p.motivo === filtroMotivo.value) &&
       (!termino ||
         normalizarTexto(
           `${p.nombre} ${p.apellido} ${p.documento} ${p.email} ${p.observacion}`,
@@ -65,7 +63,7 @@ const filtradas = computed(() => {
   )
 })
 
-const hayFiltros = computed(() => Boolean(busqueda.value.trim() || (filtroMotivo.value && filtroMotivo.value !== 'todos')))
+const hayFiltros = computed(() => Boolean(busqueda.value.trim() || (filtroMotivo.value && filtroMotivo.value !== TODOS)))
 
 watch([busqueda, filtroMotivo], () => (primeraFila.value = 0))
 // Si al quitar una persona la página actual queda vacía, se vuelve a la primera.
@@ -78,7 +76,7 @@ watch(
 
 function limpiarFiltros(): void {
   busqueda.value = ''
-  filtroMotivo.value = 'todos'
+  filtroMotivo.value = TODOS
 }
 
 function reactivarPersona(persona: PersonaBlacklist): void {
@@ -118,10 +116,6 @@ const ESTILOS_TOAST = { root: { class: 'top-20! z-50' } }
           <h1 class="text-3xl font-extrabold tracking-tight text-dark-900">Blacklist</h1>
           <p class="text-xs text-dark-400 mt-0.5">Gestión y consulta de personas no entrevistables</p>
         </div>
-        <Tag rounded class="bg-amber-50 text-amber-700 ring-1 ring-amber-400/40 ring-inset">
-          <FlaskConical class="h-3.5 w-3.5" />
-          <span>Datos de demostración</span>
-        </Tag>
       </header>
 
       <section class="overflow-hidden rounded-2xl bg-white shadow-xs border border-dark-200">
@@ -150,22 +144,16 @@ const ESTILOS_TOAST = { root: { class: 'top-20! z-50' } }
           >
             <template #value="{ value }">
               <span class="flex items-center gap-2.5">
-                <span
-                  class="h-2 w-2 rounded-full"
-                  :class="value && value !== 'todos' ? ESTILO_MOTIVO[value as MotivoBlacklist]?.punto : 'bg-slate-400'"
-                ></span>
+                <span class="h-2 w-2 rounded-full" :class="ESTILO_MOTIVO.punto"></span>
                 <span class="text-dark-800">
-                  {{ value && value !== 'todos' ? MOTIVOS[value as MotivoBlacklist] : 'Todos los motivos' }}
+                  {{ value && value !== TODOS ? value : 'Todos los motivos' }}
                 </span>
               </span>
             </template>
             <template #option="{ option }: { option: OpcionMotivo }">
               <span class="flex items-center gap-2.5">
-                <span
-                  class="h-2 w-2 rounded-full"
-                  :class="option.valor !== 'todos' ? ESTILO_MOTIVO[option.valor]?.punto : 'bg-slate-400'"
-                ></span>
-                <span :class="option.valor === 'todos' ? 'text-dark-900 font-medium' : 'text-dark-700'">
+                <span class="h-2 w-2 rounded-full" :class="ESTILO_MOTIVO.punto"></span>
+                <span :class="option.valor === TODOS ? 'text-dark-900 font-medium' : 'text-dark-700'">
                   {{ option.etiqueta }}
                 </span>
               </span>

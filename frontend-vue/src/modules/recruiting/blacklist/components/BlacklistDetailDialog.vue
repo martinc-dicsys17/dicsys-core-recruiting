@@ -6,7 +6,7 @@ import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
 
 import { ESTILO_MOTIVO, formatearFecha, iniciales } from '../presentacion'
-import { MOTIVOS, type PersonaBlacklist } from '../types'
+import type { PersonaBlacklist } from '../types'
 
 /** Persona a mostrar; null = cerrado. El detalle no permite modificar el registro: solo reactivar a la persona. */
 const persona = defineModel<PersonaBlacklist | null>('persona', { required: true })
@@ -106,15 +106,15 @@ const VALOR = 'mt-0.5 text-sm font-semibold text-dark-900'
             <ClipboardList class="h-4 w-4 text-bordo-600" />
             <span>Motivo</span>
           </h3>
-          <Tag rounded class="ring-1 ring-inset" :class="ESTILO_MOTIVO[mostrada.motivo].etiqueta">
-            <span class="h-1.5 w-1.5 rounded-full" :class="ESTILO_MOTIVO[mostrada.motivo].punto"></span>
-            <span>{{ MOTIVOS[mostrada.motivo] }}</span>
+          <Tag rounded class="ring-1 ring-inset" :class="ESTILO_MOTIVO.etiqueta">
+            <span class="h-1.5 w-1.5 rounded-full" :class="ESTILO_MOTIVO.punto"></span>
+            <span>{{ mostrada.motivo }}</span>
           </Tag>
         </div>
 
         <div class="mt-2">
           <p class="text-2xl sm:text-[1.65rem] font-extrabold tracking-tight text-bordo-900 leading-tight">
-            {{ MOTIVOS[mostrada.motivo] }}
+            {{ mostrada.motivo }}
           </p>
         </div>
       </section>

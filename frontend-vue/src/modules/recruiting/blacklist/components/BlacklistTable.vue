@@ -8,7 +8,7 @@ import Tag from 'primevue/tag'
 import { computed, ref, watch } from 'vue'
 
 import { ESTILO_MOTIVO, fondoAvatar, formatearFecha, iniciales } from '../presentacion'
-import { MOTIVOS, type PersonaBlacklist } from '../types'
+import type { PersonaBlacklist } from '../types'
 
 const props = defineProps<{ personas: PersonaBlacklist[]; cargando: boolean; hayFiltros: boolean }>()
 defineEmits<{ limpiarFiltros: [] }>()
@@ -81,9 +81,9 @@ const ENCABEZADO = 'text-[11px] uppercase tracking-[0.08em] font-bold text-dark-
 
     <Column field="motivo" header="Motivo" sortable :header-class="ENCABEZADO" style="width: 28%">
       <template #body="{ data }: { data: PersonaBlacklist }">
-        <Tag rounded class="ring-1 ring-inset" :class="ESTILO_MOTIVO[data.motivo].etiqueta">
-          <span class="h-1.5 w-1.5 rounded-full" :class="ESTILO_MOTIVO[data.motivo].punto"></span>
-          <span>{{ MOTIVOS[data.motivo] }}</span>
+        <Tag rounded class="ring-1 ring-inset" :class="ESTILO_MOTIVO.etiqueta">
+          <span class="h-1.5 w-1.5 rounded-full" :class="ESTILO_MOTIVO.punto"></span>
+          <span>{{ data.motivo }}</span>
         </Tag>
         <p v-if="data.observacion" class="mt-2 line-clamp-1 text-xs text-dark-500" :title="data.observacion">
           {{ data.observacion }}

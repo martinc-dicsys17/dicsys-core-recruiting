@@ -1,19 +1,14 @@
 /**
  * Modelo PROVISORIO de la pantalla Blacklist (personas no entrevistables).
- * Todavia no existe tabla ni endpoint: los campos son una propuesta a confirmar
- * antes de definir el modelo real.
+ * El catálogo de motivos ya viene del backend; las personas todavía no tienen tabla ni endpoint:
+ * sus campos son una propuesta a confirmar antes de definir el modelo real.
  */
 
-export const MOTIVOS = {
-  conducta: 'Conducta inapropiada',
-  datos_falsos: 'Datos falsos en el CV',
-  abandono_proceso: 'Abandono del proceso',
-  incumplimiento: 'Incumplimiento de acuerdos',
-  conflicto_interes: 'Conflicto de intereses',
-  otro: 'Otro motivo',
-} as const
-
-export type MotivoBlacklist = keyof typeof MOTIVOS
+/** Motivo del catálogo (GET /recruiting/blacklist/motivos). */
+export interface MotivoBlacklist {
+  id: number
+  motivo: string
+}
 
 export interface PersonaBlacklist {
   id: string
@@ -22,7 +17,8 @@ export interface PersonaBlacklist {
   documento: string
   email: string
   telefono: string
-  motivo: MotivoBlacklist
+  /** Texto del motivo, tal cual figura en el catálogo. */
+  motivo: string
   /** Descripción detallada escrita por el reclutador al incorporar a la persona. */
   observacion: string
   registradoPor: string

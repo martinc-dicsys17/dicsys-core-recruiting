@@ -393,6 +393,16 @@ class RecruitingMotivoDescarte(Base):
     motivo = Column(String(150), nullable=False, unique=True)
 
 
+class RecruitingMotivoBlacklist(Base):
+    """
+    Catálogo global de motivos por los que una persona entra en la Blacklist de Recruiting.
+    """
+    __tablename__ = "recruiting_motivos_blacklist"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    motivo = Column(String(150), nullable=False, unique=True)
+
+
 class RecruitingMotivoDescarteEtapa(Base):
     """
     Relación entre un motivo de descarte y las etapas del workflow en las que está disponible.

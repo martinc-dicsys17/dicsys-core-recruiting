@@ -105,6 +105,7 @@ NACIDAS_CON_ALEMBIC = {
     "recruiting_reclutadores",
     "recruiting_skills",
     "recruiting_transiciones_estado",
+    "recruiting_motivos_blacklist",  # 0007
 }
 
 
@@ -148,6 +149,38 @@ def test_upgrade_desde_cero_da_el_esquema_de_los_modelos(base_nueva):
     assert set(inspect(base_nueva).get_table_names()) == set(Base.metadata.tables) | {"alembic_version"}
     extensiones = set(base_nueva.execute(text("SELECT extname FROM pg_extension")).scalars())
     assert {"uuid-ossp", "pgcrypto"} <= extensiones
+
+
+MOTIVOS_BLACKLIST = [
+    "Conducta inapropiada",
+    "Datos falsos en el CV",
+    "Abandono del proceso",
+    "Incumplimiento de acuerdos",
+    "Conflicto de intereses",
+    "Otro motivo",
+]
+
+
+def _motivos_blacklist(conexion) -> list[str]:
+    return list(conexion.execute(text("SELECT motivo FROM recruiting_motivos_blacklist ORDER BY id")).scalars())
+
+
+def test_la_0007_carga_los_seis_motivos_de_blacklist_en_orden(base_nueva):
+    _alembic(base_nueva, "upgrade", "head")
+    assert _motivos_blacklist(base_nueva) == MOTIVOS_BLACKLIST
+    # el próximo alta sigue a los seis: la secuencia quedó en el máximo
+    nuevo = base_nueva.execute(
+        text("INSERT INTO recruiting_motivos_blacklist (motivo) VALUES ('Prueba') RETURNING id")
+    ).scalar()
+    assert nuevo == 7
+
+
+def test_la_0007_se_revierte_y_vuelve_a_cargar_los_seis_motivos(base_nueva):
+    _alembic(base_nueva, "upgrade", "head")
+    _alembic(base_nueva, "downgrade", "0006")
+    assert not inspect(base_nueva).has_table("recruiting_motivos_blacklist")
+    _alembic(base_nueva, "upgrade", "head")
+    assert _motivos_blacklist(base_nueva) == MOTIVOS_BLACKLIST
 
 
 def test_downgrade_hasta_el_principio_y_vuelta(base_nueva):
