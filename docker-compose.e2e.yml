@@ -1,0 +1,105 @@
+# Stack E2E AISLADO para las pruebas de Playwright (frontend-vue/e2e). No comparte nada con el stack habitual:
+#   - proyecto propio (dicsys-core-e2e): contenedores, red y volúmenes propios
+#   - Postgres propio en tmpfs (se pierde al bajar), sin publicar y sin los datos reales (./data) montados
+#   - sin credenciales ni servicios externos (Webex, SendGrid, Gemini, Google...): todo vacío
+#   - puertos solo en 127.0.0.1 y distintos de los habituales (frontend 18080, backend 18000)
+# Reusa las imágenes ya construidas del stack habitual (solo las lee) y monta ./backend y ./frontend en solo lectura
+# para probar el código y el compilado actuales (como hace el docker-compose.override.yml del desarrollo). Lo levanta y lo baja el globalSetup de Playwright (e2e/global-setup.ts):
+#   docker compose -f docker-compose.e2e.yml up -d --wait   /   docker compose -f docker-compose.e2e.yml down -v
+name: dicsys-core-e2e
+
+x-backend-env: &backend-env
+  APP_NAME: Dicsys Core E2E
+  APP_VERSION: e2e
+  DEBUG: "false"
+  HOST: 0.0.0.0
+  PORT: "8000"
+  RELOAD: "false"
+  SECRET_KEY: e2e-secret-key-no-productiva
+  JWT_SECRET_KEY: e2e-jwt-secret-no-productiva-de-mas-de-32-bytes
+  JWT_ALGORITHM: HS256
+  JWT_EXPIRE_MINUTES: "120"
+  DATABASE_URL: postgresql://e2e:e2e@e2e-db:5432/dicsys_core_e2e
+  CORS_ORIGINS: '["http://localhost:18080"]'
+  ENVIRONMENT: development # dispara los seeds del arranque (admin y parámetros) sobre la base aislada
+  SEED_ADMIN_PASSWORD: E2e-Admin-2026!
+  CRON_ENABLED: "false"
+  STORAGE_LOCAL_PATH: /tmp/e2e/files
+  LLM_STORAGE_PATH: /tmp/e2e/llm
+  CV_STORAGE_DIR: /tmp/e2e/cv
+  OG_CACHE_DIR: /tmp/e2e/og
+  FRONTEND_URL: http://localhost:18080
+
+services:
+  e2e-db:
+    image: postgres:16.15-alpine
+    environment:
+      POSTGRES_USER: e2e
+      POSTGRES_PASSWORD: e2e
+      POSTGRES_DB: dicsys_core_e2e
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U e2e -d dicsys_core_e2e"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  e2e-migraciones:
+    image: corerecruit-migraciones:latest
+    restart: "no"
+    depends_on:
+      e2e-db:
+        condition: service_healthy
+    environment:
+      <<: *backend-env
+    command: ["alembic", "upgrade", "head"]
+    volumes:
+      - ./backend:/app/backend:ro # el código actual del repo (la imagen puede estar desactualizada, como en el stack habitual)
+    healthcheck:
+      disable: true
+
+  e2e-backend:
+    image: corerecruit-backend:latest
+    depends_on:
+      e2e-db:
+        condition: service_healthy
+      e2e-migraciones:
+        condition: service_completed_successfully
+    environment:
+      <<: *backend-env
+    command: ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port 8000 --workers 1"]
+    volumes:
+      - ./backend:/app/backend:ro
+    ports:
+      - "127.0.0.1:18000:8000"
+    tmpfs:
+      - /tmp/e2e:uid=1000,gid=1000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  e2e-frontend:
+    image: corerecruit-frontend:latest
+    depends_on:
+      e2e-backend:
+        condition: service_healthy
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "false"
+      SECRET_KEY: e2e-frontend-secret
+      API_URL: http://e2e-backend:8000
+      FLASK_PORT: "5000"
+      RECIBOS_ADMIN_ALLOWED_EMAILS: ""
+      SESSION_COOKIE_SECURE: "false"
+    volumes:
+      - ./frontend:/app:ro
+    ports:
+      - "127.0.0.1:18080:5000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 3s
+      timeout: 5s
+      retries: 40

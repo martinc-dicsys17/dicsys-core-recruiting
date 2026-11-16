@@ -12,7 +12,7 @@ import {
   ShieldBan,
   User,
 } from '@lucide/vue'
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 
 import { destinoVolver } from '../candidato-nuevo/validacion'
@@ -75,7 +75,16 @@ function mostrarToast(tipo: 'success' | 'error', mensaje: string): void {
   if (temporizador) clearTimeout(temporizador)
   temporizador = setTimeout(() => (toast.value.visible = false), 3500)
 }
-onBeforeUnmount(() => temporizador && clearTimeout(temporizador))
+// Escape cierra el modal estando donde esté el foco (en la pantalla anterior: @keydown.escape.window de Alpine; en Vue
+// ese modificador no existe, así que se escucha el teclado de la ventana).
+function alTeclear(evento: KeyboardEvent): void {
+  if (evento.key === 'Escape') confirmarBlacklist.value = false
+}
+onMounted(() => window.addEventListener('keydown', alTeclear))
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', alTeclear)
+  if (temporizador) clearTimeout(temporizador)
+})
 
 function agregarABlacklist(): void {
   confirmarBlacklist.value = false
@@ -96,7 +105,6 @@ const CONTENEDOR_CHIPS = 'flex flex-wrap gap-1.5 p-2 bg-dark-50 border border-da
     <div
       v-if="confirmarBlacklist"
       class="fixed inset-0 z-50 flex items-center justify-center bg-dark-900/50 p-4"
-      @keydown.escape.window="confirmarBlacklist = false"
       @click.self="confirmarBlacklist = false"
     >
       <div

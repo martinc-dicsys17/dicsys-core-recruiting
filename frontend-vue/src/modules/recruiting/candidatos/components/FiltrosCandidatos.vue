@@ -3,7 +3,7 @@ import { RotateCcw, Search } from '@lucide/vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
 import { CLASE_BOTON_LIMPIAR, CLASE_BUSCADOR, PT_SELECT_FILTRO } from '../estilos'
 import type { FiltrosListado, OpcionesFiltros } from '../types'
@@ -11,12 +11,9 @@ import type { FiltrosListado, OpcionesFiltros } from '../types'
 const props = defineProps<{ filtros: FiltrosListado; opciones: OpcionesFiltros | undefined }>()
 const emit = defineEmits<{ cambiar: [parcial: Partial<FiltrosListado>]; limpiar: [] }>()
 
-// La búsqueda de texto se aplica con Enter (como la pantalla anterior); el resto, al elegir.
-const texto = ref(props.filtros.busqueda)
-watch(
-  () => props.filtros.busqueda,
-  (nuevo) => (texto.value = nuevo),
-)
+// La búsqueda de texto se aplica con Enter (como la pantalla anterior). El texto lo guarda la página (v-model), que lo
+// envía con cualquier otro cambio de filtro o de página, como hacía la pantalla anterior.
+const texto = defineModel<string>('texto', { required: true })
 
 /**
  * La opción inicial de cada combo («Todos los seniorities», etc.) equivale al `<option value="">` de la pantalla

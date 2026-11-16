@@ -44,11 +44,22 @@ function irA(nuevos: FiltrosListado): void {
   void router.push({ query: queryDesdeFiltros(nuevos) })
 }
 /** Cualquier cambio de filtro o de tamaño de página vuelve a la primera página. */
-const cambiar = (parcial: Partial<FiltrosListado>) => irA({ ...filtros.value, ...parcial, pagina: 1 })
+// El texto del buscador se aplica con Enter, pero la pantalla anterior también lo enviaba con cualquier otro cambio de
+// filtro, de página o de tamaño: por eso se mantiene acá y se incluye siempre (lo que se ve = URL = consulta).
+const textoBusqueda = ref(filtros.value.busqueda)
+watch(
+  () => filtros.value.busqueda,
+  (nuevo) => (textoBusqueda.value = nuevo),
+)
+const conTexto = (): FiltrosListado => ({ ...filtros.value, busqueda: textoBusqueda.value.trim() })
+const cambiar = (parcial: Partial<FiltrosListado>) => irA({ ...conTexto(), ...parcial, pagina: 1 })
 const irAPagina = (pagina: number) => {
-  if (pagina >= 1 && pagina <= totalPaginas.value) irA({ ...filtros.value, pagina })
+  if (pagina >= 1 && pagina <= totalPaginas.value) irA({ ...conTexto(), pagina })
 }
-const limpiarFiltros = () => irA(filtrosVacios(filtros.value.limite))
+const limpiarFiltros = () => {
+  textoBusqueda.value = ''
+  irA(filtrosVacios(filtros.value.limite))
+}
 
 // ---- Navegación a otras pantallas (mismos enlaces que la pantalla anterior) ----
 const enlaceFicha = (id: string) => `/recruiting/candidatos/${id}`
@@ -159,7 +170,7 @@ const ICONO_CARGA =
       <Button label="Reintentar" size="small" severity="secondary" outlined @click="listado.refetch()" />
     </div>
 
-    <FiltrosCandidatos :filtros="filtros" :opciones="opciones.data.value" @cambiar="cambiar" @limpiar="limpiarFiltros" />
+    <FiltrosCandidatos v-model:texto="textoBusqueda" :filtros="filtros" :opciones="opciones.data.value" @cambiar="cambiar" @limpiar="limpiarFiltros" />
 
     <!-- La tarjeta ocupa el ancho disponible sin ensanchar la página; la tabla se desplaza dentro de ella -->
     <div class="relative w-0 min-w-full overflow-hidden rounded-2xl border border-dark-100 bg-white shadow-soft">
