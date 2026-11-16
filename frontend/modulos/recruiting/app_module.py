@@ -426,6 +426,11 @@ def crear_candidato():
 @recruiting_bp.route("/candidatos/<uuid:id>", methods=["GET"])
 @require_permiso("recruiting.candidatos")
 def candidato_detalle(id):
+    """La ficha del candidato es una pantalla Vue (/v2/recruiting/candidatos/<id>); acá se conserva la URL y el
+    parámetro `volver`. La edición sigue siendo la de esta pantalla: con `editar` se abre la ficha en modo edición."""
+    if not request.args.get("editar"):
+        parametros = {k: request.args[k] for k in ("volver",) if request.args.get(k)}
+        return redirect(url_for("vue_app.spa", ruta=f"recruiting/candidatos/{id}", **parametros))
     api_request = get_api_request_func()
     token = session.get("token")
     data, status = api_request("GET", f"/recruiting/candidatos/{id}", token=token)
@@ -437,6 +442,7 @@ def candidato_detalle(id):
         "recruiting/candidato_detalle.html",
         candidato=data,
         volver_default=url_for("recruiting.candidatos"),
+        editar_al_abrir=True,
         **_contexto_de_formulario(api_request, token),
     )
 

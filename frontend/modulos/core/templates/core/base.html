@@ -339,9 +339,11 @@
                                 {% if hijo.ruta %}
                                 {% set hijo_url = url_for(hijo.ruta) %}
                                 {% set hijo_activo = request.path.startswith(hijo_url) %}
+                                {# Pantalla ya migrada a Vue: mismo verde que los items Vue #}
+                                {% set hijo_vue = hijo.ruta in (endpoints_migrados_a_vue or []) %}
                                 <a href="{{ hijo_url }}"
-                                   class="flex items-center py-2 px-3 rounded-lg transition-all duration-200 group {{ 'bg-primary-50 text-primary-700 border-l-3 border-primary-500 font-bold' if hijo_activo else 'text-dark-500 hover:bg-dark-50 hover:text-dark-700' }}">
-                                    <i data-lucide="{{ hijo.icono or 'circle' }}" class="w-4 h-4 mr-3 {{ 'text-primary-600' if hijo_activo else 'text-dark-400 group-hover:text-dark-600' }}"></i>
+                                   class="flex items-center py-2 px-3 rounded-lg transition-all duration-200 group {% if hijo_vue %}shadow-[inset_2px_0_0_0_#34d399] {{ 'bg-emerald-100/80 text-emerald-900' if hijo_activo else 'bg-emerald-50/70 text-dark-600 hover:bg-emerald-100/70 hover:text-dark-800' }}{% else %}{{ 'bg-primary-50 text-primary-700 border-l-3 border-primary-500 font-bold' if hijo_activo else 'text-dark-500 hover:bg-dark-50 hover:text-dark-700' }}{% endif %}">
+                                    <i data-lucide="{{ hijo.icono or 'circle' }}" class="w-4 h-4 mr-3 {% if hijo_vue %}text-emerald-600{% else %}{{ 'text-primary-600' if hijo_activo else 'text-dark-400 group-hover:text-dark-600' }}{% endif %}"></i>
                                     <span class="text-sm {{ 'font-bold' if hijo_activo else 'font-medium' }}">{{ hijo.nombre }}</span>
                                 </a>
                                 {% endif %}
@@ -365,14 +367,13 @@
                         {% endif %}
                         {% endfor %}
                         {# Pantallas de la nueva interfaz Vue (modulos/vue_app). Estandar visual para identificarlas:
-                           fondo verde muy suave, linea verde a la izquierda y etiqueta "VUE". #}
+                           fondo verde muy suave y linea verde a la izquierda. #}
                         {% for pantalla in (pantallas_vue or {}).get(menu.codigo, []) %}
                         <a href="{{ pantalla.url }}"
                            title="Pantalla del nuevo frontend Vue"
                            class="flex items-center py-2 px-3 rounded-lg transition-all duration-200 group bg-emerald-50/70 text-dark-600 hover:bg-emerald-100/70 hover:text-dark-800 shadow-[inset_2px_0_0_0_#34d399]">
                             <i data-lucide="{{ pantalla.icono or 'circle' }}" class="w-4 h-4 mr-3 text-emerald-600"></i>
                             <span class="text-sm font-medium">{{ pantalla.nombre }}</span>
-                            <span class="ml-auto text-[10px] leading-none font-bold tracking-wider text-emerald-700 bg-emerald-100 border border-emerald-200 px-1.5 py-0.5 rounded">VUE</span>
                         </a>
                         {% endfor %}
                     </div>

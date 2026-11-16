@@ -49,7 +49,7 @@ export const CLASE_ENCABEZADO =
 export const PT_DIALOGO = {
   mask: { class: 'bg-dark-900/60!' },
   root: { class: 'rounded-2xl border border-dark-100 bg-white shadow-2xl' },
-  header: { class: 'mx-6 mt-6 mb-0 border-b border-dark-100 p-0 pb-3' },
+  header: { class: 'mx-6 mt-6 mb-0 border-b border-dark-300 p-0 pb-3' },
   content: { class: 'px-6 pt-4 pb-0' },
   footer: { class: 'gap-3 px-6 pt-6 pb-6' },
   pcCloseButton: {

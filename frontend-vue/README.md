@@ -13,6 +13,10 @@ ahi conservando `busqueda_id` y `volver`. Usa el proxy `/api/v1` y, para adjunta
 `/api/v1` (listado, permisos, catalogos, baja) y las rutas de Flask de siempre para las cargas de CV (multipart), el
 detalle del pipeline y asignar a una busqueda. No tiene entrada propia en el menu: se llega por el item Candidatos.
 Pruebas de sus reglas: `node --test tests/candidatos_listado.test.mjs`.
+**Ficha del candidato** (`/v2/recruiting/candidatos/<id>`), solo lectura y con datos reales: `/recruiting/candidatos/<id>`
+(Flask) redirige ahi conservando `volver`. Usa el proxy `/api/v1` (candidato y catalogos de ubicacion). «Editar» lleva a la
+ficha de Flask abierta en modo edicion (`/recruiting/candidatos/<id>?editar=1`): la edicion no esta migrada.
+«Agregar a Blacklist» solo confirma y avisa que todavia no esta disponible, como antes.
 
 ## Stack
 
@@ -37,7 +41,9 @@ Tailwind CSS 4 - Pinia (sesion) - TanStack Query (datos de servidor) - iconos Lu
   detras del mismo `login_required` y la misma sesion de siempre, e inyecta en el HTML los
   datos de sesion (usuario, empresa, menu) en `<script id="dicsys-bootstrap">`.
 - El acceso en el menu lateral actual sale de `PANTALLAS_VUE` (mismo archivo) y se dibuja en
-  `core/base.html` con el estandar visual de pantallas Vue: fondo verde suave + etiqueta `VUE`.
+  `core/base.html` con el estandar visual de pantallas Vue: fondo verde suave y linea verde. Los items de siempre cuya pantalla ya es Vue
+  (por ejemplo «Candidatos») usan ese mismo verde cuando estan activos (la grilla y la ficha); lo decide `AppSidebar.vue`
+  comparando la url del item con la ruta de la SPA, asi que una pantalla migrada nueva no necesita configuracion.
 
 ## Comandos
 

@@ -22,6 +22,13 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     meta: { titulo: 'Candidatos - Recruiting' },
   },
   {
+    // /recruiting/candidatos/<id> (Flask) redirige acá conservando `volver`; la edición sigue siendo la de Flask.
+    path: '/recruiting/candidatos/:id([0-9a-fA-F-]{36})',
+    name: 'recruiting-candidato-detalle',
+    component: () => import('./candidato-detalle/CandidatoDetallePage.vue'),
+    meta: { titulo: 'Candidato - Recruiting' },
+  },
+  {
     // /recruiting/candidatos/nuevo (Flask) redirige acá conservando busqueda_id y volver.
     path: '/recruiting/candidatos/nuevo',
     name: 'recruiting-candidato-nuevo',

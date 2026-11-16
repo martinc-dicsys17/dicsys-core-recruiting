@@ -30,6 +30,10 @@ PANTALLAS_VUE = {
     ],
 }
 
+# Items del menu de siempre cuya pantalla ya es Vue: se muestran con el mismo verde que las pantallas Vue.
+# Se identifican por el endpoint de Flask del item (la url que arma el menu).
+ENDPOINTS_MIGRADOS_A_VUE = {'recruiting.candidatos'}
+
 HTML_SIN_COMPILAR = (
     '<!doctype html><html lang="es"><meta charset="utf-8"><title>Dicsys Core</title>'
     '<body style="font-family:system-ui;padding:3rem;color:#334155">'
@@ -49,7 +53,10 @@ def _pantallas_vue(codigo_menu):
 @vue_app_bp.app_context_processor
 def _inyectar_pantallas_vue():
     """Deja disponibles las pantallas Vue para el menu lateral de core/base.html."""
-    return {'pantallas_vue': {codigo: _pantallas_vue(codigo) for codigo in PANTALLAS_VUE}}
+    return {
+        'pantallas_vue': {codigo: _pantallas_vue(codigo) for codigo in PANTALLAS_VUE},
+        'endpoints_migrados_a_vue': ENDPOINTS_MIGRADOS_A_VUE,
+    }
 
 
 def _leer_indice():
@@ -143,8 +150,9 @@ def spa(ruta):
 
 @vue_app_bp.route('/recruiting/candidatos')
 @vue_app_bp.route('/recruiting/candidatos/nuevo')
+@vue_app_bp.route('/recruiting/candidatos/<uuid:id>')
 @require_permiso('recruiting.candidatos')
-def spa_nuevo_candidato():
+def spa_nuevo_candidato(id=None):
     """Candidatos y Nuevo Candidato exigen el mismo item de menu que sus URL originales (/recruiting/candidatos...).
 
     Ruta especifica: Flask la prefiere a la generica de arriba, que no cambia para el resto de las pantallas.

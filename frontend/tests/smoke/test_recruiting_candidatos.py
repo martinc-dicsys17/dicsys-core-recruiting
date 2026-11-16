@@ -251,26 +251,39 @@ def test_el_alta_clasica_con_error_vuelve_a_mostrar_el_formulario(frontend_clien
 # --- Ficha, edición y baja ------------------------------------------------------------------------------------------
 
 
-def test_la_ficha_muestra_el_candidato(frontend_client, fake_api):
+def test_la_ficha_abre_la_pantalla_vue_conservando_volver_y_no_consulta_al_backend(frontend_client, fake_api):
+    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
+
+    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}")
+    assert respuesta.status_code == 302
+    assert respuesta.headers["Location"].endswith(f"/v2/recruiting/candidatos/{ID_ANA}")
+    assert not [c for c in fake_api.calls if c["endpoint"].startswith("/recruiting/candidatos/")]
+
+    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?volver=/recruiting/candidatos?page=2&x=1")
+    assert f"/v2/recruiting/candidatos/{ID_ANA}?volver=" in respuesta.headers["Location"]
+    assert "x=1" not in respuesta.headers["Location"]
+
+
+def test_la_edicion_de_la_ficha_sigue_siendo_la_pantalla_anterior_en_modo_edicion(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
     _catalogos(fake_api)
     fake_api.respond("GET", f"/recruiting/candidatos/{ID_ANA}", ANA)
 
-    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}")
+    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1")
     html = respuesta.get_data(as_text=True)
 
     assert respuesta.status_code == 200
     assert "ana@example.com" in html and "Backend Developer" in html
-    assert "Postular a Búsqueda" not in html
+    assert 'x-init="iniciarEdicion()"' in html
 
 
-def test_la_ficha_de_un_candidato_que_no_se_puede_ver_vuelve_al_listado_con_el_motivo(frontend_client, fake_api):
+def test_la_edicion_de_un_candidato_que_no_se_puede_ver_vuelve_al_listado_con_el_motivo(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
     fake_api.respond(
         "GET", f"/recruiting/candidatos/{ID_ANA}", {"detail": "No tenes permiso para acceder a este candidato."}, 403
     )
 
-    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}")
+    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1")
 
     assert respuesta.status_code == 302 and respuesta.headers["Location"].endswith("/recruiting/candidatos")
 
@@ -585,7 +598,7 @@ def test_el_menu_enlaza_candidatos_y_marca_la_seccion_activa(frontend_client, fa
     _catalogos(fake_api)
     fake_api.respond("GET", f"/recruiting/candidatos/{ID_ANA}", ANA)
 
-    html = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}").get_data(as_text=True)
+    html = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1").get_data(as_text=True)
 
     assert 'href="/recruiting/candidatos"' in html
     fragmento = html.split('href="/recruiting/candidatos"', 1)[1][:400]

@@ -5,7 +5,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="p-2 lg:p-6 w-full max-w-none animate-fade-in" x-data="candidatoDetalleComponent()">
+<div class="p-2 lg:p-6 w-full max-w-none animate-fade-in" x-data="candidatoDetalleComponent()"{% if editar_al_abrir %} x-init="iniciarEdicion()"{% endif %}>
 
     <!-- Modal de confirmación: agregar a Blacklist -->
     <div x-show="confirmarBlacklist" x-cloak

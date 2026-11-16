@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ChevronDown, LayoutDashboard } from '@lucide/vue'
 import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import { BASE_SPA, type MenuGrupo, type MenuItem } from '@/core/bootstrap'
 import { useSessionStore } from '@/core/stores/session'
@@ -13,6 +13,7 @@ const emit = defineEmits<{ expandir: [] }>()
 
 const sesion = useSessionStore()
 const route = useRoute()
+const router = useRouter()
 
 /** Ruta interna del router para un item Vue (su url llega con el prefijo de la SPA). */
 function rutaInterna(item: MenuItem): string {
@@ -23,8 +24,29 @@ function esActivo(item: MenuItem): boolean {
   return item.vue && item.url !== null && route.path === rutaInterna(item)
 }
 
+/**
+ * Item de una pantalla ya migrada a Vue que sigue en el menu de siempre (por ejemplo «Candidatos»): su url es la de
+ * Flask y el router de la SPA tiene una ruta para ese mismo camino. Se muestra en verde, como los items Vue, y mas
+ * marcado mientras se esta en esa pantalla o en una dependiente (la ficha de un candidato).
+ */
+function rutaDelItem(item: MenuItem): string | null {
+  if (item.vue || item.url === null) return null
+  const ruta = new URL(item.url, window.location.origin).pathname
+  return ruta === '/' ? null : ruta
+}
+
+function esMigrado(item: MenuItem): boolean {
+  const ruta = rutaDelItem(item)
+  return ruta !== null && router.resolve(ruta).name !== 'no-encontrada'
+}
+
+function esMigradoActivo(item: MenuItem): boolean {
+  const ruta = rutaDelItem(item)
+  return esMigrado(item) && ruta !== null && (route.path === ruta || route.path.startsWith(`${ruta}/`))
+}
+
 function grupoActivo(grupo: MenuGrupo): boolean {
-  return grupo.items.some(esActivo)
+  return grupo.items.some((item) => esActivo(item) || esMigradoActivo(item))
 }
 
 const abiertos = ref(new Set(sesion.menus.filter(grupoActivo).map((g) => g.codigo)))
@@ -122,22 +144,30 @@ function alternar(grupo: MenuGrupo): void {
             >
               <component :is="iconoDeMenu(item.icono, 'item')" class="mr-3 h-4 w-4 text-emerald-600" />
               <span class="text-sm" :class="esActivo(item) ? 'font-bold' : 'font-medium'">{{ item.nombre }}</span>
-              <span
-                class="ml-auto rounded border border-emerald-200 bg-emerald-100 px-1.5 py-0.5 text-[10px] leading-none font-bold tracking-wider text-emerald-700"
-              >
-                VUE
-              </span>
             </RouterLink>
+            <!-- Pantalla ya migrada a Vue (item de siempre): mismo verde que los items Vue -->
             <a
               v-else-if="item.url"
               :href="item.url"
-              class="group flex items-center rounded-lg px-3 py-2 text-dark-500 transition-all duration-200 hover:bg-dark-50 hover:text-dark-700"
+              class="group flex items-center rounded-lg px-3 py-2 transition-all duration-200"
+              :class="
+                esMigrado(item)
+                  ? [
+                      'shadow-[inset_2px_0_0_0_#34d399]',
+                      esMigradoActivo(item)
+                        ? 'bg-emerald-100/80 text-emerald-900'
+                        : 'bg-emerald-50/70 text-dark-600 hover:bg-emerald-100/70 hover:text-dark-800',
+                    ]
+                  : 'text-dark-500 hover:bg-dark-50 hover:text-dark-700'
+              "
+              :aria-current="esMigradoActivo(item) ? 'page' : undefined"
             >
               <component
                 :is="iconoDeMenu(item.icono, 'item')"
-                class="mr-3 h-4 w-4 text-dark-400 group-hover:text-dark-600"
+                class="mr-3 h-4 w-4"
+                :class="esMigrado(item) ? 'text-emerald-600' : 'text-dark-400 group-hover:text-dark-600'"
               />
-              <span class="text-sm font-medium">{{ item.nombre }}</span>
+              <span class="text-sm" :class="esMigradoActivo(item) ? 'font-bold' : 'font-medium'">{{ item.nombre }}</span>
             </a>
             <span v-else class="flex cursor-not-allowed items-center rounded-lg px-3 py-2 text-dark-400">
               <component :is="iconoDeMenu(item.icono, 'item')" class="mr-3 h-4 w-4" />
