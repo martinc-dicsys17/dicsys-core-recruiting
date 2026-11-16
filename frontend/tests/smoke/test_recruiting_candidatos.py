@@ -238,16 +238,22 @@ def test_el_admin_entra_sin_permisos_de_grupo(frontend_client, fake_api):
 # --- Formulario de alta ---------------------------------------------------------------------------------------------
 
 
-def test_el_formulario_de_alta_carga_los_catalogos(frontend_client, fake_api):
+def test_el_alta_abre_la_pantalla_vue_conservando_busqueda_y_volver(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _catalogos(fake_api)
 
     respuesta = frontend_client.get("/recruiting/candidatos/nuevo")
-    html = respuesta.get_data(as_text=True)
+    assert respuesta.status_code == 302
+    assert respuesta.headers["Location"].endswith("/v2/recruiting/candidatos/nuevo")
 
-    assert respuesta.status_code == 200
-    for esperado in ("Python", "Liderazgo", "Backend Developer", "QA Tester", "Junior"):
-        assert esperado in html
+    respuesta = frontend_client.get(f"/recruiting/candidatos/nuevo?busqueda_id={ID_ANA}&volver=/recruiting/candidatos")
+    ubicacion = respuesta.headers["Location"]
+    assert "/v2/recruiting/candidatos/nuevo?" in ubicacion
+    assert f"busqueda_id={ID_ANA}" in ubicacion and "volver=/recruiting/candidatos" in ubicacion
+    # Solo se reenvían busqueda_id y volver: otros parámetros (p. ej. «ruta») no pueden pisar el destino
+    respuesta = frontend_client.get("/recruiting/candidatos/nuevo?ruta=otra&x=1")
+    assert respuesta.headers["Location"].endswith("/v2/recruiting/candidatos/nuevo")
+    # Los catálogos ya no los arma Flask: la pantalla Vue los pide a la API.
+    assert not any(c["endpoint"].startswith("/recruiting/skills") for c in fake_api.calls)
 
 
 def test_el_alta_reenvia_el_cuerpo_normalizado_al_backend(frontend_client, fake_api):

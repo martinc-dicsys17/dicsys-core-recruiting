@@ -14,7 +14,7 @@ from flask import Blueprint, Response, current_app, session, url_for
 from jinja2.utils import htmlsafe_json_dumps
 from werkzeug.routing import BuildError
 
-from modulos.auth_helpers import get_api_request_func, login_required
+from modulos.auth_helpers import get_api_request_func, login_required, require_permiso
 
 vue_app_bp = Blueprint('vue_app', __name__, url_prefix='/v2')
 
@@ -122,11 +122,7 @@ def _armar_bootstrap():
     }
 
 
-@vue_app_bp.route('/', defaults={'ruta': ''})
-@vue_app_bp.route('/<path:ruta>')
-@login_required
-def spa(ruta):
-    """Punto de entrada unico de la SPA: cualquier ruta bajo /v2 la resuelve Vue Router."""
+def _servir_spa():
     indice = _leer_indice()
     if indice is None or MARCADOR_BOOTSTRAP not in indice:
         return Response(HTML_SIN_COMPILAR, status=503, mimetype='text/html')
@@ -135,3 +131,21 @@ def spa(ruta):
     respuesta = Response(indice.replace(MARCADOR_BOOTSTRAP, bloque, 1), mimetype='text/html')
     respuesta.headers['Cache-Control'] = 'no-store'
     return respuesta
+
+
+@vue_app_bp.route('/', defaults={'ruta': ''})
+@vue_app_bp.route('/<path:ruta>')
+@login_required
+def spa(ruta):
+    """Punto de entrada unico de la SPA: cualquier ruta bajo /v2 la resuelve Vue Router."""
+    return _servir_spa()
+
+
+@vue_app_bp.route('/recruiting/candidatos/nuevo')
+@require_permiso('recruiting.candidatos')
+def spa_nuevo_candidato():
+    """Nuevo Candidato exige el mismo item de menu que la URL original (/recruiting/candidatos/nuevo).
+
+    Ruta especifica: Flask la prefiere a la generica de arriba, que no cambia para el resto de las pantallas.
+    """
+    return _servir_spa()

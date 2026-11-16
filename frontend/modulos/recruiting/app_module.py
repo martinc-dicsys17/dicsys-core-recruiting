@@ -441,16 +441,11 @@ def candidatos():
 @recruiting_bp.route("/candidatos/nuevo", methods=["GET"])
 @require_permiso("recruiting.candidatos")
 def nuevo_candidato():
-    api_request = get_api_request_func()
-    token = session.get("token")
-    return render_template(
-        "recruiting/candidato_form.html",
-        busqueda_id=_busqueda_id_valido(request.args.get("busqueda_id")),
-        niveles_seniority_catalogo=_lista_de_nombres(
-            api_request, token, "/recruiting/niveles-seniority", ordenar=False
-        ),
-        **_contexto_de_formulario(api_request, token),
-    )
+    """El alta de candidatos es una pantalla Vue (/v2/recruiting/candidatos/nuevo); acá se conservan la URL y los
+    parámetros (busqueda_id, volver) que usan los enlaces de las demás pantallas. El permiso se valida acá y el
+    backend lo valida de nuevo en cada llamada."""
+    parametros = {k: request.args[k] for k in ("busqueda_id", "volver") if request.args.get(k)}
+    return redirect(url_for("vue_app.spa", ruta="recruiting/candidatos/nuevo", **parametros))
 
 
 def _busqueda_id_valido(valor):

@@ -4,6 +4,9 @@ Primera implementacion de la nueva arquitectura frontend. Convive con el fronten
 (Flask + Jinja + HTMX/Alpine), que no se modifica: cada pantalla nueva vive bajo `/v2/...`.
 
 Pantallas: **Blacklist** (`/v2/recruiting/blacklist`), solo de consulta y con datos ficticios.
+**Nuevo Candidato** (`/v2/recruiting/candidatos/nuevo`), con datos reales: `/recruiting/candidatos/nuevo` (Flask) redirige
+ahi conservando `busqueda_id` y `volver`. Usa el proxy `/api/v1` y, para adjuntar el CV, la ruta multipart de Flask
+`/recruiting/candidatos/<id>/cv`. Pruebas de sus reglas: `node --test tests/candidato_nuevo_validacion.test.mjs`.
 
 ## Stack
 
@@ -67,3 +70,16 @@ src/
   Cuando exista el endpoint se agrega la implementacion HTTP (proxy `/api/v1` de Flask) sin tocar los componentes.
 - Despliegue: `frontend/static/vue/` debe existir en el servidor (versionar el compilado o compilar en la imagen Docker).
 - Permisos: hoy la pantalla solo exige sesion iniciada.
+
+## Nuevo Candidato: pruebas manuales pendientes
+
+Sin Playwright y sin crear registros reales, quedan para probar a mano en el ambiente de test (con un usuario del
+grupo habitual y otro sin el item Candidatos):
+
+1. `/recruiting/candidatos/nuevo` abre la pantalla Vue; con `?busqueda_id=<uuid>&volver=/recruiting/...` los conserva.
+2. Acceso directo a `/v2/recruiting/candidatos/nuevo` sin el item Candidatos: responde 403 (con sesion y permiso: abre).
+3. Provincias, puestos, seniority, skills y competencias cargan; la ciudad se habilita al elegir provincia y se limpia al cambiarla.
+4. Obligatorios (nombres, apellido, email, telefono), fecha (DD-MM-AAAA, 1900-2010) y formato del email; limpiar el Puesto y guardar.
+5. Alta con y sin CV; con CV invalido (formato o mas de 2 MB); alta que el backend rechaza (se muestra su mensaje).
+6. Alta desde una busqueda asignada (grupo EXTERNOS).
+7. Doble clic en Guardar crea un solo candidato; Volver y Cancelar llevan al origen; revisar el aspecto a distintos anchos.
