@@ -6,7 +6,7 @@ import { sql } from '../stack'
 /**
  * Nuevo Candidato. Criterio legacy (candidato_form.html): campos obligatorios Nombres, Apellido, Email y Teléfono; fecha
  * DD-MM-AAAA entre 1900 y 2010; teléfono solo dígitos y «+»; ciudad dependiente de la provincia; seniority inicial =
- * primer nivel; modalidad inicial «Remoto»; alta por POST /recruiting/candidatos; CV (PDF/DOC/DOCX hasta 2 MB) por
+ * «Semi Senior»; modalidad inicial «Remoto»; alta por POST /recruiting/candidatos; CV (PDF/DOC/DOCX hasta 2 MB) por
  * /recruiting/candidatos/<id>/cv; al guardar vuelve a la pantalla de origen.
  */
 test.use({ storageState: estadoDe('autorizado') })
@@ -31,11 +31,13 @@ test.describe('apertura y catálogos', () => {
     await expect(page.getByRole('heading', { name: 'Nuevo Candidato' })).toBeVisible()
   })
 
-  test('valores iniciales: campos vacíos, seniority = primer nivel y modalidad Remoto', async ({ page }) => {
+  test('valores iniciales: campos vacíos, seniority Semi Senior, modalidad Remoto, disponibilidad Inmediata y observaciones vacías', async ({ page }) => {
     await abrir(page)
     for (const id of ['nombre', 'apellido', 'email', 'telefono', 'linkedin', 'dni', 'fecha-nacimiento']) await expect(campo(page, id), id).toHaveValue('')
-    await expect(page.locator('#seniority')).toHaveText('Trainee')
+    await expect(page.locator('#seniority')).toHaveText('Semi Senior')
     await expect(page.locator('#modalidad')).toHaveText('Remoto')
+    await expect(page.locator('#disponibilidad')).toHaveText('Inmediata')
+    await expect(campo(page, 'observaciones')).toHaveValue('')
     await expect(page.locator('#provincia')).toContainText('Seleccionar provincia...')
     await expect(page.locator('#ciudad')).toContainText('Seleccionar ciudad...')
     await expect(page.locator('#puesto')).toContainText('Seleccionar puesto...')
@@ -241,7 +243,7 @@ test.describe('alta de un candidato real en la base E2E', () => {
     await expect(page.getByText('Candidato guardado exitosamente.')).toBeVisible()
     await expect(page).toHaveURL(/\/v2\/recruiting\/candidatos$/, { timeout: 15_000 })
     const fila = candidatoEnBase('minimo.e2e@example.com', "nombre, seniority, modalidad, fuente, estado, cv_url is null, headline is null or headline=''")!
-    expect(fila).toEqual(['Minimo', 'Trainee', 'Remoto', 'Portal Propio', 'Activo', 't', 't'])
+    expect(fila).toEqual(['Minimo', 'Semi Senior', 'Remoto', 'Portal Propio', 'Activo', 't', 't'])
   })
 
   test('doble clic en Guardar crea un solo candidato', async ({ page, monitor }) => {

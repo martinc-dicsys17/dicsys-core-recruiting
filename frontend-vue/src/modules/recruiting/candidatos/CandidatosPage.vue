@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { AlertCircle, FileUp, Loader2, Plus, Trash2, Upload } from '@lucide/vue'
+import { AlertCircle, FileUp, Plus, Upload } from '@lucide/vue'
 import Button from 'primevue/button'
-import Dialog from 'primevue/dialog'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { CLASE_BOTON_CANCELAR, CLASE_BOTON_PELIGRO, PT_DIALOGO } from './estilos'
 
 import { candidatosRepository } from './api/candidatos.repository'
 import AsignarBusquedaDialog from './components/AsignarBusquedaDialog.vue'
@@ -82,21 +80,22 @@ async function verDetalles(c: CandidatoListado): Promise<void> {
 // ---- Asignar a búsqueda ----
 const aAsignar = ref<CandidatoListado | null>(null)
 
-// ---- Eliminar (con confirmación) ----
+// ---- Eliminar (confirmación nativa del navegador, como la pantalla anterior) ----
 const eliminar = useEliminarCandidato()
-const aEliminar = ref<CandidatoListado | null>(null)
-const nombreAEliminar = computed(() => `${aEliminar.value?.nombre ?? ''} ${aEliminar.value?.apellido ?? ''}`.trim())
+const eliminandoId = ref<string | null>(null)
 
-async function confirmarEliminar(): Promise<void> {
-  const c = aEliminar.value
-  if (!c || eliminar.isPending.value) return
+async function eliminarCandidato(c: CandidatoListado): Promise<void> {
+  if (eliminar.isPending.value) return
+  const nombre = `${c.nombre} ${c.apellido ?? ''}`.trim()
+  if (!window.confirm(`¿Estás seguro de que deseas eliminar permanentemente a "${nombre}" de la base de datos? Esta acción no se puede deshacer.`)) return
+  eliminandoId.value = c.id
   try {
     await eliminar.mutateAsync(c.id)
     toast.add({ severity: 'success', summary: 'Candidato eliminado correctamente', life: 5000 })
-    aEliminar.value = null
   } catch (e) {
-    aEliminar.value = null
     toast.add({ severity: 'error', summary: e instanceof Error ? e.message : 'Error al eliminar el candidato.', life: 8000 })
+  } finally {
+    eliminandoId.value = null
   }
 }
 
@@ -180,16 +179,17 @@ const ICONO_CARGA =
         :permisos="permisos"
         :puede-cargar-cv="permisos.puede_cargar_cv_general"
         :enlace-ficha="enlaceFicha"
-        :eliminando-id="eliminar.isPending.value ? (aEliminar?.id ?? null) : null"
+        :eliminando-id="eliminandoId"
         @asignar="aAsignar = $event"
         @detalles="verDetalles"
-        @eliminar="aEliminar = $event"
+        @eliminar="eliminarCandidato"
       />
       <PaginacionCandidatos
         :pagina="filtros.pagina"
         :limite="filtros.limite"
         :total="total"
         :total-paginas="totalPaginas"
+        :cargando="cargando"
         @pagina="irAPagina"
         @limite="cambiar({ limite: $event })"
       />
@@ -198,35 +198,6 @@ const ICONO_CARGA =
     <CargaCvIndividualDialog v-model="cargaIndividualAbierta" />
     <CargaMasivaDialog :carga="cargaMasiva" />
     <AsignarBusquedaDialog v-model:candidato="aAsignar" />
-
-    <!-- Confirmación previa a eliminar: la acción no se puede deshacer -->
-    <Dialog
-    :pt="PT_DIALOGO"
-      :visible="aEliminar !== null"
-      modal
-      :draggable="false"
-      :closable="!eliminar.isPending.value"
-      style="width: 28rem"
-      @update:visible="(abierto: boolean) => !abierto && !eliminar.isPending.value && (aEliminar = null)"
-    >
-      <template #header>
-        <div class="flex items-center gap-2.5">
-          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-red-50 text-red-600"><Trash2 class="h-5 w-5" /></div>
-          <h3 class="text-base font-bold text-dark-900">Eliminar candidato</h3>
-        </div>
-      </template>
-      <p class="text-sm text-dark-700" data-testid="texto-eliminar">
-        ¿Estás seguro de que deseas eliminar permanentemente a "{{ nombreAEliminar }}" de la base de datos? Esta
-        acción no se puede deshacer.
-      </p>
-      <template #footer>
-        <Button label="Cancelar" unstyled :class="CLASE_BOTON_CANCELAR" :disabled="eliminar.isPending.value" @click="aEliminar = null" />
-        <Button unstyled :class="CLASE_BOTON_PELIGRO" :disabled="eliminar.isPending.value" data-testid="confirmar-eliminar" @click="confirmarEliminar">
-          <Loader2 v-if="eliminar.isPending.value" class="h-4 w-4 animate-spin" />
-          <span>Eliminar</span>
-        </Button>
-      </template>
-    </Dialog>
 
     <Toast position="top-right" :pt="ESTILOS_TOAST" />
   </div>

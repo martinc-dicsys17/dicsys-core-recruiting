@@ -1,4 +1,4 @@
-import { ErrorApi } from '../../candidato-nuevo/api/candidatos.repository'
+import { ErrorApi, irAlLoginSiSesionVencida } from '../../candidato-nuevo/api/candidatos.repository'
 import { MENSAJE_CANDIDATO_NO_DISPONIBLE } from '../presentacion'
 import type { CandidatoDetalle } from '../types'
 
@@ -13,6 +13,7 @@ export async function obtenerCandidato(id: string): Promise<CandidatoDetalle> {
   } catch {
     throw new ErrorApi('Error de conexión con el servidor. Reintentá en unos momentos.', 0)
   }
+  irAlLoginSiSesionVencida(respuesta.status)
   let cuerpo: unknown = null
   try {
     cuerpo = await respuesta.json()

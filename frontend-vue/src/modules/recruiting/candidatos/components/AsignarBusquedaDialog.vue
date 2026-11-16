@@ -56,7 +56,7 @@ async function confirmar(): Promise<void> {
 </script>
 
 <template>
-  <Dialog :pt="PT_DIALOGO" v-model:visible="visible" modal :draggable="false" :closable="!asignar.isPending.value" style="width: 36rem">
+  <Dialog :pt="PT_DIALOGO" v-model:visible="visible" modal dismissable-mask :draggable="false" :closable="!asignar.isPending.value" style="width: 36rem">
     <template #header>
       <div class="flex items-center gap-2.5">
         <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">

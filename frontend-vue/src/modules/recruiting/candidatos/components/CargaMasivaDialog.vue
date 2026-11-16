@@ -36,6 +36,7 @@ function agregar(lista: FileList | null | undefined): void {
     :pt="PT_DIALOGO"
     :visible="c.abierto.value"
     modal
+    dismissable-mask
     :draggable="false"
     :closable="!c.procesando.value"
     :close-on-escape="!c.procesando.value"

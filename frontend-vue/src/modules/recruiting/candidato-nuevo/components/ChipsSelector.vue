@@ -46,8 +46,11 @@ function quitar(opcion: string): void {
 
 function agregarNueva(): void {
   const valor = nueva.value.trim()
-  if (valor && !elegidas.value.includes(valor)) elegidas.value = [...elegidas.value, valor]
-  nueva.value = ''
+  // Como la pantalla anterior: solo se vacía el campo cuando se agrega; con un valor vacío o repetido queda como está.
+  if (valor && !elegidas.value.includes(valor)) {
+    elegidas.value = [...elegidas.value, valor]
+    nueva.value = ''
+  }
 }
 </script>
 

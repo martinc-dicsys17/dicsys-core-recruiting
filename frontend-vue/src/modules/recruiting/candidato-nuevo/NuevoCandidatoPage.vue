@@ -3,6 +3,7 @@ import { AlertCircle, ArrowLeft, Briefcase, Loader2, User, UserPlus } from '@luc
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
+import Textarea from 'primevue/textarea'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import { computed, reactive, ref, watch } from 'vue'
@@ -30,6 +31,13 @@ const busquedaId = busquedaIdValido(ruta.query.busqueda_id)
 const destino = destinoVolver(ruta.query.volver, busquedaId)
 
 const MODALIDADES = ['Remoto', 'Híbrido', 'Presencial']
+// Mismas opciones que la pantalla anterior (valor guardado y texto visible).
+const DISPONIBILIDADES = [
+  { valor: 'Inmediata', texto: 'Inmediata' },
+  { valor: '2 semanas', texto: '2 semanas (preaviso estándar)' },
+  { valor: '1 mes', texto: '1 mes' },
+  { valor: 'A convenir', texto: 'A convenir' },
+]
 
 const form = reactive<FormularioCandidato>({
   nombre: '',
@@ -42,24 +50,18 @@ const form = reactive<FormularioCandidato>({
   dni: '',
   fecha_nacimiento: '',
   puesto: '',
-  seniority: '',
+  seniority: 'Semi Senior',
   modalidad: 'Remoto',
   skills: [],
   habilidades: [],
 })
+// Disponibilidad y Observaciones se muestran como en la pantalla anterior, que tampoco las enviaba al guardar.
+const disponibilidad = ref('Inmediata')
+const observaciones = ref('')
 const cv = ref<File | null>(null)
 
 const provinciaId = computed(() => form.provincia_id)
 const { provincias, ciudades, puestos, seniority, skills, habilidades } = useCatalogosCandidato(provinciaId)
-
-// El seniority arranca en el primer nivel del catálogo.
-watch(
-  () => seniority.data.value,
-  (niveles) => {
-    if (!form.seniority && niveles?.length) form.seniority = niveles[0] ?? ''
-  },
-  { immediate: true },
-)
 
 // La ciudad depende de la provincia: al cambiarla se limpia la ciudad elegida.
 watch(provinciaId, () => (form.ciudad_id = null))
@@ -358,6 +360,29 @@ const CLASE_ERROR = 'mt-1 text-xs font-medium text-red-600'
                   texto-vacio="Ninguna habilidad o competencia seleccionada. Podés elegir del catálogo o agregar una nueva."
                   placeholder-nueva="Agregar otra habilidad (ej: Liderazgo, Comunicación, Negociación)..."
                   tono="esmeralda"
+                />
+              </div>
+
+              <div class="md:col-span-2">
+                <label for="disponibilidad" :class="CLASE_ETIQUETA">Disponibilidad</label>
+                <Select
+                  v-model="disponibilidad"
+                  input-id="disponibilidad"
+                  :options="DISPONIBILIDADES"
+                  option-label="texto"
+                  option-value="valor"
+                  fluid
+                />
+              </div>
+              <div class="md:col-span-2">
+                <label for="observaciones" :class="CLASE_ETIQUETA">Observaciones</label>
+                <Textarea
+                  id="observaciones"
+                  v-model="observaciones"
+                  rows="3"
+                  fluid
+                  class="resize-none"
+                  placeholder="Notas internas, comentarios de contacto o feedback preliminar..."
                 />
               </div>
 

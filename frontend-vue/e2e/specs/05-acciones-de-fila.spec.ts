@@ -118,11 +118,10 @@ test.describe('eliminar candidato', () => {
   test('Cancelar conserva al candidato (sigue en la grilla y en la base)', async ({ page, monitor }) => {
     const c = semilla().candidatos.eliminar1!
     const fila = await buscar(page, c.email)
+    // Confirmación nativa del navegador (window.confirm), como la pantalla anterior
+    const mensaje = new Promise<string>((ok) => page.once('dialog', (d) => { ok(d.message()); void d.dismiss() }))
     await fila.getByTestId('accion-eliminar').click()
-    const dialogo = page.getByRole('dialog')
-    await expect(dialogo.getByTestId('texto-eliminar')).toContainText('¿Estás seguro de que deseas eliminar permanentemente a "Elias Eliminable" de la base de datos? Esta acción no se puede deshacer.')
-    await dialogo.getByRole('button', { name: 'Cancelar' }).click()
-    await expect(dialogo).toHaveCount(0)
+    expect(await mensaje).toBe('¿Estás seguro de que deseas eliminar permanentemente a "Elias Eliminable" de la base de datos? Esta acción no se puede deshacer.')
     expect(monitor.mutacionesDe(/DELETE/)).toHaveLength(0)
     await expect(page.locator(FILAS)).toHaveCount(1)
     expect(candidatoEnBase(c.email, 'activo, deleted_at is null')).toEqual(['t', 't'])
@@ -131,10 +130,9 @@ test.describe('eliminar candidato', () => {
   test('confirmar elimina: desaparece de la grilla y el backend lo da de baja (baja lógica)', async ({ page, monitor }) => {
     const c = semilla().candidatos.eliminar1!
     const fila = await buscar(page, c.email)
+    page.once('dialog', (d) => void d.accept())
     await fila.getByTestId('accion-eliminar').click()
-    await page.getByTestId('confirmar-eliminar').click()
     await expect(page.getByText('Candidato eliminado correctamente')).toBeVisible()
-    await expect(page.getByRole('dialog')).toHaveCount(0)
     await expect(page.getByTestId('sin-candidatos')).toBeVisible() // la búsqueda ya no lo encuentra
     expect(monitor.mutacionesDe(new RegExp(`DELETE /api/v1/recruiting/candidatos/${c.id}`))).toHaveLength(1)
     // El backend original NO borra la fila: la marca como baja (activo=false, deleted_at)

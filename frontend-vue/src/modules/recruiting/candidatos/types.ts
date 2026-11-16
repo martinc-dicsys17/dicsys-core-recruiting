@@ -11,6 +11,9 @@ export interface CandidatoListado {
   email: string
   telefono?: string | null
   ubicacion?: string | null
+  /** Respaldo de la ubicación, como en la pantalla anterior (`ubicacion or ciudad or localidad`). */
+  ciudad?: string | null
+  localidad?: string | null
   cv_url?: string | null
   headline?: string | null
   skills: string[]

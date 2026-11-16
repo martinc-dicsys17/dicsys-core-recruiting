@@ -17,6 +17,14 @@ export class ErrorApi extends Error {
   }
 }
 
+/**
+ * Sesión vencida (401 del backend): como la pantalla anterior, se lleva al usuario al login. Las pantallas Vue piden
+ * los datos por fetch, así que no hay una navegación de Flask que haga ese redirect.
+ */
+export function irAlLoginSiSesionVencida(estado: number): void {
+  if (estado === 401) window.location.assign('/login')
+}
+
 async function mensajeDeError(respuesta: Response, porDefecto: string): Promise<string> {
   try {
     const cuerpo: unknown = await respuesta.json()
@@ -38,6 +46,7 @@ async function pedir<T>(ruta: string, opciones: RequestInit, porDefecto: string)
   } catch {
     throw new ErrorApi('Error de conexión con el servidor. Reintentá en unos momentos.', 0)
   }
+  irAlLoginSiSesionVencida(respuesta.status)
   if (!respuesta.ok) throw new ErrorApi(await mensajeDeError(respuesta, porDefecto), respuesta.status)
   return (await respuesta.json()) as T
 }

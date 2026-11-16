@@ -7,7 +7,7 @@ import { computed } from 'vue'
 import { CLASE_BOTON_PAGINA, PT_SELECT_PAGINACION } from '../estilos'
 import { LIMITES, rangoRegistros } from '../filtros'
 
-const props = defineProps<{ pagina: number; limite: number; total: number; totalPaginas: number }>()
+const props = defineProps<{ pagina: number; limite: number; total: number; totalPaginas: number; cargando?: boolean }>()
 const emit = defineEmits<{ pagina: [numero: number]; limite: [valor: number] }>()
 
 const rango = computed(() => rangoRegistros(props.pagina, props.limite, props.total))
@@ -39,7 +39,7 @@ const NEGRITA = 'font-bold text-dark-900 dark:text-slate-100'
         <strong :class="NEGRITA">{{ rango.hasta }}</strong> de <strong :class="NEGRITA">{{ total }}</strong>
         candidatos
       </span>
-      <span v-else>Sin candidatos para mostrar</span>
+      <span v-else-if="!cargando">Sin candidatos para mostrar</span>
     </div>
 
     <div class="flex items-center gap-2">

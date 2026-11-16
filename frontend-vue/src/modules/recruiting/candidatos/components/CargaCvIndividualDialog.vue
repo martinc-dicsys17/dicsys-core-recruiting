@@ -161,12 +161,14 @@ const columnas = [
 <template>
   <Dialog
     :pt="PT_DIALOGO"
-    v-model:visible="visible"
+    :visible="visible"
     modal
+    dismissable-mask
     :draggable="false"
     :closable="!carga.isPending.value"
     :close-on-escape="!carga.isPending.value"
     style="width: 32rem"
+    @update:visible="(abierto: boolean) => !(!abierto && carga.isPending.value) && (visible = abierto)"
   >
     <template #header>
       <div class="flex items-center gap-2.5">
@@ -264,7 +266,7 @@ const columnas = [
     :visible="comparacion !== null"
     modal
     :draggable="false"
-    :closable="false"
+    :closable="!carga.isPending.value"
     :close-on-escape="!carga.isPending.value"
     @update:visible="(abierto: boolean) => !abierto && cerrarComparacion()"
     style="width: min(80rem, 96vw); height: 95vh"

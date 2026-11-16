@@ -100,7 +100,7 @@ const CONTENEDOR_CHIPS = 'flex flex-wrap gap-1.5 p-2 bg-dark-50 border border-da
 </script>
 
 <template>
-  <div class="w-full max-w-none animate-fade-in p-2 lg:p-6">
+  <div class="w-full max-w-none animate-fade-in">
     <!-- Modal de confirmación: agregar a Blacklist -->
     <div
       v-if="confirmarBlacklist"

@@ -1,4 +1,4 @@
-import { ErrorApi } from '../../candidato-nuevo/api/candidatos.repository'
+import { ErrorApi, irAlLoginSiSesionVencida } from '../../candidato-nuevo/api/candidatos.repository'
 import type {
   AvanceLote,
   BusquedaElegible,
@@ -36,11 +36,14 @@ function mensajeDe(cuerpo: unknown, porDefecto: string): string {
 }
 
 async function enviar(ruta: string, opciones: RequestInit): Promise<Response> {
+  let respuesta: Response
   try {
-    return await fetch(ruta, { ...opciones, headers: { Accept: 'application/json', ...opciones.headers } })
+    respuesta = await fetch(ruta, { ...opciones, headers: { Accept: 'application/json', ...opciones.headers } })
   } catch {
     throw new ErrorApi('Error de conexión con el servidor. Reintentá en unos momentos.', 0)
   }
+  irAlLoginSiSesionVencida(respuesta.status)
+  return respuesta
 }
 
 /** Pide y devuelve el JSON; un error HTTP se convierte en ErrorApi con el mensaje del backend. */

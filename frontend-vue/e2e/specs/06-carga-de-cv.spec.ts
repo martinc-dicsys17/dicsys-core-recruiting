@@ -94,6 +94,21 @@ test.describe('carga individual', () => {
     expect(sql(`select telefono, cv_url from recruiting_candidatos where lower(email)='${EMAIL}'`)[0]).toEqual(antes)
   })
 
+  test('la comparación se cierra con la X (solo cierra: no actualiza nada)', async ({ page, monitor }) => {
+    monitor.permitir(/^409 POST \/recruiting\/candidatos\/cargar-cv/)
+    const [antes] = sql(`select telefono, cv_url from recruiting_candidatos where lower(email)='${EMAIL}'`)
+    await abrirGrilla(page)
+    await page.getByTestId('abrir-carga-individual').click()
+    await page.getByTestId('cv-individual-input').setInputFiles({ name: 'cv-nora-v3.pdf', mimeType: 'application/pdf', buffer: pdf({ nombre: 'Nora', apellido: 'Nueva', email: EMAIL, telefono: '+5493515559003' }) })
+    await page.getByTestId('procesar-cv-individual').click()
+    const comparacion = page.locator('.p-dialog', { hasText: 'El candidato ya existe con otro CV' })
+    await expect(comparacion).toBeVisible()
+    await comparacion.locator('.p-dialog-close-button').click()
+    await expect(comparacion).toHaveCount(0)
+    expect(monitor.mutacionesDe(/actualizar-cv/)).toHaveLength(0)
+    expect(sql(`select telefono, cv_url from recruiting_candidatos where lower(email)='${EMAIL}'`)[0]).toEqual(antes)
+  })
+
   test('mismo email y CV distinto: «Actualizar con el nuevo» reemplaza el CV y los datos', async ({ page, monitor }) => {
     monitor.permitir(/^409 POST \/recruiting\/candidatos\/cargar-cv/)
     const [antes] = sql(`select cv_url from recruiting_candidatos where lower(email)='${EMAIL}'`)

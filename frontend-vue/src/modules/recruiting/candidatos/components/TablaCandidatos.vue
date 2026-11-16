@@ -75,7 +75,7 @@ const BOTON =
 
     <Column header="Ubicación" :header-class="CLASE_ENCABEZADO" :body-class="CELDA">
       <template #body="{ data }: { data: CandidatoListado }">
-        <span class="text-xs font-medium text-dark-800">{{ data.ubicacion || '—' }}</span>
+        <span class="text-xs font-medium text-dark-800">{{ data.ubicacion || data.ciudad || data.localidad || '—' }}</span>
       </template>
     </Column>
 
@@ -190,7 +190,7 @@ const BOTON =
     </Column>
 
     <template #empty>
-      <div class="px-6 py-16 text-center text-dark-400" data-testid="sin-candidatos">
+      <div v-if="!cargando" class="px-6 py-16 text-center text-dark-400" data-testid="sin-candidatos">
         <Inbox class="mx-auto mb-3 h-10 w-10 text-dark-300" />
         <p class="text-base font-semibold text-dark-700">No se encontraron candidatos en la base de talentos</p>
         <p v-if="puedeCargarCv" class="mx-auto mt-1 max-w-sm text-xs">
