@@ -12,8 +12,8 @@ pytestmark = [pytest.mark.frontend]
 
 ID_ANA = "11111111-1111-1111-1111-111111111111"
 
-PERMISOS_TODOS = {"puede_eliminar_candidatos": True, "puede_cargar_cv_general": True, "puede_carga_masiva": True}
 PERMISOS_EXTERNO = {"puede_eliminar_candidatos": False, "puede_cargar_cv_general": False, "puede_carga_masiva": False}
+PERMISOS_TODOS = {"puede_eliminar_candidatos": True, "puede_cargar_cv_general": True, "puede_carga_masiva": True}
 
 ANA = {
     "id": ID_ANA,
@@ -45,17 +45,6 @@ ANA = {
     "created_at": "2026-11-10T12:00:00",
     "updated_at": "2026-11-10T12:00:00",
 }
-
-
-def _pagina(items, total=None, pagina=1, por_pagina=20):
-    total = len(items) if total is None else total
-    return {
-        "items": items,
-        "total": total,
-        "pagina": pagina,
-        "por_pagina": por_pagina,
-        "total_paginas": max(1, -(-total // por_pagina)),
-    }
 
 
 def _sesion(client, fake_api, *permisos, rol="usuario", acciones=PERMISOS_TODOS):
@@ -92,11 +81,6 @@ def _catalogos(fake_api):
     fake_api.respond("GET", "/recruiting/candidatos/perfiles-puesto", ["Backend Developer", "QA Tester"])
 
 
-def _listado(fake_api, respuesta, status=200, endpoint="/recruiting/candidatos?pagina=1&por_pagina=20"):
-    _catalogos(fake_api)
-    fake_api.respond("GET", endpoint, respuesta, status)
-
-
 def _llamada(fake_api, prefijo):
     return next(c for c in fake_api.calls if c["endpoint"].startswith(prefijo))
 
@@ -128,111 +112,60 @@ def test_las_acciones_de_escritura_tambien_exigen_el_item(frontend_client, fake_
     assert frontend_client.post("/recruiting/candidatos/cargar-cv-masivo/iniciar").status_code == 403
 
 
-# --- Listado --------------------------------------------------------------------------------------------------------
+# --- Listado: pantalla Vue ------------------------------------------------------------------------------------------
+# El listado, sus filtros y la paginación son de la pantalla Vue (frontend-vue/tests/candidatos_listado.test.mjs); acá
+# se prueba que la URL original conserva todos los parámetros y que el acceso sigue protegido.
 
 
-def test_el_listado_muestra_los_candidatos_y_la_paginacion(frontend_client, fake_api):
+def test_el_listado_abre_la_pantalla_vue_y_no_consulta_al_backend(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _listado(fake_api, _pagina([ANA], total=41, por_pagina=20))
 
     respuesta = frontend_client.get("/recruiting/candidatos")
-    html = respuesta.get_data(as_text=True)
 
-    assert respuesta.status_code == 200
-    assert "Ana" in html and "Perez" in html and "ana@example.com" in html
-    assert f"/recruiting/candidatos/{ID_ANA}" in html
-    assert "/recruiting/candidatos/nuevo" in html
-    assert "Mostrando" in html and "41" in html
-    assert {
-        "method": "GET",
-        "endpoint": "/recruiting/candidatos?pagina=1&por_pagina=20",
-        "data": None,
-        "token": "test-token",
-    } in fake_api.calls
+    assert respuesta.status_code == 302
+    assert respuesta.headers["Location"].endswith("/v2/recruiting/candidatos")
+    assert not any(c["endpoint"].startswith("/recruiting/candidatos") for c in fake_api.calls)
 
 
-def test_el_listado_no_ofrece_asignar_a_busqueda_ni_el_pipeline_hasta_migrar_esas_pantallas(frontend_client, fake_api):
+def test_el_listado_conserva_filtros_pagina_y_tamano(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _listado(fake_api, _pagina([ANA]))
-
-    html = frontend_client.get("/recruiting/candidatos").get_data(as_text=True)
-
-    assert "Asignar a búsqueda" not in html
-    assert "abrirPrimerPipeline" not in html and "busquedas-elegibles" not in html
-    assert "/recruiting/oportunidades" not in html
-
-
-def test_el_listado_pasa_los_filtros_al_backend(frontend_client, fake_api):
-    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    endpoint = (
-        "/recruiting/candidatos?pagina=2&por_pagina=50&busqueda=ana+perez&estado=Activo&seniority=Senior"
-        "&ubicacion=Cordoba&puesto=QA+Tester&categorias=Lenguajes&skills=Python"
-    )
-    _listado(fake_api, _pagina([], total=0, pagina=2, por_pagina=50), endpoint=endpoint)
 
     respuesta = frontend_client.get(
-        "/recruiting/candidatos?page=2&limit=50&busqueda=ana perez&estado=Activo&seniority=Senior"
-        "&ubicacion=Cordoba&puesto=QA Tester&categorias=Lenguajes&skills=Python"
+        "/recruiting/candidatos?page=2&limit=50&busqueda=ana perez&seniority=Senior&ubicacion=otros"
+        "&puesto=QA Tester&categorias=Lenguajes&skills=Python&estado=Activo&fuente=LinkedIn&accion=cargar-cv"
     )
 
-    assert respuesta.status_code == 200
-    consulta = dict(parse_qsl(urlsplit(_llamada(fake_api, "/recruiting/candidatos?").get("endpoint")).query))
-    assert (
-        consulta["busqueda"] == "ana perez" and consulta["categorias"] == "Lenguajes" and consulta["skills"] == "Python"
-    )
-    assert consulta["pagina"] == "2" and consulta["por_pagina"] == "50"
+    consulta = dict(parse_qsl(urlsplit(respuesta.headers["Location"]).query))
+    assert urlsplit(respuesta.headers["Location"]).path == "/v2/recruiting/candidatos"
+    assert consulta == {
+        "page": "2",
+        "limit": "50",
+        "busqueda": "ana perez",
+        "seniority": "Senior",
+        "ubicacion": "otros",
+        "puesto": "QA Tester",
+        "categorias": "Lenguajes",
+        "skills": "Python",
+        "estado": "Activo",
+        "fuente": "LinkedIn",
+        "accion": "cargar-cv",
+    }
 
 
-def test_la_skill_que_no_es_de_la_categoria_elegida_no_se_envia(frontend_client, fake_api):
+def test_el_listado_conserva_volver_y_descarta_parametros_ajenos(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _listado(fake_api, _pagina([]), endpoint="/recruiting/candidatos?pagina=1&por_pagina=20&categorias=Lenguajes")
 
-    respuesta = frontend_client.get("/recruiting/candidatos?categorias=Lenguajes&skills=NoEsDeLaCategoria")
+    respuesta = frontend_client.get("/recruiting/candidatos?volver=/recruiting/dashboard&ruta=otra&x=1")
 
-    assert respuesta.status_code == 200
-
-
-def test_el_tamano_de_pagina_se_acota_a_20_50_o_100(frontend_client, fake_api):
-    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _listado(fake_api, _pagina([]), endpoint="/recruiting/candidatos?pagina=1&por_pagina=100")
-
-    assert frontend_client.get("/recruiting/candidatos?limit=5000").status_code == 200
+    consulta = dict(parse_qsl(urlsplit(respuesta.headers["Location"]).query))
+    assert consulta == {"volver": "/recruiting/dashboard"}
+    assert urlsplit(respuesta.headers["Location"]).path == "/v2/recruiting/candidatos"
 
 
-def test_el_listado_muestra_el_error_si_el_backend_falla_y_no_un_vacio_enganoso(frontend_client, fake_api):
-    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _listado(fake_api, {"detail": "No tenés acceso a 'candidatos'"}, status=403)
-
-    html = frontend_client.get("/recruiting/candidatos").get_data(as_text=True)
-
-    assert 'data-testid="candidatos-error"' in html and "No tenés acceso a &#39;candidatos&#39;" in html
-
-
-def test_el_grupo_externos_no_ve_eliminar_ni_cargar_cv(frontend_client, fake_api):
-    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos", acciones=PERMISOS_EXTERNO)
-    _listado(fake_api, _pagina([ANA]))
-
-    html = frontend_client.get("/recruiting/candidatos").get_data(as_text=True)
-
-    assert "Eliminar candidato" not in html
-    assert "abrirCargaIndividual()" not in html.split("<script>")[0]
-
-
-def test_quien_puede_ve_eliminar_y_cargar_cv(frontend_client, fake_api):
-    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _listado(fake_api, _pagina([ANA]))
-
-    html = frontend_client.get("/recruiting/candidatos").get_data(as_text=True)
-
-    assert "Eliminar candidato" in html
-    assert "abrirCargaIndividual()" in html
-
-
-def test_el_admin_entra_sin_permisos_de_grupo(frontend_client, fake_api):
+def test_el_admin_entra_al_listado_sin_permisos_de_grupo(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, rol="admin")
-    _listado(fake_api, _pagina([ANA]))
 
-    assert frontend_client.get("/recruiting/candidatos").status_code == 200
+    assert frontend_client.get("/recruiting/candidatos").status_code == 302
 
 
 # --- Formulario de alta ---------------------------------------------------------------------------------------------
@@ -450,6 +383,9 @@ def test_cargar_cv_reenvia_el_archivo_con_el_token_y_redirige_al_listado(fronten
         respuesta.get_json()["redirect"] == "/recruiting/candidatos"
         and respuesta.get_json()["candidato"]["id"] == ID_ANA
     )
+    # El aviso lo muestra la pantalla Vue: no queda un mensaje flash pendiente para la próxima página
+    with frontend_client.session_transaction() as sesion:
+        assert not sesion.get("_flashes")
     llamada = backend_http["llamadas"][0]
     assert llamada["url"] == "http://backend.test/api/v1/recruiting/candidatos/cargar-cv"
     assert llamada["headers"] == {"Authorization": "Bearer test-token"}
@@ -643,20 +579,18 @@ MENU_RECRUITING = {
 
 
 def test_el_menu_enlaza_candidatos_y_marca_la_seccion_activa(frontend_client, fake_api):
+    """El listado ya es una pantalla Vue (su menú lo dibuja la SPA); en la ficha, que sigue en Flask, el ítem se resalta."""
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
     fake_api.respond("GET", "/menus", MENU_RECRUITING)
     _catalogos(fake_api)
     fake_api.respond("GET", f"/recruiting/candidatos/{ID_ANA}", ANA)
 
-    _listado(fake_api, _pagina([ANA]))
-    en_listado = frontend_client.get("/recruiting/candidatos").get_data(as_text=True)
-    en_ficha = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}").get_data(as_text=True)
+    html = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}").get_data(as_text=True)
 
-    for html in (en_listado, en_ficha):
-        assert 'href="/recruiting/candidatos"' in html
-        fragmento = html.split('href="/recruiting/candidatos"', 1)[1][:400]
-        assert "bg-primary-50" in fragmento, "el ítem Candidatos queda resaltado en el listado y en la ficha"
-    assert "Próx." in en_listado  # Búsquedas, Pipeline y Parámetros siguen pendientes
+    assert 'href="/recruiting/candidatos"' in html
+    fragmento = html.split('href="/recruiting/candidatos"', 1)[1][:400]
+    assert "bg-primary-50" in fragmento, "el ítem Candidatos queda resaltado en la ficha"
+    assert "Próx." in html  # Búsquedas, Pipeline y Parámetros siguen pendientes
 
 
 def test_el_dashboard_enlaza_a_candidatos_solo_a_quien_tiene_el_item(frontend_client, fake_api):

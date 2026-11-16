@@ -15,6 +15,13 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     meta: { titulo: 'Blacklist - Recruiting' },
   },
   {
+    // /recruiting/candidatos (Flask) redirige acá conservando filtros, página y demás parámetros.
+    path: '/recruiting/candidatos',
+    name: 'recruiting-candidatos',
+    component: () => import('./candidatos/CandidatosPage.vue'),
+    meta: { titulo: 'Candidatos - Recruiting' },
+  },
+  {
     // /recruiting/candidatos/nuevo (Flask) redirige acá conservando busqueda_id y volver.
     path: '/recruiting/candidatos/nuevo',
     name: 'recruiting-candidato-nuevo',

@@ -7,6 +7,12 @@ Pantallas: **Blacklist** (`/v2/recruiting/blacklist`), solo de consulta y con da
 **Nuevo Candidato** (`/v2/recruiting/candidatos/nuevo`), con datos reales: `/recruiting/candidatos/nuevo` (Flask) redirige
 ahi conservando `busqueda_id` y `volver`. Usa el proxy `/api/v1` y, para adjuntar el CV, la ruta multipart de Flask
 `/recruiting/candidatos/<id>/cv`. Pruebas de sus reglas: `node --test tests/candidato_nuevo_validacion.test.mjs`.
+**Candidatos** (`/v2/recruiting/candidatos`), la grilla, con datos reales y paginacion del servidor: `/recruiting/candidatos`
+(Flask) redirige ahi conservando filtros, pagina y tamano (la URL de la SPA usa los mismos nombres: `page`, `limit`,
+`busqueda`, `seniority`, `ubicacion`, `puesto`, `categorias`, `skills`, `estado`, `fuente`, `accion`, `volver`). Usa el proxy
+`/api/v1` (listado, permisos, catalogos, baja) y las rutas de Flask de siempre para las cargas de CV (multipart), el
+detalle del pipeline y asignar a una busqueda. No tiene entrada propia en el menu: se llega por el item Candidatos.
+Pruebas de sus reglas: `node --test tests/candidatos_listado.test.mjs`.
 
 ## Stack
 

@@ -295,147 +295,21 @@ def _contexto_de_formulario(api_request, token):
     }
 
 
-def _opciones_de_filtros(api_request, token):
-    """Opciones de los filtros del listado: provincias, categorías de skills (y sus skills), seniority y perfiles."""
-    provincias = []
-    try:
-        data, status = api_request("GET", "/recruiting/provincias", token=token)
-        if status == 200 and isinstance(data, list):
-            provincias = sorted(
-                [
-                    p["nombre"]
-                    for p in data
-                    # La provincia genérica se filtra con la opción fija «Otros» de la plantilla
-                    if isinstance(p, dict)
-                    and p.get("nombre")
-                    and _clave_catalogo(p["nombre"]) != _PROVINCIA_GENERICA_CLAVE
-                ],
-                key=_orden_provincia,
-            )
-    except Exception:
-        provincias = []
-
-    categorias, skills_por_categoria = [], {}
-    try:
-        data, status = api_request("GET", "/recruiting/skills", token=token)
-        if status == 200 and isinstance(data, list):
-            vistas = {}
-            for skill in data:
-                if not isinstance(skill, dict):
-                    continue
-                original = " ".join((skill.get("categoria") or "").split())
-                if not original:
-                    continue
-                vistas.setdefault(original.casefold(), original)
-                nombre = " ".join((skill.get("nombre") or "").split())
-                if nombre:
-                    skills_por_categoria.setdefault(vistas[original.casefold()], set()).add(nombre)
-            categorias = sorted(vistas.values(), key=lambda c: c.casefold())
-            skills_por_categoria = {
-                cat: sorted(nombres, key=lambda n: n.casefold()) for cat, nombres in skills_por_categoria.items()
-            }
-    except Exception:
-        categorias, skills_por_categoria = [], {}
-
-    perfiles, _ = _cargar_perfiles_puesto(api_request, token)
-    niveles = _lista_de_nombres(api_request, token, "/recruiting/niveles-seniority", ordenar=False)
-    return provincias, categorias, skills_por_categoria, perfiles, niveles
+# Parámetros del listado que se conservan al pasar a la pantalla Vue (filtros, página y la apertura de la carga de CV).
+PARAMETROS_LISTADO = (
+    "busqueda", "search", "q", "estado", "fuente", "seniority", "ubicacion", "puesto", "categorias", "skills",
+    "page", "pagina", "limit", "por_pagina", "accion", "volver",
+)
 
 
 @recruiting_bp.route("/candidatos", methods=["GET"])
 @require_permiso("recruiting.candidatos")
 def candidatos():
-    api_request = get_api_request_func()
-    token = session.get("token")
-
-    busqueda = request.args.get("busqueda") or request.args.get("search") or request.args.get("q") or ""
-    estado = request.args.get("estado") or ""
-    fuente = request.args.get("fuente") or ""
-    seniority = request.args.get("seniority") or ""
-    ubicacion = request.args.get("ubicacion") or ""
-    puesto = (request.args.get("puesto") or "").strip()
-    categorias_sel = []
-    for c in request.args.getlist("categorias"):
-        c = " ".join((c or "").split())
-        if c and c.casefold() not in [x.casefold() for x in categorias_sel]:
-            categorias_sel.append(c)
-    categorias_sel = categorias_sel[:20]
-    skill_sel = " ".join((request.args.get("skills") or "").split())
-
-    try:
-        pagina = max(1, int(request.args.get("page") or request.args.get("pagina") or 1))
-    except ValueError, TypeError:
-        pagina = 1
-    try:
-        limite = int(request.args.get("limit") or request.args.get("por_pagina") or 20)
-    except ValueError, TypeError:
-        limite = 20
-    limite = 20 if limite <= 20 else 50 if limite <= 50 else 100
-
-    provincias, categorias_skills, skills_por_categoria, perfiles_puesto, niveles_seniority = _opciones_de_filtros(
-        api_request, token
-    )
-
-    # La skill específica solo aplica si hay una categoría elegida y la skill pertenece a ella
-    if not (categorias_sel and skill_sel and skill_sel in skills_por_categoria.get(categorias_sel[0], [])):
-        skill_sel = ""
-
-    parametros = [("pagina", pagina), ("por_pagina", limite)]
-    for clave, valor in (
-        ("busqueda", busqueda),
-        ("estado", estado),
-        ("fuente", fuente),
-        ("seniority", seniority),
-        ("ubicacion", ubicacion),
-        ("puesto", puesto),
-    ):
-        if valor:
-            parametros.append((clave, valor))
-    parametros += [("categorias", c) for c in categorias_sel]
-    if skill_sel:
-        parametros.append(("skills", skill_sel))
-
-    data, status = api_request("GET", f"/recruiting/candidatos?{urlencode(parametros)}", token=token)
-
-    candidatos_pagina, total_registros, total_paginas = [], 0, 1
-    if status == 200 and isinstance(data, dict):
-        candidatos_pagina = data.get("items", [])
-        total_registros = data.get("total", len(candidatos_pagina))
-        total_paginas = data.get("total_paginas", 1)
-        pagina = data.get("pagina", pagina)
-        limite = data.get("por_pagina", limite)
-
-    if total_registros > 0:
-        registro_inicio = (pagina - 1) * limite + 1
-        registro_fin = min(pagina * limite, total_registros)
-    else:
-        registro_inicio = registro_fin = 0
-
-    return render_template(
-        "recruiting/candidatos.html",
-        niveles_seniority=niveles_seniority,
-        provincias=provincias,
-        categorias_skills=categorias_skills,
-        skills_por_categoria=skills_por_categoria,
-        filtro_skill=skill_sel,
-        perfiles_puesto=perfiles_puesto,
-        filtro_puesto=puesto,
-        filtro_categorias=categorias_sel,
-        candidatos=candidatos_pagina,
-        total_registros=total_registros,
-        total_paginas=total_paginas,
-        pagina_actual=pagina,
-        limite_actual=limite,
-        registro_inicio=registro_inicio,
-        registro_fin=registro_fin,
-        filtro_busqueda=busqueda,
-        filtro_estado=estado,
-        filtro_fuente=fuente,
-        filtro_seniority=seniority,
-        filtro_ubicacion=ubicacion,
-        error_listado=None if status == 200 else _detalle_de_error(data, "No se pudo cargar el listado de candidatos."),
-        **_permisos_candidatos(),
-    )
+    """El listado de candidatos es una pantalla Vue (/v2/recruiting/candidatos); acá se conserva la URL con todos los
+    parámetros que usan los enlaces de las demás pantallas. Los datos, los filtros y los permisos de las acciones
+    los pide la pantalla a la API; el permiso se valida acá y el backend lo valida de nuevo en cada llamada."""
+    parametros = {k: v for k, v in request.args.lists() if k in PARAMETROS_LISTADO and any(v)}
+    return redirect(url_for("vue_app.spa", ruta="recruiting/candidatos", **parametros))
 
 
 @recruiting_bp.route("/candidatos/nuevo", methods=["GET"])
@@ -658,12 +532,7 @@ def candidato_cargar_individual_cv(accion):
 
     data, status = _reenviar_archivos("POST", f"/candidatos/{accion}", {"archivo": archivo}, timeout=45.0)
     if status in (200, 201) and isinstance(data, dict) and data.get("ok", True) is not False:
-        flash(
-            "Candidato creado y CV procesado exitosamente."
-            if accion == "cargar-cv"
-            else "Candidato actualizado con el nuevo CV.",
-            "success",
-        )
+        # El aviso de éxito lo muestra la pantalla Vue; un mensaje flash quedaría pendiente para la próxima página.
         return (
             jsonify(
                 {

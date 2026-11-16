@@ -102,9 +102,9 @@ def test_el_compilado_versionado_esta_completo_y_flask_lo_sirve(frontend_client,
         respuesta.close()
 
 
-def test_nuevo_candidato_vue_exige_el_item_candidatos_en_el_acceso_directo(frontend_client, fake_api):
-    """/v2/recruiting/candidatos/nuevo respeta el permiso de la URL original; el resto de /v2 sigue pidiendo solo sesion."""
-    ruta = "/v2/recruiting/candidatos/nuevo"
+@pytest.mark.parametrize("ruta", ["/v2/recruiting/candidatos/nuevo", "/v2/recruiting/candidatos"])
+def test_candidatos_vue_exige_el_item_candidatos_en_el_acceso_directo(frontend_client, fake_api, ruta):
+    """Candidatos y Nuevo Candidato respetan el permiso de la URL original; el resto de /v2 sigue pidiendo solo sesion."""
     assert frontend_client.get(ruta).status_code == 302  # sin sesion: al login
 
     fake_api.respond("GET", "/menus", {"items": []})

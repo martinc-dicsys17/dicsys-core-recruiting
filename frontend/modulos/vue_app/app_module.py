@@ -141,10 +141,11 @@ def spa(ruta):
     return _servir_spa()
 
 
+@vue_app_bp.route('/recruiting/candidatos')
 @vue_app_bp.route('/recruiting/candidatos/nuevo')
 @require_permiso('recruiting.candidatos')
 def spa_nuevo_candidato():
-    """Nuevo Candidato exige el mismo item de menu que la URL original (/recruiting/candidatos/nuevo).
+    """Candidatos y Nuevo Candidato exigen el mismo item de menu que sus URL originales (/recruiting/candidatos...).
 
     Ruta especifica: Flask la prefiere a la generica de arriba, que no cambia para el resto de las pantallas.
     """
