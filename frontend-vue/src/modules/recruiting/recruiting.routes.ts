@@ -22,11 +22,18 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     meta: { titulo: 'Candidatos - Recruiting' },
   },
   {
-    // /recruiting/candidatos/<id> (Flask) redirige acá conservando `volver`; la edición sigue siendo la de Flask.
+    // /recruiting/candidatos/<id> (Flask) redirige acá conservando `volver`.
     path: '/recruiting/candidatos/:id([0-9a-fA-F-]{36})',
     name: 'recruiting-candidato-detalle',
     component: () => import('./candidato-detalle/CandidatoDetallePage.vue'),
     meta: { titulo: 'Candidato - Recruiting' },
+  },
+  {
+    // /recruiting/candidatos/<id>?editar=1 (Flask) redirige acá conservando `volver`.
+    path: '/recruiting/candidatos/:id([0-9a-fA-F-]{36})/editar',
+    name: 'recruiting-candidato-editar',
+    component: () => import('./candidato-editar/EditarCandidatoPage.vue'),
+    meta: { titulo: 'Editar Candidato - Recruiting' },
   },
   {
     // /recruiting/candidatos/nuevo (Flask) redirige acá conservando busqueda_id y volver.

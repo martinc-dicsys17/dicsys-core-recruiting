@@ -45,7 +45,7 @@ watch(nombreCompleto, (nombre) => {
   if (nombre) document.title = `${nombre.trim()} — Reclutamiento - Dicsys Core`
 })
 
-// Editar: la edición sigue siendo la de la pantalla anterior (se abre ya en modo edición).
+// Editar: Flask redirige a la pantalla de edición (Vue) conservando `volver`.
 const enlaceEditar = computed(() => {
   const consulta = new URLSearchParams({ editar: '1' })
   if (ruta.query.volver) consulta.set('volver', String(ruta.query.volver))

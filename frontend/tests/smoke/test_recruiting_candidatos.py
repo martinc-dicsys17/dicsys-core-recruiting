@@ -264,28 +264,17 @@ def test_la_ficha_abre_la_pantalla_vue_conservando_volver_y_no_consulta_al_backe
     assert "x=1" not in respuesta.headers["Location"]
 
 
-def test_la_edicion_de_la_ficha_sigue_siendo_la_pantalla_anterior_en_modo_edicion(frontend_client, fake_api):
+def test_la_edicion_de_la_ficha_redirige_a_la_pantalla_vue_de_edicion_conservando_volver(frontend_client, fake_api):
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    _catalogos(fake_api)
-    fake_api.respond("GET", f"/recruiting/candidatos/{ID_ANA}", ANA)
 
     respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1")
-    html = respuesta.get_data(as_text=True)
+    assert respuesta.status_code == 302
+    assert respuesta.headers["Location"].endswith(f"/v2/recruiting/candidatos/{ID_ANA}/editar")
+    assert not [c for c in fake_api.calls if c["endpoint"].startswith("/recruiting/candidatos/")]
 
-    assert respuesta.status_code == 200
-    assert "ana@example.com" in html and "Backend Developer" in html
-    assert 'x-init="iniciarEdicion()"' in html
-
-
-def test_la_edicion_de_un_candidato_que_no_se_puede_ver_vuelve_al_listado_con_el_motivo(frontend_client, fake_api):
-    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
-    fake_api.respond(
-        "GET", f"/recruiting/candidatos/{ID_ANA}", {"detail": "No tenes permiso para acceder a este candidato."}, 403
-    )
-
-    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1")
-
-    assert respuesta.status_code == 302 and respuesta.headers["Location"].endswith("/recruiting/candidatos")
+    respuesta = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1&volver=/recruiting/candidatos?page=2&x=1")
+    assert f"/v2/recruiting/candidatos/{ID_ANA}/editar?volver=" in respuesta.headers["Location"]
+    assert "x=1" not in respuesta.headers["Location"]
 
 
 def test_un_id_que_no_es_uuid_responde_404_sin_llamar_al_backend(frontend_client, fake_api):
@@ -591,18 +580,14 @@ MENU_RECRUITING = {
 }
 
 
-def test_el_menu_enlaza_candidatos_y_marca_la_seccion_activa(frontend_client, fake_api):
-    """El listado ya es una pantalla Vue (su menú lo dibuja la SPA); en la ficha, que sigue en Flask, el ítem se resalta."""
+def test_el_menu_enlaza_candidatos_y_marca_lo_pendiente(frontend_client, fake_api):
+    """Las pantallas de candidatos ya son Vue (su resaltado lo dibuja la SPA); en las de Flask el menú sigue enlazándolas."""
     _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
     fake_api.respond("GET", "/menus", MENU_RECRUITING)
-    _catalogos(fake_api)
-    fake_api.respond("GET", f"/recruiting/candidatos/{ID_ANA}", ANA)
 
-    html = frontend_client.get(f"/recruiting/candidatos/{ID_ANA}?editar=1").get_data(as_text=True)
+    html = frontend_client.get("/recruiting/").get_data(as_text=True)
 
     assert 'href="/recruiting/candidatos"' in html
-    fragmento = html.split('href="/recruiting/candidatos"', 1)[1][:400]
-    assert "bg-primary-50" in fragmento, "el ítem Candidatos queda resaltado en la ficha"
     assert "Próx." in html  # Búsquedas, Pipeline y Parámetros siguen pendientes
 
 

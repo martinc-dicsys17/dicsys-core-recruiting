@@ -426,25 +426,11 @@ def crear_candidato():
 @recruiting_bp.route("/candidatos/<uuid:id>", methods=["GET"])
 @require_permiso("recruiting.candidatos")
 def candidato_detalle(id):
-    """La ficha del candidato es una pantalla Vue (/v2/recruiting/candidatos/<id>); acá se conserva la URL y el
-    parámetro `volver`. La edición sigue siendo la de esta pantalla: con `editar` se abre la ficha en modo edición."""
-    if not request.args.get("editar"):
-        parametros = {k: request.args[k] for k in ("volver",) if request.args.get(k)}
-        return redirect(url_for("vue_app.spa", ruta=f"recruiting/candidatos/{id}", **parametros))
-    api_request = get_api_request_func()
-    token = session.get("token")
-    data, status = api_request("GET", f"/recruiting/candidatos/{id}", token=token)
-    if status != 200 or not isinstance(data, dict):
-        msg = _detalle_de_error(data, "No se pudo encontrar el candidato solicitado o no tenés permisos para acceder.")
-        flash(msg, "danger" if status == 403 else "warning")
-        return redirect(url_for("recruiting.candidatos"))
-    return render_template(
-        "recruiting/candidato_detalle.html",
-        candidato=data,
-        volver_default=url_for("recruiting.candidatos"),
-        editar_al_abrir=True,
-        **_contexto_de_formulario(api_request, token),
-    )
+    """La ficha y la edición del candidato son pantallas Vue (/v2/recruiting/candidatos/<id> y .../editar); acá se
+    conserva la URL y el parámetro `volver`. Con `editar` se abre la pantalla de edición."""
+    parametros = {k: request.args[k] for k in ("volver",) if request.args.get(k)}
+    ruta = f"recruiting/candidatos/{id}/editar" if request.args.get("editar") else f"recruiting/candidatos/{id}"
+    return redirect(url_for("vue_app.spa", ruta=ruta, **parametros))
 
 
 @recruiting_bp.route("/candidatos/<uuid:id>", methods=["PUT"])

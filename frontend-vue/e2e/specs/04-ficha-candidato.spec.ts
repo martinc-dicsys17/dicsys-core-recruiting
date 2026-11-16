@@ -5,7 +5,7 @@ import { esperarGrilla, filaDe } from '../helpers'
  * Ver candidato (ficha). Criterio legacy (candidato_detalle.html): modo lectura con todos los campos en solo lectura,
  * valores por defecto cuando faltan datos (Seniority «Semi Senior», Modalidad «Remoto», Fuente «Portal Propio»,
  * Disponibilidad «Inmediata»), pretensión «$ 1.500.000 ARS» / «US$ … USD» / «-», botones Agregar a Blacklist (solo
- * confirma y avisa que aún no está disponible), Editar (la edición sigue en la pantalla de Flask) y Volver (?volver=).
+ * confirma y avisa que aún no está disponible), Editar (abre la edición Vue) y Volver (?volver=).
  */
 test.use({ storageState: estadoDe('autorizado') })
 
@@ -145,17 +145,20 @@ test.describe('acciones del encabezado', () => {
     await expect(modal).toHaveCount(0, { timeout: 3000 })
   })
 
-  test('Editar abre la pantalla de edición existente (Flask) en modo edición', async ({ page }) => {
+  test('Editar abre la pantalla de edición (Vue) con el formulario cargado', async ({ page }) => {
     const c = semilla().candidatos.completo!
     await ir(page, c.id, '?volver=/recruiting/candidatos?page=2')
     await page.getByTestId('editar').click()
-    await expect(page).toHaveURL(new RegExp(`/recruiting/candidatos/${c.id}\\?editar=1`))
-    await expect(page).not.toHaveURL(/\/v2\//)
+    await expect(page).toHaveURL(new RegExp(`/v2/recruiting/candidatos/${c.id}/editar`))
     await expect(page.getByRole('heading', { name: 'Editar Ficha del Candidato' })).toBeVisible()
     await expect(page.getByText('Modo Edición')).toBeVisible()
     await expect(page.locator('input[name="nombre"]')).toHaveValue('Camila')
     await expect(page.locator('input[name="nombre"]')).toBeEnabled()
-    await expect(page.getByRole('button', { name: 'Guardar Cambios' }).first()).toBeVisible()
+    await expect(page.getByTestId('guardar-superior')).toBeVisible()
+    // Cancelar vuelve a la ficha conservando ?volver=
+    await page.getByTestId('cancelar').click()
+    await expect(page).toHaveURL(new RegExp(`/v2/recruiting/candidatos/${c.id}\\?volver=`))
+    await expect(page.getByTestId('detalle-nombre')).toHaveText('Camila Completa')
   })
 
   test('Volver: respeta ?volver= de Recruiting, ignora destinos externos y por defecto va al listado', async ({ page }) => {

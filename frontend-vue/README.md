@@ -14,8 +14,12 @@ ahi conservando `busqueda_id` y `volver`. Usa el proxy `/api/v1` y, para adjunta
 detalle del pipeline y asignar a una busqueda. No tiene entrada propia en el menu: se llega por el item Candidatos.
 Pruebas de sus reglas: `node --test tests/candidatos_listado.test.mjs`.
 **Ficha del candidato** (`/v2/recruiting/candidatos/<id>`), solo lectura y con datos reales: `/recruiting/candidatos/<id>`
-(Flask) redirige ahi conservando `volver`. Usa el proxy `/api/v1` (candidato y catalogos de ubicacion). «Editar» lleva a la
-ficha de Flask abierta en modo edicion (`/recruiting/candidatos/<id>?editar=1`): la edicion no esta migrada.
+(Flask) redirige ahi conservando `volver`. Usa el proxy `/api/v1` (candidato y catalogos de ubicacion). «Editar» lleva a la pantalla de edicion.
+**Editar candidato** (`/v2/recruiting/candidatos/<id>/editar`), con datos reales: `/recruiting/candidatos/<id>?editar=1`
+(Flask) redirige ahi conservando `volver`. Lee el candidato y los catalogos por el proxy `/api/v1`, guarda con la ruta de
+Flask de siempre (`PUT /recruiting/candidatos/<id>`) y reemplaza el CV con la ruta multipart
+`/recruiting/candidatos/<id>/cv`. Guardar y Cancelar vuelven a la ficha. Pruebas de sus reglas:
+`node --test tests/candidato_editar_formulario.test.mjs`.
 «Agregar a Blacklist» solo confirma y avisa que todavia no esta disponible, como antes.
 
 ## Stack
