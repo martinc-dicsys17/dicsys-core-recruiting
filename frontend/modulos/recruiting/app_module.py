@@ -609,64 +609,6 @@ def candidato_cargar_masivo_cv_cancelar(lote_id):
 # solo orienta la interfaz. El cambio de etapa, el kanban y «agregar candidato» desde el Pipeline se migran con
 # Pipeline; la carga de CV desde una búsqueda asignada (EXTERNOS), con la revisión de CV duplicados.
 
-ESTADOS_BUSQUEDA = ["Abierta", "Pre-ingreso", "Suspendida", "Ganada", "Cancelada"]
-POR_PAGINA_BUSQUEDAS = (20, 50, 100)
-ERROR_BUSQUEDAS = "No se pudo cargar el listado de búsquedas."
-
-# Valores iniciales del formulario de una búsqueda nueva (los demás campos arrancan vacíos)
-BUSQUEDA_NUEVA = {
-    "id": "",
-    "titulo": "",
-    "puesto": "",
-    "cliente": "",
-    "vacantes": 1,
-    "prioridad": "Alta",
-    "tipo": "Efectiva",
-    "seniority": "Senior",
-    "modalidad": "Hibrido",
-    "rango": "",
-    "descripcion": "",
-}
-
-
-def _permisos_busquedas():
-    """Acciones que el usuario ve en Búsquedas; restrictivo si no se puede consultar el backend."""
-    permisos = {
-        "puede_crear_busquedas": False,
-        "puede_eliminar_busquedas": False,
-        "puede_ver_lider_tipo_fecha_busqueda": False,
-        "puede_ver_smart_matching": False,
-        "puede_asignar_candidatos": False,
-        "puede_asignar_reclutador": False,
-        "puede_administrar_externos": False,
-        "es_externo": False,
-    }
-    try:
-        data, status = get_api_request_func()("GET", "/recruiting/oportunidades/permisos", token=session.get("token"))
-        if status == 200 and isinstance(data, dict):
-            for clave in permisos:
-                permisos[clave] = bool(data.get(clave))
-    except Exception:
-        pass
-    return permisos
-
-
-def _externos_disponibles(api_request, token):
-    """Usuarios del grupo Externos que se pueden asignar a una búsqueda (el backend valida el permiso)."""
-    try:
-        data, status = api_request("GET", "/recruiting/externos-disponibles", token=token)
-        if status == 200 and isinstance(data, list):
-            return [u for u in data if isinstance(u, dict) and u.get("id")]
-    except Exception:
-        pass
-    return []
-
-
-def _opciones_de_personas(api_request, token, ruta):
-    """Nombres activos del catálogo de líderes o reclutadores, para los combos."""
-    return _lista_de_nombres(api_request, token, f"/recruiting/{ruta}", ordenar=False)
-
-
 # El formulario llama «hm» al líder y «reclutador» al reclutador
 ALIAS_OPORTUNIDAD = {"lider_nombre": "hm", "recruiter_nombre": "reclutador"}
 TEXTOS_OPORTUNIDAD = (
@@ -723,95 +665,26 @@ def _respuesta_de_busqueda(data, status, mensaje_ok, error_por_defecto, **extra)
     return jsonify({"success": False, "ok": False, "error": _detalle_de_error(data, error_por_defecto)}), status or 400
 
 
+# Parámetros del listado de Búsquedas que se conservan al pasar a la pantalla Vue.
+PARAMETROS_LISTADO_BUSQUEDAS = ("busqueda", "estado", "tipo", "pagina", "por_pagina")
+
+
 @recruiting_bp.route("/oportunidades", methods=["GET"])
 @require_permiso("recruiting.oportunidades")
 def oportunidades():
-    api_request = get_api_request_func()
-    token = session.get("token")
-    permisos = _permisos_busquedas()
-
-    busqueda = (request.args.get("busqueda") or "").strip()
-    estado = request.args.get("estado") or "Abierta"
-    if estado != "todos" and estado not in ESTADOS_BUSQUEDA:
-        estado = "Abierta"
-    # El tipo solo se elige con permiso (el grupo EXTERNOS solo ve las efectivas)
-    tipo = request.args.get("tipo") or "Efectiva"
-    if tipo not in ("Efectiva", "Potencial", "Todas") or not permisos["puede_ver_lider_tipo_fecha_busqueda"]:
-        tipo = "Efectiva"
-    try:
-        pagina = max(1, int(request.args.get("pagina") or 1))
-    except ValueError, TypeError:
-        pagina = 1
-    try:
-        limite = int(request.args.get("por_pagina") or POR_PAGINA_BUSQUEDAS[0])
-    except ValueError, TypeError:
-        limite = POR_PAGINA_BUSQUEDAS[0]
-    limite = next((o for o in POR_PAGINA_BUSQUEDAS if limite <= o), POR_PAGINA_BUSQUEDAS[-1])
-
-    parametros = [("pagina", pagina), ("por_pagina", limite), ("estado", estado), ("tipo", tipo)]
-    if busqueda:
-        parametros.append(("busqueda", busqueda))
-    data, status = api_request("GET", f"/recruiting/oportunidades?{urlencode(parametros)}", token=token)
-
-    items, total, total_paginas = [], 0, 1
-    if status == 200 and isinstance(data, dict):
-        items = data.get("items", [])
-        total = data.get("total", len(items))
-        total_paginas = data.get("total_paginas", 1)
-        pagina = data.get("pagina", pagina)
-        limite = data.get("por_pagina", limite)
-
-    def url_pagina(numero):
-        filtros = {"estado": estado, "tipo": tipo, "por_pagina": limite, "pagina": numero}
-        if busqueda:
-            filtros["busqueda"] = busqueda
-        return url_for("recruiting.oportunidades", **filtros)
-
-    return render_template(
-        "recruiting/oportunidades.html",
-        oportunidades=items,
-        estados=ESTADOS_BUSQUEDA,
-        filtro_busqueda=busqueda,
-        filtro_estado=estado,
-        filtro_tipo=tipo,
-        total_registros=total,
-        total_paginas=total_paginas,
-        pagina_actual=pagina,
-        limite_actual=limite,
-        registro_inicio=(pagina - 1) * limite + 1 if total else 0,
-        registro_fin=min(pagina * limite, total),
-        url_pagina=url_pagina,
-        error_listado=None if status == 200 else _detalle_de_error(data, ERROR_BUSQUEDAS),
-        puede_administrar_externos=permisos["puede_administrar_externos"],
-        externos_disponibles=_externos_disponibles(api_request, token)
-        if permisos["puede_administrar_externos"]
-        else [],
-        puede_crear_busquedas=permisos["puede_crear_busquedas"],
-        puede_eliminar_busquedas=permisos["puede_eliminar_busquedas"],
-        puede_ver_lider_tipo_fecha=permisos["puede_ver_lider_tipo_fecha_busqueda"],
-    )
+    """El listado de búsquedas es una pantalla Vue (/v2/recruiting/oportunidades); acá se conserva la URL con los
+    filtros y la página. Los datos y los permisos de las acciones los pide la pantalla a la API; el permiso se valida
+    acá y el backend lo valida de nuevo en cada llamada."""
+    parametros = {k: request.args[k] for k in PARAMETROS_LISTADO_BUSQUEDAS if request.args.get(k)}
+    return redirect(url_for("vue_app.spa", ruta="recruiting/oportunidades", **parametros))
 
 
 @recruiting_bp.route("/oportunidades/nueva", methods=["GET"])
 @require_permiso("recruiting.oportunidades")
 def nueva_oportunidad():
-    if not _permisos_busquedas()["puede_crear_busquedas"]:
-        flash("No tenés permisos para crear búsquedas.", "error")
-        return redirect(url_for("recruiting.oportunidades"))
-    api_request = get_api_request_func()
-    token = session.get("token")
-    perfiles, perfiles_ok = _cargar_perfiles_puesto(api_request, token)
-    return render_template(
-        "recruiting/oportunidad_form.html",
-        oportunidad=dict(BUSQUEDA_NUEVA),
-        is_edit=False,
-        perfiles_puesto_catalogo=perfiles,
-        perfiles_puesto_ok=perfiles_ok,
-        skills_catalogo=_lista_de_nombres(api_request, token, "/recruiting/skills"),
-        habilidades_catalogo=_lista_de_nombres(api_request, token, "/recruiting/habilidades"),
-        lideres_catalogo=_opciones_de_personas(api_request, token, "lideres"),
-        reclutadores_catalogo=_opciones_de_personas(api_request, token, "reclutadores"),
-    )
+    """El alta de búsquedas es una pantalla Vue (/v2/recruiting/oportunidades/nueva); la pantalla verifica el permiso
+    de creación con la API y el backend lo valida de nuevo al guardar."""
+    return redirect(url_for("vue_app.spa", ruta="recruiting/oportunidades/nueva"))
 
 
 @recruiting_bp.route("/oportunidades", methods=["POST"])
@@ -835,65 +708,16 @@ def crear_oportunidad():
 @recruiting_bp.route("/oportunidades/<uuid:id>", methods=["GET"])
 @require_permiso("recruiting.oportunidades")
 def oportunidad_detalle(id):
-    api_request = get_api_request_func()
-    token = session.get("token")
-
-    op, status = api_request("GET", f"/recruiting/oportunidades/{id}", token=token)
-    if status != 200 or not isinstance(op, dict):
-        flash(
-            "No tenés acceso a esta búsqueda: no la tenés asignada."
-            if status == 403
-            else "La búsqueda solicitada no existe o no fue encontrada.",
-            "error",
-        )
-        return redirect(url_for("recruiting.oportunidades"))
-
-    permisos = _permisos_busquedas()
-    # Búsqueda Ganada = cerrada: se muestra para consulta, sin acciones que modifiquen el proceso
-    ganada = str(op.get("estado") or "").strip().lower() == "ganada"
-    ve_smart_matching = permisos["puede_ver_smart_matching"] and not ganada
-    puede_administrar_externos = permisos["puede_administrar_externos"] and not ganada
-
-    candidatos, estado_candidatos = api_request("GET", f"/recruiting/oportunidades/{id}/candidatos", token=token)
-    sugeridos, match_minimo = [], 50
-    if ve_smart_matching:
-        datos_sug, estado_sug = api_request(
-            "GET", f"/recruiting/oportunidades/{id}/candidatos-compatibles", token=token
-        )
-        if estado_sug == 200 and isinstance(datos_sug, list):
-            sugeridos = datos_sug
-        config, estado_config = api_request("GET", "/recruiting/config", token=token)
-        if estado_config == 200 and isinstance(config, dict):
-            match_minimo = config.get("match_minimo_porcentaje", 50)
-
-    perfiles, perfiles_ok = _cargar_perfiles_puesto(api_request, token)
-    return render_template(
-        "recruiting/oportunidad_detalle.html",
-        op=op,
-        oportunidad=op,
-        busqueda_ganada=ganada,
-        perfiles_puesto_catalogo=perfiles,
-        perfiles_puesto_ok=perfiles_ok,
-        candidatos_proceso=candidatos if estado_candidatos == 200 and isinstance(candidatos, list) else [],
-        candidatos_sugeridos=sugeridos,
-        match_minimo=match_minimo,
-        skills_catalogo=_lista_de_nombres(api_request, token, "/recruiting/skills"),
-        habilidades_catalogo=_lista_de_nombres(api_request, token, "/recruiting/habilidades"),
-        puede_asignar_reclutador=permisos["puede_asignar_reclutador"] and not ganada,
-        puede_ver_lider_tipo_fecha=permisos["puede_ver_lider_tipo_fecha_busqueda"],
-        puede_ver_smart_matching=ve_smart_matching,
-        puede_administrar_externos=puede_administrar_externos,
-        es_usuario_externo=permisos["es_externo"],
-        puede_cargar_cv_en_busqueda=permisos["es_externo"] and not ganada,
-        externos_disponibles=_externos_disponibles(api_request, token) if puede_administrar_externos else [],
-        reclutadores_catalogo=_opciones_de_personas(api_request, token, "reclutadores"),
-    )
+    """La ficha de la búsqueda (con su edición) es una pantalla Vue (/v2/recruiting/oportunidades/<id>); acá se
+    conservan la URL y sus parámetros (edit, volver...). El backend valida el acceso en cada llamada."""
+    parametros = {k: v for k, v in request.args.lists() if any(v)}
+    return redirect(url_for("vue_app.spa", ruta=f"recruiting/oportunidades/{id}", **parametros))
 
 
 @recruiting_bp.route("/oportunidades/<uuid:id>/editar", methods=["GET"])
 @require_permiso("recruiting.oportunidades")
 def editar_oportunidad(id):
-    return redirect(url_for("recruiting.oportunidad_detalle", id=id, edit="true"))
+    return redirect(url_for("vue_app.spa", ruta=f"recruiting/oportunidades/{id}", edit="true"))
 
 
 @recruiting_bp.route("/oportunidades/<uuid:id>", methods=["PUT"])

@@ -1,0 +1,1 @@
+var e=`busquedasAviso`;function t(t){try{sessionStorage.setItem(e,JSON.stringify(t))}catch{}}function n(){try{let t=sessionStorage.getItem(e);if(!t)return null;sessionStorage.removeItem(e);let n=JSON.parse(t);return typeof n.mensaje==`string`?{tipo:n.tipo===`success`?`success`:`error`,mensaje:n.mensaje}:null}catch{return null}}export{n,t};

@@ -2,6 +2,8 @@
 ficha (ver y editar), asignaciones y candidatos de la búsqueda (reenvío al backend). El backend valida el acceso de
 verdad: acá se prueba lo que la pantalla pide, muestra y reenvía."""
 
+from urllib.parse import parse_qsl, urlsplit
+
 import pytest
 
 pytestmark = [pytest.mark.frontend]
@@ -204,136 +206,51 @@ def test_las_acciones_de_escritura_tambien_exigen_el_item(frontend_client, fake_
     assert frontend_client.post(f"{base}/candidatos", json={}).status_code == 403
 
 
-# --- Listado --------------------------------------------------------------------------------------------------------
+# --- Listado y alta: pantallas Vue (las URLs originales redirigen) -------------------------------------------------
 
 
-def test_el_listado_muestra_las_busquedas_y_la_paginacion(frontend_client, fake_api):
+def test_el_listado_redirige_a_la_pantalla_vue_conservando_los_filtros(frontend_client, fake_api):
     _con_item(frontend_client, fake_api)
-    _listado(fake_api, _pagina([OPORTUNIDAD], total=41, por_pagina=20))
-
-    respuesta = frontend_client.get("/recruiting/oportunidades")
-    html = respuesta.get_data(as_text=True)
-
-    assert respuesta.status_code == 200
-    assert "Desarrollador Python" in html and "Acme SA" in html and "Marcela Gomez" in html
-    assert ID_OP in html and "/recruiting/oportunidades/${op.id}" in html  # las filas las arma Alpine con estos datos
-    assert "/recruiting/oportunidades/nueva" in html
-    assert "Mostrando" in html and "41" in html and "Página 1 de 3" in html
-    assert "pagina=2" in html
-    assert {
-        "method": "GET",
-        "endpoint": "/recruiting/oportunidades?pagina=1&por_pagina=20&estado=Abierta&tipo=Efectiva",
-        "data": None,
-        "token": "test-token",
-    } in fake_api.calls
-
-
-def test_el_listado_pasa_los_filtros_al_backend(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api)
-    endpoint = "/recruiting/oportunidades?pagina=2&por_pagina=50&estado=Ganada&tipo=Todas&busqueda=ana+perez"
-    _listado(fake_api, _pagina([], total=0, pagina=2, por_pagina=50), endpoint=endpoint)
 
     respuesta = frontend_client.get(
-        "/recruiting/oportunidades?pagina=2&por_pagina=50&estado=Ganada&tipo=Todas&busqueda=ana perez"
-    )
-    html = respuesta.get_data(as_text=True)
-
-    assert respuesta.status_code == 200
-    assert "No se encontraron búsquedas con los filtros actuales" in html
-    assert 'value="ana perez"' in html
-
-
-def test_los_valores_de_filtro_invalidos_vuelven_a_los_predeterminados(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api)
-    _listado(
-        fake_api, _pagina([]), endpoint="/recruiting/oportunidades?pagina=1&por_pagina=100&estado=Abierta&tipo=Efectiva"
+        "/recruiting/oportunidades?pagina=2&por_pagina=50&estado=Ganada&tipo=Todas&busqueda=ana perez&otro=x"
     )
 
-    assert (
-        frontend_client.get("/recruiting/oportunidades?estado=Inventado&tipo=Rara&por_pagina=5000&pagina=x").status_code
-        == 200
-    )
+    assert respuesta.status_code == 302
+    destino = urlsplit(respuesta.headers["Location"])
+    assert destino.path == "/v2/recruiting/oportunidades"
+    assert dict(parse_qsl(destino.query)) == {
+        "pagina": "2",
+        "por_pagina": "50",
+        "estado": "Ganada",
+        "tipo": "Todas",
+        "busqueda": "ana perez",
+    }
+    # Flask no pide datos: los pide la pantalla Vue a la API
+    assert not _llamadas(fake_api, "GET", "/recruiting/oportunidades?")
 
 
-def test_la_pagina_siguiente_conserva_los_filtros(frontend_client, fake_api):
+def test_el_listado_sin_parametros_redirige_limpio(frontend_client, fake_api):
     _con_item(frontend_client, fake_api)
-    endpoint = "/recruiting/oportunidades?pagina=1&por_pagina=20&estado=todos&tipo=Potencial&busqueda=java"
-    _listado(fake_api, _pagina([OPORTUNIDAD], total=45), endpoint=endpoint)
 
-    html = frontend_client.get("/recruiting/oportunidades?estado=todos&tipo=Potencial&busqueda=java").get_data(
-        as_text=True
-    )
+    respuesta = frontend_client.get("/recruiting/oportunidades")
 
-    assert "estado=todos" in html and "tipo=Potencial" in html and "busqueda=java" in html and "pagina=2" in html
+    assert respuesta.status_code == 302 and respuesta.headers["Location"].endswith("/v2/recruiting/oportunidades")
 
 
-def test_el_listado_con_error_del_backend_avisa_y_no_muestra_ceros(frontend_client, fake_api):
+def test_el_alta_redirige_a_la_pantalla_vue(frontend_client, fake_api):
     _con_item(frontend_client, fake_api)
-    _listado(fake_api, {"detail": "Falla del servidor"}, status=500)
-
-    html = frontend_client.get("/recruiting/oportunidades").get_data(as_text=True)
-
-    assert "Falla del servidor" in html and "oportunidades-error" in html
-
-
-def test_el_boton_nueva_busqueda_solo_con_permiso(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api, acciones=PERMISOS_EXTERNO)
-    _listado(fake_api, _pagina([OPORTUNIDAD]))
-
-    html = frontend_client.get("/recruiting/oportunidades").get_data(as_text=True)
-
-    assert "/recruiting/oportunidades/nueva" not in html
-    assert "externos-disponibles" not in [c["endpoint"] for c in fake_api.calls]
-
-
-def test_el_externo_no_elige_el_tipo_y_siempre_pide_las_efectivas(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api, acciones=PERMISOS_EXTERNO)
-    _listado(fake_api, _pagina([OPORTUNIDAD]))
-
-    html = frontend_client.get("/recruiting/oportunidades?tipo=Potencial").get_data(as_text=True)
-
-    assert 'name="tipo"' not in html
-    assert _llamadas(fake_api, "GET", "/recruiting/oportunidades?")[0]["endpoint"].endswith("tipo=Efectiva")
-
-
-def test_el_listado_ofrece_asignar_externo_y_cancelar_segun_los_permisos(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api)
-    _listado(fake_api, _pagina([OPORTUNIDAD]))
-    html = frontend_client.get("/recruiting/oportunidades").get_data(as_text=True)
-    assert '@click="abrirModalExterno(op)"' in html and '@click="cancelarBusqueda(op)"' in html
-    assert "Externo Uno" in html
-
-    _con_item(
-        frontend_client,
-        fake_api,
-        acciones={**PERMISOS_INTERNO, "puede_eliminar_busquedas": False, "puede_administrar_externos": False},
-    )
-    html = frontend_client.get("/recruiting/oportunidades").get_data(as_text=True)
-    assert '@click="abrirModalExterno(op)"' not in html and '@click="cancelarBusqueda(op)"' not in html
-
-
-# --- Formulario de alta ---------------------------------------------------------------------------------------------
-
-
-def test_el_formulario_de_alta_trae_los_catalogos(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api)
-    _catalogos(fake_api)
-
-    respuesta = frontend_client.get("/recruiting/oportunidades/nueva")
-    html = respuesta.get_data(as_text=True)
-
-    assert respuesta.status_code == 200
-    assert "Backend Developer" in html and "Lucia Paz" in html and "Marcela Gomez" in html
-    assert "Python" in html and "Liderazgo" in html
-    assert 'value="Hibrido"' in html and 'value="Critica"' in html
-
-
-def test_sin_permiso_para_crear_el_formulario_redirige_al_listado(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api, acciones=PERMISOS_EXTERNO)
 
     respuesta = frontend_client.get("/recruiting/oportunidades/nueva")
 
-    assert respuesta.status_code == 302 and respuesta.headers["Location"].endswith("/recruiting/oportunidades")
+    assert respuesta.status_code == 302 and respuesta.headers["Location"].endswith("/v2/recruiting/oportunidades/nueva")
+
+
+@pytest.mark.parametrize("ruta", ["/v2/recruiting/oportunidades", "/v2/recruiting/oportunidades/nueva", f"/v2/recruiting/oportunidades/{ID_OP}"])
+def test_las_urls_de_la_spa_exigen_el_item_oportunidades(frontend_client, fake_api, ruta):
+    _sesion(frontend_client, fake_api, "recruiting", "recruiting.candidatos")
+
+    assert frontend_client.get(ruta).status_code == 403
 
 
 def test_el_alta_reenvia_el_formulario_al_backend_con_sus_alias(frontend_client, fake_api):
@@ -392,55 +309,17 @@ def test_el_alta_pasa_el_error_del_backend(frontend_client, fake_api):
 # --- Ficha ----------------------------------------------------------------------------------------------------------
 
 
-def test_la_ficha_muestra_la_busqueda_sus_candidatos_y_las_sugerencias(frontend_client, fake_api):
+def test_la_ficha_redirige_a_la_pantalla_vue_conservando_los_parametros(frontend_client, fake_api):
     _con_item(frontend_client, fake_api)
-    _detalle(fake_api)
 
-    respuesta = frontend_client.get(f"/recruiting/oportunidades/{ID_OP}")
-    html = respuesta.get_data(as_text=True)
+    respuesta = frontend_client.get(f"/recruiting/oportunidades/{ID_OP}?edit=true&volver=/recruiting/oportunidades")
 
-    assert respuesta.status_code == 200
-    assert "Desarrollador Python" in html and "Acme SA" in html
-    assert "Beto Rios" in html and "Julia Mendez" in html
-    assert "60%" in html  # umbral de Smart Matching de la empresa
-    assert "Cargar CV" not in html  # la carga de CV desde la búsqueda es del grupo EXTERNOS y queda para después
-    assert "Híbrido" in html and "Hibrido" in html
-
-
-def test_una_busqueda_ganada_se_ve_sin_smart_matching_ni_acciones(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api)
-    _detalle(fake_api, op={**OPORTUNIDAD, "estado": "Ganada"})
-
-    respuesta = frontend_client.get(f"/recruiting/oportunidades/{ID_OP}")
-    html = respuesta.get_data(as_text=True)
-
-    assert respuesta.status_code == 200
-    assert "Julia Mendez" not in html
-    assert not _llamadas(fake_api, "GET", f"/recruiting/oportunidades/{ID_OP}/candidatos-compatibles")
-    assert not _llamadas(fake_api, "GET", "/recruiting/externos-disponibles")
-
-
-def test_el_externo_no_ve_smart_matching(frontend_client, fake_api):
-    _con_item(frontend_client, fake_api, acciones=PERMISOS_EXTERNO)
-    _detalle(fake_api)
-
-    html = frontend_client.get(f"/recruiting/oportunidades/{ID_OP}").get_data(as_text=True)
-
-    assert "Julia Mendez" not in html
-    assert not _llamadas(fake_api, "GET", f"/recruiting/oportunidades/{ID_OP}/candidatos-compatibles")
-    assert not _llamadas(fake_api, "GET", "/recruiting/config")
-
-
-@pytest.mark.parametrize("status,mensaje", [(403, "no la tenés asignada"), (404, "no existe")])
-def test_una_busqueda_inaccesible_vuelve_al_listado_con_un_aviso(frontend_client, fake_api, status, mensaje):
-    _con_item(frontend_client, fake_api)
-    fake_api.respond("GET", f"/recruiting/oportunidades/{ID_OP}", {"detail": "x"}, status)
-
-    respuesta = frontend_client.get(f"/recruiting/oportunidades/{ID_OP}")
-
-    assert respuesta.status_code == 302 and respuesta.headers["Location"].endswith("/recruiting/oportunidades")
-    with frontend_client.session_transaction() as sesion:
-        assert any(mensaje in texto for _, texto in sesion["_flashes"])
+    assert respuesta.status_code == 302
+    destino = urlsplit(respuesta.headers["Location"])
+    assert destino.path == f"/v2/recruiting/oportunidades/{ID_OP}"
+    assert dict(parse_qsl(destino.query)) == {"edit": "true", "volver": "/recruiting/oportunidades"}
+    # Flask no pide datos: los pide la pantalla Vue a la API
+    assert not _llamadas(fake_api, "GET", f"/recruiting/oportunidades/{ID_OP}")
 
 
 def test_el_id_que_no_es_uuid_responde_404(frontend_client, fake_api):
@@ -454,7 +333,7 @@ def test_editar_lleva_a_la_ficha_en_modo_edicion(frontend_client, fake_api):
     respuesta = frontend_client.get(f"/recruiting/oportunidades/{ID_OP}/editar")
 
     assert respuesta.status_code == 302
-    assert respuesta.headers["Location"].endswith(f"/recruiting/oportunidades/{ID_OP}?edit=true")
+    assert respuesta.headers["Location"].endswith(f"/v2/recruiting/oportunidades/{ID_OP}?edit=true")
 
 
 def test_la_edicion_envia_solo_lo_que_cambio(frontend_client, fake_api):

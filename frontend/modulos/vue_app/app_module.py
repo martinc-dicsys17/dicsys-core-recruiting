@@ -32,7 +32,7 @@ PANTALLAS_VUE = {
 
 # Items del menu de siempre cuya pantalla ya es Vue: se muestran con el mismo verde que las pantallas Vue.
 # Se identifican por el endpoint de Flask del item (la url que arma el menu).
-ENDPOINTS_MIGRADOS_A_VUE = {'recruiting.candidatos'}
+ENDPOINTS_MIGRADOS_A_VUE = {'recruiting.candidatos', 'recruiting.oportunidades'}
 
 HTML_SIN_COMPILAR = (
     '<!doctype html><html lang="es"><meta charset="utf-8"><title>Dicsys Core</title>'
@@ -157,4 +157,13 @@ def spa_nuevo_candidato(id=None):
 
     Ruta especifica: Flask la prefiere a la generica de arriba, que no cambia para el resto de las pantallas.
     """
+    return _servir_spa()
+
+
+@vue_app_bp.route('/recruiting/oportunidades')
+@vue_app_bp.route('/recruiting/oportunidades/nueva')
+@vue_app_bp.route('/recruiting/oportunidades/<uuid:id>')
+@require_permiso('recruiting.oportunidades')
+def spa_busquedas(id=None):
+    """Busquedas exige el mismo item de menu que sus URL originales (/recruiting/oportunidades...)."""
     return _servir_spa()

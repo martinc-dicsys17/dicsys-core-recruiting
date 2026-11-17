@@ -42,5 +42,26 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     component: () => import('./candidato-nuevo/NuevoCandidatoPage.vue'),
     meta: { titulo: 'Nuevo Candidato - Recruiting' },
   },
+  {
+    // /recruiting/oportunidades (Flask) redirige acá conservando filtros y página.
+    path: '/recruiting/oportunidades',
+    name: 'recruiting-busquedas',
+    component: () => import('./busquedas/BusquedasPage.vue'),
+    meta: { titulo: 'Búsquedas - Recruiting' },
+  },
+  {
+    // /recruiting/oportunidades/nueva (Flask) redirige acá.
+    path: '/recruiting/oportunidades/nueva',
+    name: 'recruiting-busqueda-nueva',
+    component: () => import('./busqueda-nueva/NuevaBusquedaPage.vue'),
+    meta: { titulo: 'Nueva Búsqueda - Recruiting' },
+  },
+  {
+    // /recruiting/oportunidades/<id> y .../editar (Flask) redirigen acá; la edición es en la misma ficha (?edit=true).
+    path: '/recruiting/oportunidades/:id([0-9a-fA-F-]{36})',
+    name: 'recruiting-busqueda-detalle',
+    component: () => import('./busqueda-detalle/BusquedaDetallePage.vue'),
+    meta: { titulo: 'Búsqueda - Recruiting' },
+  },
   // Futuras pantallas del módulo Recruiting se incorporarán aquí siguiendo el mismo patrón.
 ]

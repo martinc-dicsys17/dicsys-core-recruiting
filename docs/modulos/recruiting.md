@@ -76,6 +76,25 @@ lugar) y, dentro de la ficha, asignar reclutador (del catálogo de Parámetros) 
 quitar el usuario externo, los candidatos de la búsqueda y las sugerencias de Smart Matching con el botón de postular.
 Cancelar una búsqueda es pasarla al estado Cancelada (nunca se borra).
 
+### Frontend (Vue)
+
+Las tres pantallas son Vue (`frontend-vue/src/modules/recruiting/busquedas/`, `busqueda-nueva/`, `busqueda-detalle/`) y
+hablan con `/api/v1/recruiting`. Las URLs de siempre (`/recruiting/oportunidades`, `/nueva`, `/<id>`, `/<id>/editar`)
+redirigen a `/v2/...` conservando los parámetros, con el ítem `recruiting.oportunidades` validado en Flask y en la API.
+Los avisos que antes daba el «flash» de Flask (sin permiso de crear, búsqueda inexistente o no asignada) viajan al
+listado por `sessionStorage` (`busquedas/aviso.ts`).
+
+Lo que sigue en Flask, y por qué:
+
+- `POST /recruiting/oportunidades/<id>/cargar-cv` y `/actualizar-cv`: la carga de CV desde una búsqueda asignada
+  (EXTERNOS) es multipart y el proxy `/api/v1` no lo soporta. El equivalente de la API es
+  `POST /oportunidades/{id}/candidatos/cargar-cv`. Se puede eliminar si el proxy pasa a aceptar archivos.
+- `POST /recruiting/oportunidades/<id>/candidatos` (y `/oportunidades/<id>/agregar-candidato`): los usa
+  `oportunidad_agregar_candidato.html`, del Pipeline. Se eliminan al migrar Pipeline.
+- `POST|PUT /recruiting/oportunidades...` de asignar, editar, reclutador y externo: ya no los usa ninguna
+  plantilla ni pantalla Vue (verificado con una búsqueda en `templates/`); quedan sin uso y se pueden borrar junto con
+  sus tests de `test_recruiting_oportunidades.py`.
+
 ### API (`/api/v1/recruiting`, `operation_id` `recruiting_oportunidades_<acción>`)
 
 | Método y ruta | Qué hace |
