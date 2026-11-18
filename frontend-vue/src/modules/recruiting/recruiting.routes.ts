@@ -63,5 +63,22 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     component: () => import('./busqueda-detalle/BusquedaDetallePage.vue'),
     meta: { titulo: 'Búsqueda - Recruiting' },
   },
+  {
+    // /recruiting/gestion-busquedas y /recruiting/asignar-candidato (Flask) redirigen acá conservando vista y filtro.
+    // El alias es la URL que arma Flask para el ítem «Pipeline» del menú: así el menú reconoce la pantalla como Vue.
+    path: '/recruiting/gestion-busquedas',
+    alias: '/recruiting/asignar-candidato',
+    name: 'recruiting-pipeline',
+    component: () => import('./pipeline/PipelinePage.vue'),
+    meta: { titulo: 'Pipeline - Recruiting' },
+  },
+  {
+    // /recruiting/oportunidades/<id>/pipeline (Flask) redirige acá conservando sus parámetros. En el menú se resalta
+    // «Pipeline» (no «Búsquedas», aunque la dirección cuelgue de /recruiting/oportunidades), como antes.
+    path: '/recruiting/oportunidades/:id([0-9a-fA-F-]{36})/pipeline',
+    name: 'recruiting-pipeline-busqueda',
+    component: () => import('./pipeline/PipelineBusquedaPage.vue'),
+    meta: { titulo: 'Pipeline - Recruiting', itemMenu: 'recruiting-pipeline' },
+  },
   // Futuras pantallas del módulo Recruiting se incorporarán aquí siguiendo el mismo patrón.
 ]

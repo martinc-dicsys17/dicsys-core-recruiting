@@ -32,7 +32,7 @@ PANTALLAS_VUE = {
 
 # Items del menu de siempre cuya pantalla ya es Vue: se muestran con el mismo verde que las pantallas Vue.
 # Se identifican por el endpoint de Flask del item (la url que arma el menu).
-ENDPOINTS_MIGRADOS_A_VUE = {'recruiting.candidatos', 'recruiting.oportunidades'}
+ENDPOINTS_MIGRADOS_A_VUE = {'recruiting.candidatos', 'recruiting.oportunidades', 'recruiting.gestion_busquedas'}
 
 HTML_SIN_COMPILAR = (
     '<!doctype html><html lang="es"><meta charset="utf-8"><title>Dicsys Core</title>'
@@ -166,4 +166,15 @@ def spa_nuevo_candidato(id=None):
 @require_permiso('recruiting.oportunidades')
 def spa_busquedas(id=None):
     """Busquedas exige el mismo item de menu que sus URL originales (/recruiting/oportunidades...)."""
+    return _servir_spa()
+
+
+@vue_app_bp.route('/recruiting/gestion-busquedas')
+@vue_app_bp.route('/recruiting/asignar-candidato')
+@vue_app_bp.route('/recruiting/oportunidades/<uuid:id>/pipeline')
+@require_permiso('recruiting.gestion_busquedas')
+def spa_pipeline(id=None):
+    """Pipeline (vista global, seleccion individual y el Pipeline de una busqueda) exige el mismo item de menu que sus
+    URL originales (/recruiting/gestion-busquedas, /recruiting/asignar-candidato -la que arma el menu- y
+    /recruiting/oportunidades/<id>/pipeline)."""
     return _servir_spa()

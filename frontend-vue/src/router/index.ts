@@ -6,6 +6,8 @@ import { recruitingRoutes } from '@/modules/recruiting/recruiting.routes'
 declare module 'vue-router' {
   interface RouteMeta {
     titulo?: string
+    /** Nombre de la ruta cuyo ítem del menú se resalta en esta pantalla, si no es el que corresponde a su dirección. */
+    itemMenu?: string
   }
 }
 

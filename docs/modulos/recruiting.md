@@ -141,6 +141,28 @@ selección individual, Pipeline de una búsqueda (tabla por etapa, mover de etap
 reingresar), ficha del pipeline de un candidato (historial y adjuntos), «Agregar candidato» y, en el Dashboard, la
 revisión de CV duplicados. El filtro «Candidatos: Todos / Propios» aplica a las tres vistas.
 
+### Frontend (Vue)
+
+La vista global, la selección individual y el Pipeline de una búsqueda son Vue
+(`frontend-vue/src/modules/recruiting/pipeline/`: `PipelinePage.vue` y `PipelineBusquedaPage.vue`). Las URLs de siempre
+(`/recruiting/gestion-busquedas`, `/asignar-candidato` y `/oportunidades/<id>/pipeline`) redirigen a `/v2/...`
+conservando sus parámetros (`vista`, `alcance_candidatos`, `etapas`, `columna`), con el ítem
+`recruiting.gestion_busquedas` validado en Flask (también en `/v2`) y en la API. Las consultas van por el proxy
+`/api/v1/recruiting`. Una búsqueda que no se puede abrir vuelve a Pipeline con el aviso (`busquedas/aviso.ts`). El ítem
+del menú apunta a `/recruiting/asignar-candidato` (la URL que arma `url_for` para ese endpoint): la ruta Vue la tiene
+como alias, y `/v2/recruiting/asignar-candidato` exige el mismo permiso. En el Pipeline de una búsqueda se resalta
+«Pipeline», no «Búsquedas» (`meta.itemMenu` de la ruta).
+
+Lo que sigue en Flask, y por qué:
+
+- `PUT|POST /recruiting/oportunidades/<id>/candidatos/<cid>/etapa`: mover, descartar y reingresar. Con un adjunto es
+  multipart (el proxy `/api/v1` no lo soporta): guarda el cambio y después el archivo, con las mismas validaciones.
+- La ficha del pipeline de un candidato («Ver Detalles», `candidato_pipeline_detalle.html`) y «Agregar candidato»
+  (`oportunidad_agregar_candidato.html`) siguen siendo pantallas Flask: la Vue enlaza a ellas como antes.
+- `GET /recruiting/motivos-descarte` y `/oportunidades/<id>/pipeline-columna/<columna>`: ya no los usa ninguna pantalla
+  (la Vue va a la API). `pipeline.html`, `asignar_candidato_hub.html` y sus parciales `_pipeline_*.html` quedan sin uso;
+  se borran junto con esas rutas cuando se confirme la migración.
+
 ### API (`/api/v1/recruiting`, `operation_id` `recruiting_pipeline_<acción>`)
 
 | Método y ruta | Qué hace |

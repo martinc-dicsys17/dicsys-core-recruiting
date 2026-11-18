@@ -821,11 +821,11 @@ def asignar_candidato_oportunidad(id):
 
 
 # === PIPELINE (ítem «gestion_busquedas») ===
-# La vista global, el Pipeline de una búsqueda (tabla, mover de etapa, descartar, adjuntos), la ficha del pipeline de un
-# candidato y «Agregar candidato». Las pantallas compartidas con Candidatos y Búsquedas exigen solo el módulo: el backend
-# valida el permiso del ítem en cada llamada y esta capa solo orienta la interfaz.
+# La vista global y el Pipeline de una búsqueda son pantallas Vue (las URLs de siempre redirigen); acá quedan la ruta
+# que mueve de etapa, descarta o reingresa (con su adjunto), la ficha del pipeline de un candidato y «Agregar
+# candidato». Las pantallas compartidas con Candidatos y Búsquedas exigen solo el módulo: el backend valida el permiso
+# del ítem en cada llamada y esta capa solo orienta la interfaz.
 
-ERROR_PIPELINE = "No se pudo cargar el Pipeline. Probá de nuevo en unos minutos."
 EXTENSIONES_ADJUNTO_ETAPA = (".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg", ".xlsx", ".xls", ".txt", ".zip", ".rar")
 MAX_ADJUNTO_ETAPA_BYTES = 10 * 1024 * 1024
 
@@ -868,49 +868,19 @@ def _parametro_alcance(prefijo="?"):
     return prefijo + urlencode({"alcance_candidatos": alcance}) if alcance else ""
 
 
+def _parametros_de_la_url():
+    """Parámetros de la URL con valor, para conservarlos al pasar a la pantalla Vue."""
+    return {k: v for k, v in request.args.lists() if any(v)}
+
+
 @recruiting_bp.route("/gestion-busquedas", methods=["GET"])
 @recruiting_bp.route("/asignar-candidato", methods=["GET"])
 @require_permiso("recruiting.gestion_busquedas")
 def gestion_busquedas():
-    """Pipeline: vista global (todas las búsquedas con sus candidatos por columna) o individual (elegir una búsqueda)."""
-    api_request = get_api_request_func()
-    token = session.get("token")
-    vista = request.args.get("vista", "global")
-    if vista not in ("global", "individual"):
-        vista = "global"
-
-    resumen = {"columnas": [], "items": []}
-    oportunidades_abiertas = []
-    error = None
-    if vista == "global":
-        data, status = api_request(
-            "GET",
-            "/recruiting/pipeline-resumen?"
-            + urlencode({"estado": "Abierta", "alcance_candidatos": _filtro_alcance_candidatos()}),
-            token=token,
-        )
-        if status == 200 and isinstance(data, dict):
-            resumen = {"columnas": data.get("columnas") or [], "items": data.get("items") or []}
-        else:
-            error = _detalle_de_error(data, ERROR_PIPELINE)
-    else:
-        data, status = api_request("GET", "/recruiting/oportunidades?estado=Abierta&por_pagina=100", token=token)
-        if status == 200 and isinstance(data, dict):
-            oportunidades_abiertas = [
-                op for op in (data.get("items") or []) if str(op.get("estado", "")).strip().lower() == "abierta"
-            ]
-        else:
-            error = _detalle_de_error(data, ERROR_PIPELINE)
-
-    return render_template(
-        "recruiting/asignar_candidato_hub.html",
-        puede_crear_busquedas=_permisos_pipeline()["puede_crear_busquedas"],
-        vista=vista,
-        resumen=resumen,
-        oportunidades=oportunidades_abiertas,
-        filtro_alcance_candidatos=_filtro_alcance_candidatos(),
-        error_pipeline=error,
-    )
+    """Pipeline (vista global o selección individual) es una pantalla Vue (/v2/recruiting/gestion-busquedas); acá se
+    conservan la vista y el filtro de candidatos. Los datos y los permisos los pide la pantalla a la API; el permiso se
+    valida acá y el backend lo valida de nuevo en cada llamada."""
+    return redirect(url_for("vue_app.spa", ruta="recruiting/gestion-busquedas", **_parametros_de_la_url()))
 
 
 @recruiting_bp.route("/pipeline", methods=["GET"])
@@ -931,41 +901,10 @@ def oportunidades_pipeline_hub():
 @recruiting_bp.route("/oportunidades/<uuid:id>/pipeline", methods=["GET"])
 @require_permiso("recruiting.gestion_busquedas")
 def pipeline(id):
-    """Pipeline de una búsqueda: sus candidatos por etapa, con mover de etapa y descartar."""
-    api_request = get_api_request_func()
-    token = session.get("token")
-    consulta = _parametro_alcance()
-
-    op, status_op = api_request("GET", f"/recruiting/oportunidades/{id}", token=token)
-    if status_op != 200 or not isinstance(op, dict):
-        flash(
-            "No tenés acceso a esta búsqueda: no la tenés asignada."
-            if status_op == 403
-            else "La búsqueda solicitada no existe o no fue encontrada.",
-            "error",
-        )
-        return redirect(url_for("recruiting.gestion_busquedas"))
-
-    candidatos, status_cand = api_request("GET", f"/recruiting/oportunidades/{id}/pipeline-candidatos{consulta}", token=token)
-    contadores, status_cont = api_request("GET", f"/recruiting/oportunidades/{id}/pipeline-contadores{consulta}", token=token)
-    permisos = _permisos_pipeline()
-    ganada = _busqueda_ganada(op)
-
-    return render_template(
-        "recruiting/pipeline.html",
-        op=op,
-        oportunidad=op,
-        candidatos=candidatos if status_cand == 200 and isinstance(candidatos, list) else [],
-        contadores=contadores if status_cont == 200 and isinstance(contadores, dict) else {"total": 0, "por_etapa": {}},
-        error_pipeline=None if status_cand == 200 else _detalle_de_error(candidatos, ERROR_PIPELINE),
-        busqueda_ganada=ganada,
-        # Búsqueda Ganada = cerrada: solo consulta (el backend también rechaza cualquier cambio con 409)
-        puede_mover_descartar=permisos["puede_mover_descartar"] and not ganada,
-        puede_asignar_candidatos=permisos["puede_asignar_candidatos"] and not ganada,
-        filtro_etapas=[e.strip() for e in request.args.get("etapas", "").split(",") if e.strip()],
-        filtro_columna=request.args.get("columna", "").strip(),
-        filtro_alcance_candidatos=_filtro_alcance_candidatos(),
-    )
+    """El Pipeline de una búsqueda es una pantalla Vue (/v2/recruiting/oportunidades/<id>/pipeline); acá se conservan la
+    URL y sus parámetros (alcance_candidatos, etapas, columna). La pantalla pide la búsqueda, sus candidatos y los
+    permisos a la API y, si la búsqueda no se puede abrir, vuelve a Pipeline con el aviso, como antes."""
+    return redirect(url_for("vue_app.spa", ruta=f"recruiting/oportunidades/{id}/pipeline", **_parametros_de_la_url()))
 
 
 @recruiting_bp.route("/oportunidades/<uuid:id>/pipeline-columna/<string:columna>", methods=["GET"])

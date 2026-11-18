@@ -21,6 +21,12 @@ Flask de siempre (`PUT /recruiting/candidatos/<id>`) y reemplaza el CV con la ru
 `/recruiting/candidatos/<id>/cv`. Guardar y Cancelar vuelven a la ficha. Pruebas de sus reglas:
 `node --test tests/candidato_editar_formulario.test.mjs`.
 «Agregar a Blacklist» solo confirma y avisa que todavia no esta disponible, como antes.
+**Pipeline** (`/v2/recruiting/gestion-busquedas`, vista global o seleccion individual, y
+`/v2/recruiting/oportunidades/<id>/pipeline`, el Pipeline de una busqueda), con datos reales: las URLs de Flask de
+siempre redirigen ahi conservando `vista`, `alcance_candidatos`, `etapas` y `columna`. Consulta por el proxy `/api/v1`;
+mover de etapa, descartar y reingresar (con el adjunto, multipart) usan la ruta de Flask de siempre
+(`/recruiting/oportunidades/<id>/candidatos/<id>/etapa`). «Ver Detalles» y «Agregar candidato» siguen en Flask.
+Pruebas de sus reglas: `node --test tests/pipeline_reglas.test.mjs`; E2E: `e2e/specs/13-pipeline.spec.ts`.
 
 ## Stack
 

@@ -40,9 +40,17 @@ function esMigrado(item: MenuItem): boolean {
   return ruta !== null && router.resolve(ruta).name !== 'no-encontrada'
 }
 
+/**
+ * Activo si la pantalla actual es la del ítem (misma ruta del router, aunque Flask arme otra URL para el mismo
+ * endpoint) o una dependiente de su dirección. Una pantalla puede fijar qué ítem resalta con `meta.itemMenu`: el
+ * Pipeline de una búsqueda cuelga de /recruiting/oportunidades pero resalta «Pipeline», no «Búsquedas».
+ */
 function esMigradoActivo(item: MenuItem): boolean {
   const ruta = rutaDelItem(item)
-  return esMigrado(item) && ruta !== null && (route.path === ruta || route.path.startsWith(`${ruta}/`))
+  if (ruta === null || !esMigrado(item)) return false
+  const destino = router.resolve(ruta).name
+  if (route.meta.itemMenu) return destino === route.meta.itemMenu
+  return destino === route.name || route.path === ruta || route.path.startsWith(`${ruta}/`)
 }
 
 function grupoActivo(grupo: MenuGrupo): boolean {
