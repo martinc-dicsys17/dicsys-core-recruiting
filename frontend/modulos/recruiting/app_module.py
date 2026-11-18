@@ -1199,9 +1199,8 @@ def _proxy_parametros(metodo, endpoint, clave_respuesta, mensaje_error, payload=
 @recruiting_bp.route("/parametros", methods=["GET"])
 @require_permiso("recruiting.parametros")
 def parametros():
-    data, status = get_api_request_func()("GET", f"{BASE_PARAMETROS}/config", token=session.get("token"))
-    match_minimo = data.get("match_minimo_porcentaje", 50) if status == 200 and isinstance(data, dict) else 50
-    return render_template("recruiting/parametros.html", match_minimo=match_minimo)
+    """La pantalla vive en la interfaz Vue: se redirige conservando la sesion."""
+    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros"))
 
 
 @recruiting_bp.route("/parametros/config", methods=["PUT"])
@@ -1211,7 +1210,7 @@ def parametros_actualizar_config():
 
 
 def _registrar_abm_parametros(
-    ruta, ruta_backend, plantilla, clave_lista, clave_item, singular, convertidor="uuid", alias_listado=None
+    ruta, ruta_backend, clave_lista, clave_item, singular, convertidor="uuid", alias_listado=None
 ):
     """Vista y proxies de un ABM con baja lógica (listar con inactivos, crear, editar y desactivar). Los nombres de
     endpoint (`parametros_<ruta>_vista`...) los usan las pestañas de las plantillas."""
@@ -1220,7 +1219,7 @@ def _registrar_abm_parametros(
     permiso = require_permiso("recruiting.parametros")
 
     def vista():
-        return render_template(f"recruiting/{plantilla}.html")
+        return redirect(url_for("vue_app.spa", ruta=f"recruiting/parametros/{ruta}"))
 
     def listar():
         q = (request.args.get("q") or "").strip()
@@ -1259,16 +1258,15 @@ def _registrar_abm_parametros(
     )
 
 
-_registrar_abm_parametros("skills", "skills", "skills", "skills", "skill", "la skill", alias_listado="list")
+_registrar_abm_parametros("skills", "skills", "skills", "skill", "la skill", alias_listado="list")
 _registrar_abm_parametros(
-    "habilidades", "habilidades", "habilidades", "habilidades", "habilidad", "la habilidad", alias_listado="list"
+    "habilidades", "habilidades", "habilidades", "habilidad", "la habilidad", alias_listado="list"
 )
-_registrar_abm_parametros("lideres", "lideres", "lideres", "lideres", "persona", "el líder")
-_registrar_abm_parametros("reclutadores", "reclutadores", "reclutadores", "reclutadores", "persona", "el reclutador")
+_registrar_abm_parametros("lideres", "lideres", "lideres", "persona", "el líder")
+_registrar_abm_parametros("reclutadores", "reclutadores", "reclutadores", "persona", "el reclutador")
 _registrar_abm_parametros(
     "perfiles-profesionales",
     "perfiles-puesto",
-    "perfiles_profesionales",
     "perfiles",
     "perfil",
     "el perfil profesional",
@@ -1282,7 +1280,7 @@ def _registrar_abm_ubicacion(ruta, clave_lista, clave_item, singular):
     permiso = require_permiso("recruiting.parametros")
 
     def vista():
-        return render_template(f"recruiting/{nombre}.html")
+        return redirect(url_for("vue_app.spa", ruta=f"recruiting/parametros/{ruta}"))
 
     def listar():
         provincia_id = request.args.get("provincia_id", type=int)
@@ -1324,9 +1322,9 @@ _registrar_abm_ubicacion("motivos-blacklist", "motivos", "motivo", "el motivo")
 @recruiting_bp.route("/parametros/archivos-cv", methods=["GET"])
 @require_permiso("recruiting.parametros")
 def parametros_archivos_cv_vista():
-    """Consulta y descarga de los CV archivados (cv_procesados_ok, cv_duplicados y cv_errores). Limpiar, respaldar e
-    importar son de administradores."""
-    return render_template("recruiting/archivos_cv.html", puede_limpiar_bd=_es_admin())
+    """Consulta y descarga de los CV archivados: la pantalla vive en la interfaz Vue. Limpiar, respaldar e importar son
+    de administradores."""
+    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros/archivos-cv"))
 
 
 @recruiting_bp.route("/parametros/archivos-cv/api", methods=["GET"])
@@ -1514,9 +1512,10 @@ def _proxy_descarga_archivos_cv(endpoint, params=None):
 @recruiting_bp.route("/parametros/historial-cargas-cv", methods=["GET"])
 @require_permiso("recruiting.parametros")
 def parametros_historial_cargas_cv_vista():
+    """El historial es solo para administradores; la pantalla vive en la interfaz Vue."""
     if not _es_admin():
         return render_template("core/403.html", modulo="recruiting.parametros"), 403
-    return render_template("recruiting/historial_cargas_cv.html")
+    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros/historial-cargas-cv"))
 
 
 @recruiting_bp.route("/parametros/historial-cargas-cv/api", methods=["GET"])

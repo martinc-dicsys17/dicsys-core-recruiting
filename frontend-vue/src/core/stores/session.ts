@@ -12,7 +12,8 @@ export const useSessionStore = defineStore('session', () => {
   const enlaces = computed(() => datos.value.enlaces)
   const menus = computed(() => datos.value.menus)
   const esDemo = computed(() => datos.value.origen === 'demo')
+  const esAdmin = computed(() => datos.value.esAdmin === true)
   const inicial = computed(() => (usuario.value.nombre || usuario.value.email || 'U').charAt(0).toUpperCase())
 
-  return { usuario, empresa, enlaces, menus, esDemo, inicial }
+  return { usuario, empresa, enlaces, menus, esDemo, esAdmin, inicial }
 })

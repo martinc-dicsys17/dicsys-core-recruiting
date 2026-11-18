@@ -10,7 +10,7 @@ No modifica la autenticacion: usa el mismo login_required y la misma sesion que 
 """
 import os
 
-from flask import Blueprint, Response, current_app, session, url_for
+from flask import Blueprint, Response, current_app, render_template, session, url_for
 from jinja2.utils import htmlsafe_json_dumps
 from werkzeug.routing import BuildError
 
@@ -32,7 +32,12 @@ PANTALLAS_VUE = {
 
 # Items del menu de siempre cuya pantalla ya es Vue: se muestran con el mismo verde que las pantallas Vue.
 # Se identifican por el endpoint de Flask del item (la url que arma el menu).
-ENDPOINTS_MIGRADOS_A_VUE = {'recruiting.candidatos', 'recruiting.oportunidades', 'recruiting.gestion_busquedas'}
+ENDPOINTS_MIGRADOS_A_VUE = {
+    'recruiting.candidatos',
+    'recruiting.oportunidades',
+    'recruiting.gestion_busquedas',
+    'recruiting.parametros',
+}
 
 HTML_SIN_COMPILAR = (
     '<!doctype html><html lang="es"><meta charset="utf-8"><title>Dicsys Core</title>'
@@ -116,6 +121,7 @@ def _armar_bootstrap():
             'rol': rol,
             'avatarUrl': avatar,
         },
+        'esAdmin': user.get('rol') == 'admin',
         'empresa': {
             'nombre': session.get('empresa_nombre') or '',
             'logoUrl': session.get('empresa_logo') or None,
@@ -177,4 +183,22 @@ def spa_pipeline(id=None):
     """Pipeline (vista global, seleccion individual y el Pipeline de una busqueda) exige el mismo item de menu que sus
     URL originales (/recruiting/gestion-busquedas, /recruiting/asignar-candidato -la que arma el menu- y
     /recruiting/oportunidades/<id>/pipeline)."""
+    return _servir_spa()
+
+
+@vue_app_bp.route('/recruiting/parametros')
+@vue_app_bp.route('/recruiting/parametros/<seccion>')
+@require_permiso('recruiting.parametros')
+def spa_parametros(seccion=None):
+    """Parámetros y sus secciones exigen el mismo item de menu que sus URL originales (/recruiting/parametros...)."""
+    return _servir_spa()
+
+
+@vue_app_bp.route('/recruiting/parametros/historial-cargas-cv')
+@require_permiso('recruiting.parametros')
+def spa_historial_cargas_cv():
+    """El historial de cargas de CV es solo para administradores, como en la pantalla anterior (el backend lo valida
+    igual en cada llamada)."""
+    if (session.get('user') or {}).get('rol') != 'admin':
+        return render_template('core/403.html', modulo='recruiting.parametros'), 403
     return _servir_spa()

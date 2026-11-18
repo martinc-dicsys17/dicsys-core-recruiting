@@ -80,5 +80,72 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     component: () => import('./pipeline/PipelineBusquedaPage.vue'),
     meta: { titulo: 'Pipeline - Recruiting', itemMenu: 'recruiting-pipeline' },
   },
+  {
+    // /recruiting/parametros/<sección> (Flask) redirige acá conservando sus parámetros.
+    path: '/recruiting/parametros',
+    name: 'recruiting-parametros',
+    component: () => import('./parametros/ConfiguracionPage.vue'),
+    meta: { titulo: 'Parámetros - Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/skills',
+    name: 'recruiting-parametros-skills',
+    component: () => import('./parametros/SkillsPage.vue'),
+    meta: { titulo: 'Skills - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/habilidades',
+    name: 'recruiting-parametros-habilidades',
+    component: () => import('./parametros/HabilidadesPage.vue'),
+    meta: { titulo: 'Habilidades - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/provincias',
+    name: 'recruiting-parametros-provincias',
+    component: () => import('./parametros/ProvinciasPage.vue'),
+    meta: { titulo: 'Provincias - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/ciudades',
+    name: 'recruiting-parametros-ciudades',
+    component: () => import('./parametros/CiudadesPage.vue'),
+    meta: { titulo: 'Ciudades - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/lideres',
+    name: 'recruiting-parametros-lideres',
+    component: () => import('./parametros/LideresPage.vue'),
+    meta: { titulo: 'Líderes - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/reclutadores',
+    name: 'recruiting-parametros-reclutadores',
+    component: () => import('./parametros/ReclutadoresPage.vue'),
+    meta: { titulo: 'Reclutadores - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/perfiles-profesionales',
+    name: 'recruiting-parametros-perfiles',
+    component: () => import('./parametros/PerfilesPage.vue'),
+    meta: { titulo: 'Perfiles profesionales - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/motivos-blacklist',
+    name: 'recruiting-parametros-motivos',
+    component: () => import('./parametros/MotivosPage.vue'),
+    meta: { titulo: 'Motivos de Blacklist - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/archivos-cv',
+    name: 'recruiting-parametros-archivos-cv',
+    component: () => import('./parametros/ArchivosCvPage.vue'),
+    meta: { titulo: 'Archivos de CV - Parámetros de Recruiting' },
+  },
+  {
+    path: '/recruiting/parametros/historial-cargas-cv',
+    name: 'recruiting-parametros-historial-cargas-cv',
+    component: () => import('./parametros/HistorialPage.vue'),
+    meta: { titulo: 'Historial de cargas de CV - Parámetros de Recruiting' },
+  },
   // Futuras pantallas del módulo Recruiting se incorporarán aquí siguiendo el mismo patrón.
 ]

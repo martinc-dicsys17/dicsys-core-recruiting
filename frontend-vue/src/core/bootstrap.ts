@@ -30,6 +30,8 @@ export interface MenuGrupo {
 export interface AppBootstrap {
   origen: 'servidor' | 'demo'
   usuario: { nombre: string; email: string; rol: string; avatarUrl: string | null }
+  /** true si el usuario es administrador (Flask lo entrega ya calculado; el backend valida igual cada llamada). */
+  esAdmin: boolean
   empresa: { nombre: string; logoUrl: string | null }
   enlaces: { inicio: string; perfil: string; cerrarSesion: string }
   menus: MenuGrupo[]
@@ -46,6 +48,7 @@ function bootstrapDemo(): AppBootstrap {
   return {
     origen: 'demo',
     usuario: { nombre: 'Usuario demo', email: 'demo@ejemplo.com', rol: 'Sesion de demostracion', avatarUrl: null },
+    esAdmin: true,
     empresa: { nombre: '', logoUrl: null },
     enlaces: {
       inicio: `${legacy}/dashboard`,
