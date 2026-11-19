@@ -1,8 +1,8 @@
-"""Recruiting → Parámetros → Motivos de Blacklist: permiso de las rutas, la pestaña en las pantallas de Parámetros y el
-reenvío al backend de listar, crear, editar y eliminar. El backend valida el acceso de verdad: acá se prueba lo que la
-pantalla pide, muestra y reenvía."""
+"""Recruiting → Parámetros → Motivos de Blacklist: permiso de las rutas, la redirección a la pantalla Vue y el reenvío
+al backend de listar, crear, editar y eliminar. El backend valida el acceso de verdad: acá se prueba lo que la pantalla
+pide y reenvía."""
 
-import re
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -47,45 +47,19 @@ def test_sin_el_item_parametros_responde_403(frontend_client, fake_api, metodo, 
     assert not [c for c in fake_api.calls if c["endpoint"].startswith(BACKEND)]
 
 
-# --- Pantalla y pestaña ---------------------------------------------------------------------------------------------
+# --- Pantalla -------------------------------------------------------------------------------------------------------
+# La pantalla es Vue: la URL de siempre redirige a la SPA (las pestañas y el ABM los dibuja Vue). Las redirecciones de
+# las demás pantallas de Parámetros se prueban en test_recruiting_parametros_vue.py.
 
 
-def test_la_pantalla_muestra_el_abm_con_su_pestana_activa(frontend_client, fake_api):
+def test_la_pantalla_redirige_a_la_interfaz_vue(frontend_client, fake_api):
     _con_permiso(frontend_client, fake_api)
+
     respuesta = frontend_client.get(RAIZ)
-    html = respuesta.get_data(as_text=True)
 
-    assert respuesta.status_code == 200
-    assert "Catálogo de Motivos de Blacklist" in html
-    assert "Nuevo Motivo" in html
-    pestana = re.search(r'<a href="/recruiting/parametros/motivos-blacklist"[^>]*>', html).group(0)
-    assert "font-bold" in pestana and "border-primary-600" in pestana  # la pestaña activa
-    provincias = re.search(r'<a href="/recruiting/parametros/provincias"[^>]*>', html).group(0)
-    assert "border-primary-600" not in provincias
-
-
-@pytest.mark.parametrize(
-    "ruta",
-    [
-        "/recruiting/parametros",
-        "/recruiting/parametros/skills",
-        "/recruiting/parametros/habilidades",
-        "/recruiting/parametros/provincias",
-        "/recruiting/parametros/ciudades",
-        "/recruiting/parametros/lideres",
-        "/recruiting/parametros/reclutadores",
-        "/recruiting/parametros/perfiles-profesionales",
-        "/recruiting/parametros/archivos-cv",
-    ],
-)
-def test_las_demas_pantallas_de_parametros_ofrecen_la_pestana(frontend_client, fake_api, ruta):
-    _con_permiso(frontend_client, fake_api)
-    fake_api.respond("GET", "/recruiting/parametros/config", {"match_minimo_porcentaje": 50})
-    fake_api.respond("GET", "/recruiting/parametros/archivos-cv", [])
-    respuesta = frontend_client.get(ruta)
-
-    assert respuesta.status_code == 200
-    assert f'href="{RAIZ}"' in respuesta.get_data(as_text=True)
+    assert respuesta.status_code == 302
+    assert urlsplit(respuesta.headers["Location"]).path == f"/v2{RAIZ}"
+    assert not [c for c in fake_api.calls if c["endpoint"].startswith(BACKEND)]  # los datos los pide Vue
 
 
 # --- Reenvío al backend ---------------------------------------------------------------------------------------------

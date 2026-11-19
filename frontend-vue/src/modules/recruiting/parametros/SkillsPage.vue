@@ -51,6 +51,7 @@ const config = {
   ],
   baja: 'logica',
   tituloEditar: 'Editar Skill',
+  tituloBotonEditar: 'Editar Skill',
   tituloCrear: 'Nueva Skill',
   botonCrear: 'Crear Skill',
   textoCreado: 'Skill creado exitosamente.',

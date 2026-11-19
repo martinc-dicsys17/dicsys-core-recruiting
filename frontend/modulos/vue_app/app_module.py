@@ -10,7 +10,7 @@ No modifica la autenticacion: usa el mismo login_required y la misma sesion que 
 """
 import os
 
-from flask import Blueprint, Response, current_app, render_template, session, url_for
+from flask import Blueprint, Response, current_app, redirect, render_template, request, session, url_for
 from jinja2.utils import htmlsafe_json_dumps
 from werkzeug.routing import BuildError
 
@@ -150,7 +150,17 @@ def _servir_spa():
 @vue_app_bp.route('/<path:ruta>')
 @login_required
 def spa(ruta):
-    """Punto de entrada unico de la SPA: cualquier ruta bajo /v2 la resuelve Vue Router."""
+    """Punto de entrada unico de la SPA: cualquier ruta bajo /v2 la resuelve Vue Router.
+
+    Con barra final (/v2/recruiting/parametros/historial-cargas-cv/) Werkzeug no toma la ruta especifica de la
+    pantalla, que exige su permiso, sino esta, que solo exige la sesion: se redirige a la direccion sin la barra, que
+    vuelve a pasar por el control de esa pantalla. Las variantes en mayusculas las descarta Vue Router (no las abre).
+    """
+    if ruta.endswith('/'):
+        destino = url_for('vue_app.spa', ruta=ruta.rstrip('/'))
+        if request.query_string:
+            destino += '?' + request.query_string.decode('utf-8', 'replace')
+        return redirect(destino)
     return _servir_spa()
 
 
@@ -199,6 +209,6 @@ def spa_parametros(seccion=None):
 def spa_historial_cargas_cv():
     """El historial de cargas de CV es solo para administradores, como en la pantalla anterior (el backend lo valida
     igual en cada llamada)."""
-    if (session.get('user') or {}).get('rol') != 'admin':
+    if (session.get('user') or {}).get('rol') != 'admin':  # la misma regla que _es_admin() de Recruiting
         return render_template('core/403.html', modulo='recruiting.parametros'), 403
     return _servir_spa()

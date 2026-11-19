@@ -25,6 +25,13 @@ const RECURSOS: Record<string, RecursoAbm> = {
 }
 
 /**
+ * Catálogos cuyos datos dependen de otro: Provincias muestra la cantidad de ciudades y Ciudades el nombre de la
+ * provincia. Al cambiar uno, el otro se marca vencido sin pedirlo en el momento (`refetchType: 'none'`): se vuelve a
+ * pedir al abrir su pestaña.
+ */
+const DEPENDIENTES: Record<string, string> = { ciudades: 'provincias', provincias: 'ciudades' }
+
+/**
  * Estado de servidor de un ABM de Parámetros: listado (con inactivos) y altas, ediciones y bajas. Al guardar o dar de
  * baja se invalida el listado para traer los datos reales del backend.
  */
@@ -39,7 +46,13 @@ export function useAbm(ruta: string, parametros?: Ref<string>) {
     queryFn: () => recurso.listar(parametros?.value ?? ''),
   })
 
-  const invalidar = () => cliente.invalidateQueries({ queryKey: ['recruiting', 'parametros', ruta] })
+  const invalidar = async () => {
+    const dependiente = DEPENDIENTES[ruta]
+    if (dependiente) {
+      await cliente.invalidateQueries({ queryKey: ['recruiting', 'parametros', dependiente], refetchType: 'none' })
+    }
+    await cliente.invalidateQueries({ queryKey: ['recruiting', 'parametros', ruta] })
+  }
 
   const crear = useMutation({
     mutationFn: (datos: Record<string, unknown>) => recurso.crear(datos),

@@ -12,7 +12,7 @@ const config = {
   ruta: 'lideres',
   claveId: 'id',
   titulo: 'Catálogo de Líderes / Hiring Managers',
-  subtitulo: 'Opciones del combo "Líder / Hiring Manager" de Nueva oportunidad',
+  subtitulo: 'Opciones del combo “Líder / Hiring Manager” de Nueva oportunidad',
   nuevo: 'Nuevo Líder',
   buscarPlaceholder: 'Buscar por nombre...',
   camposBusqueda: ['nombre'],

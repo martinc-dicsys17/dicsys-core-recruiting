@@ -11,8 +11,11 @@ import { useAviso } from './composables/useAviso'
 const { consulta, guardar: guardarConfig } = useConfig()
 const { mensaje, tipo, notificar } = useAviso()
 
-const matchMinimo = ref(50)
+// `v-model.number` deja el texto tal cual (por ejemplo, vacío) cuando no es un número.
+const matchMinimo = ref<number | string>(50)
 const guardando = computed(() => guardarConfig.isPending.value)
+// Hasta tener el valor real de la empresa no se puede guardar: el 50 inicial es solo de presentación.
+const sinValorReal = computed(() => !consulta.data.value)
 
 watch(
   () => consulta.data.value,
@@ -36,15 +39,18 @@ function mensajeDeError(error: unknown): string {
 }
 
 async function guardar(): Promise<void> {
-  if (matchMinimo.value < 1 || matchMinimo.value > 100) {
+  if (sinValorReal.value || guardando.value) return
+  const valor = Number(matchMinimo.value)
+  if (matchMinimo.value === '' || !Number.isFinite(valor) || valor < 1 || valor > 100) {
     notificar('El valor debe estar entre 1 y 100.', 'error')
     return
   }
   try {
-    await guardarConfig.mutateAsync(Number(matchMinimo.value))
+    // Entero, como el parseInt de la pantalla anterior (50,7 se guarda como 50)
+    await guardarConfig.mutateAsync(Math.trunc(valor))
     notificar('Configuración guardada correctamente.')
   } catch (error) {
-    notificar(mensajeDeError(error), 'error')
+    notificar(error instanceof ErrorApi && error.estado === 0 ? 'Error de conexión.' : mensajeDeError(error), 'error')
   }
 }
 </script>
@@ -108,7 +114,7 @@ async function guardar(): Promise<void> {
         <div class="flex justify-end pt-1">
           <button
             type="button"
-            :disabled="guardando"
+            :disabled="guardando || sinValorReal"
             class="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-primary-600 px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 disabled:opacity-50"
             @click="guardar"
           >

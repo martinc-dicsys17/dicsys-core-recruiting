@@ -869,8 +869,10 @@ def _parametro_alcance(prefijo="?"):
 
 
 def _parametros_de_la_url():
-    """Parámetros de la URL con valor, para conservarlos al pasar a la pantalla Vue."""
-    return {k: v for k, v in request.args.lists() if any(v)}
+    """Parámetros de la URL con valor, para conservarlos al pasar a la pantalla Vue. Se descartan los nombres que
+    url_for usa para sí (`ruta` y los que empiezan con «_», como `_scheme` o `_anchor`): pasados tal cual darían un
+    error 500 o cambiarían la dirección armada."""
+    return {k: v for k, v in request.args.lists() if any(v) and k != "ruta" and not k.startswith("_")}
 
 
 @recruiting_bp.route("/gestion-busquedas", methods=["GET"])
@@ -1200,7 +1202,7 @@ def _proxy_parametros(metodo, endpoint, clave_respuesta, mensaje_error, payload=
 @require_permiso("recruiting.parametros")
 def parametros():
     """La pantalla vive en la interfaz Vue: se redirige conservando la sesion."""
-    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros"))
+    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros", **_parametros_de_la_url()))
 
 
 @recruiting_bp.route("/parametros/config", methods=["PUT"])
@@ -1219,7 +1221,7 @@ def _registrar_abm_parametros(
     permiso = require_permiso("recruiting.parametros")
 
     def vista():
-        return redirect(url_for("vue_app.spa", ruta=f"recruiting/parametros/{ruta}"))
+        return redirect(url_for("vue_app.spa", ruta=f"recruiting/parametros/{ruta}", **_parametros_de_la_url()))
 
     def listar():
         q = (request.args.get("q") or "").strip()
@@ -1280,7 +1282,7 @@ def _registrar_abm_ubicacion(ruta, clave_lista, clave_item, singular):
     permiso = require_permiso("recruiting.parametros")
 
     def vista():
-        return redirect(url_for("vue_app.spa", ruta=f"recruiting/parametros/{ruta}"))
+        return redirect(url_for("vue_app.spa", ruta=f"recruiting/parametros/{ruta}", **_parametros_de_la_url()))
 
     def listar():
         provincia_id = request.args.get("provincia_id", type=int)
@@ -1324,7 +1326,7 @@ _registrar_abm_ubicacion("motivos-blacklist", "motivos", "motivo", "el motivo")
 def parametros_archivos_cv_vista():
     """Consulta y descarga de los CV archivados: la pantalla vive en la interfaz Vue. Limpiar, respaldar e importar son
     de administradores."""
-    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros/archivos-cv"))
+    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros/archivos-cv", **_parametros_de_la_url()))
 
 
 @recruiting_bp.route("/parametros/archivos-cv/api", methods=["GET"])
@@ -1515,7 +1517,9 @@ def parametros_historial_cargas_cv_vista():
     """El historial es solo para administradores; la pantalla vive en la interfaz Vue."""
     if not _es_admin():
         return render_template("core/403.html", modulo="recruiting.parametros"), 403
-    return redirect(url_for("vue_app.spa", ruta="recruiting/parametros/historial-cargas-cv"))
+    return redirect(
+        url_for("vue_app.spa", ruta="recruiting/parametros/historial-cargas-cv", **_parametros_de_la_url())
+    )
 
 
 @recruiting_bp.route("/parametros/historial-cargas-cv/api", methods=["GET"])

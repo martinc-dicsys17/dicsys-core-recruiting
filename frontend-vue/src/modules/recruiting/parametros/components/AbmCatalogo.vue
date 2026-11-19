@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { AlertCircle, Check, Loader2, Pencil, Plus, Power, Search, SearchX, Trash2, X, type LucideIcon } from '@lucide/vue'
-import { computed, ref, watch } from 'vue'
+import { AlertCircle, Check, Edit3, Loader2, Plus, Power, Search, SearchX, Trash2, X, type LucideIcon } from '@lucide/vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 import { ErrorApi } from '../api/parametros.repository'
 import { useAbm } from '../composables/useAbm'
@@ -29,7 +29,9 @@ const { listado, crear, actualizar, desactivar, eliminar } = useAbm(props.config
 const { mensaje, tipo, notificar } = useAviso()
 
 const filas = computed(() => listado.data.value ?? [])
-const cargando = computed(() => listado.isPending.value || listado.isFetching.value)
+// Solo la primera carga de cada listado muestra el spinner: al refrescar después de guardar, activar o dar de baja, la
+// tabla queda a la vista y se actualiza en el lugar, como en la pantalla anterior.
+const cargando = computed(() => listado.isPending.value)
 
 watch(
   () => filas.value.length,
@@ -81,6 +83,7 @@ function claseAlineacion(columna: ColumnaAbm): string {
   return ''
 }
 
+/** Texto del chip vacío. Con `vacio` propio (Ciudades: «—») el chip conserva su estilo, como en la pantalla anterior. */
 function vacioDe(columna: ColumnaAbm): string {
   return columna.vacio ?? 'Sin categoría'
 }
@@ -97,6 +100,11 @@ function errorDeFormulario(error: unknown): string {
   return textoDeError(error, props.config.errorConexion ?? 'Error de conexión con el servidor.')
 }
 
+/** Error de las acciones de la tabla (estado y baja): sin conexión, la pantalla anterior decía «Error de conexión.». */
+function errorDeAccion(error: unknown): string {
+  return textoDeError(error, 'Error de conexión.')
+}
+
 // ---- Alta y edición -----------------------------------------------------------------------------------------------
 
 const modalAbierto = ref(false)
@@ -105,6 +113,12 @@ const guardando = ref(false)
 const errorForm = ref('')
 const idEdicion = ref<string | number | null>(null)
 const formulario = ref<Record<string, string | number | null>>({})
+const contenidoModal = ref<HTMLElement | null>(null)
+
+/** Como la pantalla anterior, al abrir el modal el cursor queda en el primer campo de texto (el nombre). */
+function enfocarPrimerCampo(): void {
+  void nextTick(() => contenidoModal.value?.querySelector<HTMLInputElement>('input[type="text"]')?.focus())
+}
 
 const opcionesProvincia = computed(() =>
   (props.provincias ?? []).map((provincia) => ({ valor: provincia.provincia_id, texto: provincia.nombre })),
@@ -125,6 +139,7 @@ function abrirNuevo(): void {
   }
   formulario.value = valores
   modalAbierto.value = true
+  enfocarPrimerCampo()
 }
 
 function abrirEditar(registro: RegistroAbm): void {
@@ -138,10 +153,11 @@ function abrirEditar(registro: RegistroAbm): void {
   }
   formulario.value = valores
   modalAbierto.value = true
+  enfocarPrimerCampo()
 }
 
+/** Escape, el fondo y la X cierran siempre, aun guardando (como antes); el botón Cancelar se deshabilita al guardar. */
 function cerrarModal(): void {
-  if (guardando.value) return
   modalAbierto.value = false
 }
 
@@ -201,7 +217,7 @@ async function cambiarEstado(registro: RegistroAbm): Promise<void> {
     await actualizar.mutateAsync({ id, datos: { activo: nuevoEstado } })
     notificar(props.config.textoEstado?.(registro, nuevoEstado) ?? 'Estado actualizado.')
   } catch (error) {
-    notificar(errorDeFormulario(error), 'error')
+    notificar(errorDeAccion(error), 'error')
   }
 }
 
@@ -217,7 +233,7 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
     }
     notificar(props.config.textoBajaExitosa(registro))
   } catch (error) {
-    notificar(errorDeFormulario(error), 'error')
+    notificar(errorDeAccion(error), 'error')
   }
 }
 </script>
@@ -226,7 +242,14 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
   <AvisoFlotante :mensaje="mensaje" :tipo="tipo" />
 
   <div class="overflow-hidden rounded-2xl border border-dark-100 bg-white shadow-soft">
-    <div class="flex flex-col gap-4 border-b border-dark-100 p-6 md:flex-row md:items-center md:justify-between">
+    <div
+      class="flex flex-col gap-4 border-b border-dark-100 p-6"
+      :class="
+        filtroProvincia
+          ? 'lg:flex-row lg:items-center lg:justify-between'
+          : 'md:flex-row md:items-center md:justify-between'
+      "
+    >
       <div class="flex items-center gap-3">
         <span class="rounded-xl bg-primary-50 p-2.5 text-primary-600">
           <component :is="icono" class="h-5 w-5" />
@@ -238,6 +261,19 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
       </div>
 
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <!-- Ciudades: el filtro por provincia va antes del buscador, como en la pantalla anterior -->
+        <select
+          v-if="filtroProvincia"
+          v-model="provinciaId"
+          class="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-xs focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none sm:w-52"
+          aria-label="Filtrar por provincia"
+        >
+          <option value="">Todas las provincias</option>
+          <option v-for="provincia in provincias" :key="provincia.provincia_id" :value="String(provincia.provincia_id)">
+            {{ provincia.nombre }}
+          </option>
+        </select>
+
         <div v-if="config.buscarPlaceholder" class="relative w-full" :class="config.buscadorAncho ?? 'sm:w-64'">
           <Search class="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-dark-400" />
           <input
@@ -256,18 +292,6 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
             <X class="h-3.5 w-3.5" />
           </button>
         </div>
-
-        <select
-          v-if="filtroProvincia"
-          v-model="provinciaId"
-          class="w-full rounded-xl border border-dark-200 bg-white px-3 py-2 text-xs focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 focus:outline-none sm:w-56"
-          aria-label="Filtrar por provincia"
-        >
-          <option value="">Todas las provincias</option>
-          <option v-for="provincia in provincias" :key="provincia.provincia_id" :value="String(provincia.provincia_id)">
-            {{ provincia.nombre }}
-          </option>
-        </select>
 
         <button
           type="button"
@@ -338,7 +362,11 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
                 <template v-else-if="columna.tipo === 'chip'">
                   <span
                     class="inline-flex items-center rounded-md px-2.5 py-0.5 font-medium"
-                    :class="textoDe(registro, columna.clave) ? 'bg-dark-100 text-dark-700' : 'text-dark-400 italic'"
+                    :class="
+                      textoDe(registro, columna.clave) || columna.vacio !== undefined
+                        ? 'bg-dark-100 text-dark-700'
+                        : 'text-dark-400 italic'
+                    "
                   >
                     {{ textoDe(registro, columna.clave) || vacioDe(columna) }}
                   </span>
@@ -355,10 +383,10 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
                 <button
                   type="button"
                   class="inline-flex cursor-pointer items-center gap-1 rounded-lg bg-primary-50 px-2.5 py-1 text-xs font-medium text-primary-600 transition-colors hover:bg-primary-100"
-                  title="Editar"
+                  :title="config.tituloBotonEditar ?? 'Editar'"
                   @click="abrirEditar(registro)"
                 >
-                  <Pencil class="h-3.5 w-3.5" />
+                  <Edit3 class="h-3.5 w-3.5" />
                   <span>Editar</span>
                 </button>
                 <button
@@ -370,7 +398,7 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
                       ? 'bg-amber-50 text-amber-700 hover:bg-amber-100'
                       : 'bg-rose-50 text-rose-700 hover:bg-rose-100'
                   "
-                  :title="config.baja === 'logica' ? 'Desactivar (Baja lógica)' : 'Eliminar'"
+                  :title="config.baja === 'logica' ? 'Desactivar (Baja lógica)' : (config.tituloBotonEliminar ?? 'Eliminar')"
                   @click="darDeBaja(registro)"
                 >
                   <Power v-if="config.baja === 'logica'" class="h-3.5 w-3.5" />
@@ -384,6 +412,10 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
           <tr v-else>
             <td :colspan="config.columnas.length + 1" class="px-6 py-10 text-center">
               <p v-if="config.vacioSimple" class="text-xs text-dark-400">{{ config.vacioSinFiltro }}</p>
+              <template v-else-if="config.vacioSinIcono">
+                <p class="text-sm font-semibold text-dark-800">{{ config.vacioTitulo }}</p>
+                <p class="mt-0.5 text-xs text-dark-400">{{ hayFiltros ? config.vacioConFiltro : config.vacioSinFiltro }}</p>
+              </template>
               <div v-else class="mx-auto flex max-w-sm flex-col items-center justify-center">
                 <div class="mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-dark-100 text-dark-400">
                   <SearchX class="h-5 w-5" />
@@ -411,7 +443,11 @@ async function darDeBaja(registro: RegistroAbm): Promise<void> {
     <div class="fixed inset-0 bg-dark-900/40 backdrop-blur-sm transition-opacity" @click="cerrarModal" />
 
     <div class="flex min-h-full items-center justify-center p-4 text-center">
-      <div class="relative w-full max-w-md transform overflow-hidden rounded-2xl border border-dark-100 bg-white p-6 text-left shadow-2xl transition-all" @click.stop>
+      <div
+        ref="contenidoModal"
+        class="relative w-full max-w-md transform overflow-hidden rounded-2xl border border-dark-100 bg-white p-6 text-left shadow-2xl transition-all"
+        @click.stop
+      >
         <div class="flex items-center justify-between border-b border-dark-100 pb-4">
           <div class="flex items-center gap-2.5">
             <span class="rounded-xl bg-primary-50 p-2 text-primary-600">

@@ -47,7 +47,7 @@ export interface ColumnaAbm {
   etiqueta: string
   tipo?: 'texto' | 'chip' | 'estado' | 'contador'
   alineacion?: 'izquierda' | 'centro' | 'derecha'
-  /** Texto cuando el chip viene vacío (por defecto «Sin categoría»; Ciudades usa «-»). */
+  /** Texto cuando el chip viene vacío (por defecto «Sin categoría», en itálica; Ciudades usa «—»). */
   vacio?: string
 }
 
@@ -89,6 +89,12 @@ export interface ConfigAbm {
   errorRequeridoSelect?: string
   /** Estados vacíos simples (una línea centrada) en lugar del bloque con icono y título. */
   vacioSimple?: boolean
+  /** Estado vacío con título y detalle pero sin icono (Ciudades). */
+  vacioSinIcono?: boolean
+  /** `title` del botón Editar (la pantalla anterior usaba «Editar Skill», «Editar Provincia»...; por defecto «Editar»). */
+  tituloBotonEditar?: string
+  /** `title` del botón Eliminar en los catálogos sin baja lógica («Eliminar Provincia»...). */
+  tituloBotonEliminar?: string
 }
 
 export interface ArchivoCv {
@@ -162,7 +168,8 @@ export interface ImportacionEstado {
     total_archivos: number
     archivos_storage: number | null
     backup_seguridad: BackupSeguridad | null
-    usuarios_sin_credenciales: { id: string; email: string }[]
+    /** El backend lo arma como diccionario libre: puede faltar o venir nulo. */
+    usuarios_sin_credenciales?: { id: string; email: string }[] | null
   } | null
   revertido: boolean | null
 }

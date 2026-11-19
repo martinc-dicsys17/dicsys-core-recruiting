@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { MapPin } from '@lucide/vue'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
+import { ErrorApi } from './api/parametros.repository'
 import AbmCatalogo from './components/AbmCatalogo.vue'
+import AvisoFlotante from './components/AvisoFlotante.vue'
 import ParametrosLayout from './components/ParametrosLayout.vue'
 import { useProvincias } from './composables/useAbm'
+import { useAviso } from './composables/useAviso'
 import type { ConfigAbm, Provincia } from './types'
 
 const total = ref(0)
 const provinciaId = ref('')
-const { data: datosProvincias } = useProvincias()
+const { data: datosProvincias, error: errorProvincias } = useProvincias()
 const provincias = computed<Provincia[]>(() =>
   (datosProvincias.value ?? []).map((provincia) => ({
     provincia_id: Number(provincia.provincia_id ?? 0),
@@ -17,6 +20,16 @@ const provincias = computed<Provincia[]>(() =>
     cantidad_ciudades: Number(provincia.cantidad_ciudades ?? 0),
   })),
 )
+
+// Sin provincias el botón «Nueva Ciudad» queda deshabilitado: si no se pudieron cargar se avisa, como antes.
+const { mensaje, tipo, notificar } = useAviso()
+watch(errorProvincias, (error) => {
+  if (!error) return
+  notificar(
+    error instanceof ErrorApi && error.estado === 0 ? 'Error de conexión al cargar las provincias.' : error.message,
+    'error',
+  )
+})
 
 const config = {
   ruta: 'ciudades',
@@ -31,9 +44,10 @@ const config = {
   vacioTitulo: 'No se encontraron ciudades',
   vacioSinFiltro: 'No hay ciudades registradas en el catálogo.',
   vacioConFiltro: 'Probá con otros filtros.',
+  vacioSinIcono: true,
   columnas: [
     { clave: 'nombre', etiqueta: 'Ciudad' },
-    { clave: 'provincia_nombre', etiqueta: 'Provincia', tipo: 'chip' },
+    { clave: 'provincia_nombre', etiqueta: 'Provincia', tipo: 'chip', vacio: '—' },
   ],
   campos: [
     { clave: 'provincia_id', etiqueta: 'Provincia', tipo: 'select', requerido: true },
@@ -50,6 +64,8 @@ const config = {
   tituloEditar: 'Editar Ciudad',
   tituloCrear: 'Nueva Ciudad',
   botonCrear: 'Crear Ciudad',
+  tituloBotonEditar: 'Editar Ciudad',
+  tituloBotonEliminar: 'Eliminar Ciudad',
   textoCreado: 'Ciudad creada exitosamente.',
   textoActualizado: 'Ciudad actualizada correctamente.',
   textoBaja: (registro) => `¿Estás seguro de eliminar la ciudad '${registro.nombre}'? Esta acción no se puede deshacer.`,
@@ -62,6 +78,7 @@ const config = {
 
 <template>
   <ParametrosLayout activa="ciudades" :contadores="{ ciudades: total }">
+    <AvisoFlotante :mensaje="mensaje" :tipo="tipo" />
     <AbmCatalogo
       v-model:provincia-id="provinciaId"
       :config="config"

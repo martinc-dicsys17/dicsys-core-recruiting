@@ -83,12 +83,16 @@ async function verDetalle(item: HistorialCargaCvItem): Promise<void> {
   detalle.value = null
   errorDetalle.value = ''
   cargandoDetalle.value = true
+  // Solo se muestra la respuesta de la operación que sigue abierta: si mientras tanto se cerró el detalle o se abrió
+  // otra, la respuesta tardía se descarta (no puede mostrar archivos de otra operación).
+  const vigente = () => operacion.value?.id === item.id
   try {
-    detalle.value = await parametrosRepository.historial.detalle(item.id)
+    const datos = await parametrosRepository.historial.detalle(item.id)
+    if (vigente()) detalle.value = datos
   } catch (atrapado) {
-    errorDetalle.value = mensajeDetalle(atrapado)
+    if (vigente()) errorDetalle.value = mensajeDetalle(atrapado)
   } finally {
-    cargandoDetalle.value = false
+    if (vigente()) cargandoDetalle.value = false
   }
 }
 
@@ -104,6 +108,7 @@ function cerrarDetalle(): void {
   detalle.value = null
   operacion.value = null
   errorDetalle.value = ''
+  cargandoDetalle.value = false
 }
 </script>
 

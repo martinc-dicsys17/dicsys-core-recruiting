@@ -415,6 +415,11 @@ def create_app(config=None, api_request_func=None):
         if request.remote_addr:
             # como en api_request: la IP del navegador, para el límite de intentos del ingreso (F07-P07)
             headers["X-Cliente-IP"] = request.remote_addr
+        user_agent = request.headers.get("User-Agent")
+        if user_agent:
+            # como en api_request: el navegador del usuario para las auditorías que lo registran. Las cabeceras se arman
+            # acá: un X-Cliente-* que mande el navegador no se reenvía.
+            headers["X-Cliente-User-Agent"] = user_agent[:500]
         if g.get("id_pedido"):
             headers["X-Request-ID"] = g.id_pedido  # F06-P06
         if endpoint.startswith("auth/"):

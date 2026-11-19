@@ -50,6 +50,7 @@ const config = {
   ],
   baja: 'logica',
   tituloEditar: 'Editar Habilidad',
+  tituloBotonEditar: 'Editar Habilidad',
   tituloCrear: 'Nueva Habilidad',
   botonCrear: 'Crear Habilidad',
   textoCreado: 'Habilidad creada exitosamente.',
@@ -58,7 +59,7 @@ const config = {
   textoBajaExitosa: (registro) => `Habilidad '${registro.nombre}' desactivada exitosamente.`,
   textoEstado: (registro, activo) => `Habilidad '${registro.nombre}' ${activo ? 'activada' : 'desactivada'}.`,
   errorCargar: 'Error de conexión al cargar habilidades.',
-  errorRequerido: 'El nombre de la habilidad es obligatorio.',
+  errorRequerido: 'El nombre del rol o habilidad es obligatorio.',
 } satisfies ConfigAbm
 </script>
 

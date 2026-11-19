@@ -81,7 +81,7 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     meta: { titulo: 'Pipeline - Recruiting', itemMenu: 'recruiting-pipeline' },
   },
   {
-    // /recruiting/parametros/<sección> (Flask) redirige acá conservando sus parámetros.
+    // /recruiting/parametros/<sección> (Flask) redirige acá conservando los parámetros de su URL.
     path: '/recruiting/parametros',
     name: 'recruiting-parametros',
     component: () => import('./parametros/ConfiguracionPage.vue'),
@@ -145,7 +145,7 @@ export const recruitingRoutes: RouteRecordRaw[] = [
     path: '/recruiting/parametros/historial-cargas-cv',
     name: 'recruiting-parametros-historial-cargas-cv',
     component: () => import('./parametros/HistorialPage.vue'),
-    meta: { titulo: 'Historial de cargas de CV - Parámetros de Recruiting' },
+    meta: { titulo: 'Historial de cargas de CV - Parámetros de Recruiting', soloAdmin: true },
   },
   // Futuras pantallas del módulo Recruiting se incorporarán aquí siguiendo el mismo patrón.
 ]

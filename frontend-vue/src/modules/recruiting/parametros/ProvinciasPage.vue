@@ -36,6 +36,8 @@ const config = {
   ],
   baja: 'fisica',
   tituloEditar: 'Editar Provincia',
+  tituloBotonEditar: 'Editar Provincia',
+  tituloBotonEliminar: 'Eliminar Provincia',
   tituloCrear: 'Nueva Provincia',
   botonCrear: 'Crear Provincia',
   textoCreado: 'Provincia creada exitosamente.',

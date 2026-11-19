@@ -12,7 +12,7 @@ const config = {
   ruta: 'reclutadores',
   claveId: 'id',
   titulo: 'Catálogo de Reclutadores responsables',
-  subtitulo: 'Opciones del combo "Reclutador responsable" de Nueva oportunidad',
+  subtitulo: 'Opciones del combo “Reclutador responsable” de Nueva oportunidad',
   nuevo: 'Nuevo Reclutador',
   buscarPlaceholder: 'Buscar por nombre...',
   camposBusqueda: ['nombre'],

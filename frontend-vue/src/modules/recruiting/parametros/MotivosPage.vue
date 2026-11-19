@@ -33,6 +33,8 @@ const config = {
   ],
   baja: 'fisica',
   tituloEditar: 'Editar Motivo',
+  tituloBotonEditar: 'Editar Motivo',
+  tituloBotonEliminar: 'Eliminar Motivo',
   tituloCrear: 'Nuevo Motivo',
   botonCrear: 'Crear Motivo',
   textoCreado: 'Motivo creado exitosamente.',

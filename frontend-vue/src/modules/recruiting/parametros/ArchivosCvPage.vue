@@ -37,6 +37,11 @@ const sesion = useSessionStore()
 const cliente = useQueryClient()
 const { mensaje, tipo, notificar } = useAviso()
 
+// Ciclo de vida: al salir de la pantalla se cancelan las consultas de estado en vuelo y ninguna respuesta tardía puede
+// reprogramar el seguimiento ni recargar la página (el backup y la restauración siguen en el servidor).
+let montada = true
+const cancelacion = new AbortController()
+
 // ---- Carpetas y archivos ------------------------------------------------------------------------------------------
 
 const resumen = useCarpetasCv()
@@ -91,8 +96,11 @@ const errorDetalle = computed(() =>
 const archivos = computed(() => detalle.value?.archivos ?? [])
 const totalPaginas = computed(() => detalle.value?.total_paginas ?? 1)
 const totalFiltrado = computed(() => detalle.value?.total_filtrado ?? 0)
-const desde = computed(() => (totalFiltrado.value === 0 ? 0 : (pagina.value - 1) * POR_PAGINA + 1))
-const hasta = computed(() => Math.min(pagina.value * POR_PAGINA, totalFiltrado.value))
+// Página efectiva: el backend la ajusta a la última si la pedida ya no existe (por ejemplo, si se borraron archivos),
+// y la pantalla muestra y navega desde esa, como la anterior.
+const paginaActual = computed(() => detalle.value?.pagina ?? pagina.value)
+const desde = computed(() => (totalFiltrado.value === 0 ? 0 : (paginaActual.value - 1) * POR_PAGINA + 1))
+const hasta = computed(() => Math.min(paginaActual.value * POR_PAGINA, totalFiltrado.value))
 const esCarpetaErrores = computed(() => seleccionada.value === 'cv_errores')
 const columnas = computed(() => (esCarpetaErrores.value ? 5 : 4))
 
@@ -120,7 +128,7 @@ function buscar(): void {
 }
 
 function irAPagina(nueva: number): void {
-  if (nueva < 1 || nueva > totalPaginas.value || nueva === pagina.value || cargandoDetalle.value) return
+  if (nueva < 1 || nueva > totalPaginas.value || nueva === paginaActual.value || cargandoDetalle.value) return
   pagina.value = nueva
 }
 
@@ -189,6 +197,7 @@ function cerrarBackup(): void {
 
 function seguirBackup(): void {
   window.clearTimeout(temporizadorBackup)
+  if (!montada) return
   temporizadorBackup = window.setTimeout(() => void consultarBackup(), 1000)
 }
 
@@ -198,10 +207,13 @@ async function iniciarBackup(): Promise<void> {
   errorBackup.value = ''
   backup.value = null
   try {
-    backup.value = await parametrosRepository.archivos.iniciarBackup()
+    const iniciado = await parametrosRepository.archivos.iniciarBackup()
+    if (!montada) return
+    backup.value = iniciado
     fallosBackup = 0
     seguirBackup()
   } catch (error) {
+    if (!montada) return
     errorBackup.value = mensajeError(error, 'Error de conexión al iniciar el backup.', 'No se pudo iniciar el backup.')
   } finally {
     backupIniciando.value = false
@@ -210,9 +222,11 @@ async function iniciarBackup(): Promise<void> {
 
 async function consultarBackup(): Promise<void> {
   const actual = backup.value
-  if (!actual || !backupEnCurso.value) return
+  if (!montada || !actual || !backupEnCurso.value) return
   try {
-    backup.value = await parametrosRepository.archivos.estadoBackup(actual.backup_id)
+    const estado = await parametrosRepository.archivos.estadoBackup(actual.backup_id, cancelacion.signal)
+    if (!montada) return
+    backup.value = estado
     fallosBackup = 0
     if (!backupEnCurso.value) {
       if (backupFinalizado.value) notificar('Backup de Recruiting completado.', 'exito', 4000)
@@ -220,6 +234,7 @@ async function consultarBackup(): Promise<void> {
       return
     }
   } catch {
+    if (!montada) return
     fallosBackup += 1
     if (fallosBackup >= 5) {
       errorBackup.value =
@@ -244,6 +259,7 @@ const aceptaLimitaciones = ref(false)
 const confirmandoImportar = ref(false)
 const recargarAlCerrarImportar = ref(false)
 let temporizadorImportar: number | undefined
+let temporizadorRecarga: number | undefined
 let fallosImportar = 0
 const archivoImportar = ref<HTMLInputElement | null>(null)
 
@@ -277,6 +293,8 @@ const puedeConfirmarImportar = computed(() => {
 const backupSeguridad = computed(
   () => importacion.value?.backup_seguridad ?? importacion.value?.resultado?.backup_seguridad ?? null,
 )
+/** Cuentas restauradas sin contraseña (el backend lo manda en un diccionario libre: puede faltar o venir nulo). */
+const usuariosSinCredenciales = computed(() => importacion.value?.resultado?.usuarios_sin_credenciales ?? [])
 const urlBackupSeguridad = computed(() =>
   backupSeguridad.value ? parametrosRepository.archivos.descargarBackup(backupSeguridad.value.backup_id) : '#',
 )
@@ -309,12 +327,16 @@ function abrirImportar(): void {
 }
 
 function refrescarTrasImportar(): void {
-  const cuentas = importacion.value?.resultado?.usuarios_sin_credenciales ?? []
-  if (cuentas.length > 0) {
+  if (usuariosSinCredenciales.value.length > 0) {
     recargarAlCerrarImportar.value = true
     return
   }
-  window.setTimeout(() => window.location.reload(), 1200)
+  if (!montada) return
+  window.clearTimeout(temporizadorRecarga)
+  // Solo recarga si el usuario sigue en esta pantalla (el temporizador se cancela al salir)
+  temporizadorRecarga = window.setTimeout(() => {
+    if (montada) window.location.reload()
+  }, 1200)
 }
 
 function cerrarImportar(): void {
@@ -350,12 +372,19 @@ async function subirImportacion(evento: Event): Promise<void> {
   subidaPct.value = 0
   modalImportar.value = true
   try {
-    importacion.value = await parametrosRepository.archivos.subirImportacion(archivo, (pct) => {
-      subidaPct.value = pct
-    })
+    const subida = await parametrosRepository.archivos.subirImportacion(
+      archivo,
+      (pct) => {
+        subidaPct.value = pct
+      },
+      cancelacion.signal,
+    )
+    if (!montada) return
+    importacion.value = subida
     fallosImportar = 0
     seguirImportar()
   } catch (error) {
+    if (!montada) return
     errorImportar.value = mensajeError(error, 'Error de conexión al subir el backup.', 'No se pudo subir el backup.')
   } finally {
     importSubiendo.value = false
@@ -364,14 +393,17 @@ async function subirImportacion(evento: Event): Promise<void> {
 
 function seguirImportar(): void {
   window.clearTimeout(temporizadorImportar)
+  if (!montada) return
   temporizadorImportar = window.setTimeout(() => void consultarImportar(), 1000)
 }
 
 async function consultarImportar(): Promise<void> {
   const actual = importacion.value
-  if (!actual || !importEnCurso.value) return
+  if (!montada || !actual || !importEnCurso.value) return
   try {
-    importacion.value = await parametrosRepository.archivos.estadoImportacion(actual.importacion_id)
+    const estado = await parametrosRepository.archivos.estadoImportacion(actual.importacion_id, cancelacion.signal)
+    if (!montada) return
+    importacion.value = estado
     fallosImportar = 0
     if (!importEnCurso.value) {
       if (importFinalizado.value) notificar('Restauración de Recruiting completada.', 'exito', 4000)
@@ -381,6 +413,7 @@ async function consultarImportar(): Promise<void> {
       return
     }
   } catch {
+    if (!montada) return
     fallosImportar += 1
     if (fallosImportar >= 5) {
       errorImportar.value =
@@ -397,14 +430,17 @@ async function confirmarImportar(): Promise<void> {
   confirmandoImportar.value = true
   errorImportar.value = ''
   try {
-    importacion.value = await parametrosRepository.archivos.confirmarImportacion(
+    const iniciada = await parametrosRepository.archivos.confirmarImportacion(
       actual.importacion_id,
       textoConfirmacion.value.trim(),
       aceptaLimitaciones.value,
     )
+    if (!montada) return
+    importacion.value = iniciada
     fallosImportar = 0
     seguirImportar()
   } catch (error) {
+    if (!montada) return
     errorImportar.value = mensajeError(
       error,
       'Error de conexión al iniciar la restauración.',
@@ -468,9 +504,12 @@ async function confirmarLimpieza(): Promise<void> {
 }
 
 onScopeDispose(() => {
+  montada = false
+  cancelacion.abort()
   window.clearTimeout(temporizadorBusqueda)
   window.clearTimeout(temporizadorBackup)
   window.clearTimeout(temporizadorImportar)
+  window.clearTimeout(temporizadorRecarga)
 })
 </script>
 
@@ -757,21 +796,21 @@ onScopeDispose(() => {
           <button
             type="button"
             data-testid="archivos-cv-anterior"
-            :disabled="pagina <= 1 || cargandoDetalle"
+            :disabled="paginaActual <= 1 || cargandoDetalle"
             class="cursor-pointer rounded-lg border border-dark-200 bg-white px-3 py-1.5 font-semibold text-dark-700 hover:bg-dark-50 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="irAPagina(pagina - 1)"
+            @click="irAPagina(paginaActual - 1)"
           >
             Anterior
           </button>
           <span class="font-semibold whitespace-nowrap text-dark-700" data-testid="archivos-cv-pagina">
-            Página <span>{{ pagina }}</span> de <span>{{ totalPaginas }}</span>
+            Página <span>{{ paginaActual }}</span> de <span>{{ totalPaginas }}</span>
           </span>
           <button
             type="button"
             data-testid="archivos-cv-siguiente"
-            :disabled="pagina >= totalPaginas || cargandoDetalle"
+            :disabled="paginaActual >= totalPaginas || cargandoDetalle"
             class="cursor-pointer rounded-lg border border-dark-200 bg-white px-3 py-1.5 font-semibold text-dark-700 hover:bg-dark-50 disabled:cursor-not-allowed disabled:opacity-50"
-            @click="irAPagina(pagina + 1)"
+            @click="irAPagina(paginaActual + 1)"
           >
             Siguiente
           </button>
@@ -1145,7 +1184,7 @@ onScopeDispose(() => {
                     vinculados y adjuntos) recuperados.
                   </p>
                   <div
-                    v-if="importacion.resultado.usuarios_sin_credenciales.length"
+                    v-if="usuariosSinCredenciales.length"
                     class="rounded-lg border border-amber-200 bg-amber-50 p-2 text-amber-900"
                     data-testid="importar-usuarios-sin-credenciales"
                   >
@@ -1156,7 +1195,7 @@ onScopeDispose(() => {
                     </p>
                     <ul class="mt-1 list-disc pl-4">
                       <li
-                        v-for="usuario in importacion.resultado.usuarios_sin_credenciales"
+                        v-for="usuario in usuariosSinCredenciales"
                         :key="usuario.id"
                         class="font-mono"
                       >

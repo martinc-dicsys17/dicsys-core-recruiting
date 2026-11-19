@@ -76,14 +76,15 @@ def test_la_spa_vue_avisa_si_no_esta_compilada(frontend_client, monkeypatch):
 @pytest.mark.smoke
 def test_el_menu_actual_muestra_el_acceso_vue_sin_alterar_los_items_existentes(frontend_client, fake_api):
     fake_api.respond("GET", "/menus", MENUS)
-    fake_api.respond("GET", "/recruiting/parametros/config", {})
     _iniciar_sesion(frontend_client)
 
-    html = frontend_client.get("/recruiting/parametros").get_data(as_text=True)
+    # Una pantalla que sigue siendo Jinja (Parámetros ya es Vue y su URL de siempre redirige a /v2)
+    html = frontend_client.get("/recruiting/dashboard/manager").get_data(as_text=True)
 
     assert 'href="/recruiting/candidatos"' in html
     acceso = re.search(r'<a href="/v2/recruiting/blacklist".*?</a>', html, re.S).group(0)
-    assert "Blacklist" in acceso and ">VUE<" in acceso and "bg-emerald-50/70" in acceso
+    # Estándar visual de las pantallas Vue en el menú: fondo verde y su title (la etiqueta «VUE» se quitó en 7ef04c9)
+    assert "Blacklist" in acceso and 'title="Pantalla del nuevo frontend Vue"' in acceso and "bg-emerald-50/70" in acceso
 
 
 @pytest.mark.frontend
