@@ -4,7 +4,7 @@
 # Las dependencias salen de frontend/uv.lock con uv sync --frozen (F03-P04).
 
 # Dependencias de runtime en /opt/venv
-FROM python:3.14.9-slim AS deps
+FROM python:3.14.10-slim AS deps
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
@@ -23,7 +23,7 @@ FROM deps AS deps-test
 RUN uv sync --frozen --group test
 
 
-FROM python:3.14.9-slim AS base
+FROM python:3.14.10-slim AS base
 
 ARG FLASK_PORT=80
 ENV FLASK_PORT=${FLASK_PORT} \
