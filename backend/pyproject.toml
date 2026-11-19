@@ -8,8 +8,8 @@ dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     # Base de datos y ORM: 2.1 cambia el driver por defecto de postgresql:// a psycopg v3; acá se usa psycopg2
-    "sqlalchemy>=2.0.0,<2.1",
-    "psycopg2-binary>=2.9.0",
+    "sqlalchemy==2.0.54",
+    "psycopg2-binary==2.9.13",
     # Migraciones del esquema (F04): se corren como paso de release, nunca en el arranque del backend
     "alembic>=1.19,<2",
     # Validación y serialización
