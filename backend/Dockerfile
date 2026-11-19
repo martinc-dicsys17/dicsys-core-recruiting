@@ -3,7 +3,7 @@
 # exactamente lo mismo. Todas las dependencias compiladas traen wheels para esta versión de Python: sin compiladores.
 
 # Etapa 1: dependencias de runtime en /opt/venv
-FROM python:3.14.9-slim AS builder
+FROM python:3.14.10-slim AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:0.13.5 /uv /usr/local/bin/uv
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
@@ -25,7 +25,7 @@ RUN uv sync --frozen --group test
 
 
 # Etapa 2: Base compartida por runtime y tests
-FROM python:3.14.9-slim AS runtime-base
+FROM python:3.14.10-slim AS runtime-base
 
 WORKDIR /app
 
