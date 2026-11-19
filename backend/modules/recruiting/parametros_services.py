@@ -513,8 +513,23 @@ class ArchivoCVService:
         }
 
     @classmethod
+    def _verificar_acceso(cls, carpeta: str) -> None:
+        """Un almacenamiento que el backend no puede leer ni escribir (raíz sin permisos o inexistente e imposible de
+        crear) es un error de configuración, no una carpeta vacía: 503 en lugar de informar cero archivos."""
+        problema = CandidatoService.problema_acceso_cv_storage(carpeta)
+        if problema:
+            logging.getLogger(__name__).error(f"Almacenamiento de CV no disponible ({carpeta}): {problema}")
+            raise HTTPException(
+                status_code=503,
+                detail="El almacenamiento de CV no está disponible: el servidor no puede leer o escribir sus carpetas. "
+                "Avisá a soporte.",
+            )
+
+    @classmethod
     def resumen(cls) -> List[Dict[str, Any]]:
         """Cantidad de archivos y espacio ocupado de las tres carpetas, sobre el almacenamiento físico real."""
+        for carpeta in cls.CARPETAS:
+            cls._verificar_acceso(carpeta)
         return [cls._resumen_de(carpeta, cls._inspeccionar(carpeta)) for carpeta in cls.CARPETAS]
 
     @classmethod
@@ -524,6 +539,8 @@ class ArchivoCVService:
         """Resumen de una carpeta y detalle de sus archivos (nombre, tamaño y fecha), más recientes primero. Sin
         `pagina`/`por_pagina` devuelve todos; con ellos, solo la página pedida (se ajusta a la última si se pasa).
         `buscar` filtra por nombre, sin distinguir mayúsculas, antes de paginar."""
+        cls._ruta_carpeta(carpeta)  # carpeta no válida: 404 antes que el diagnóstico del almacenamiento
+        cls._verificar_acceso(carpeta)
         archivos = cls._inspeccionar(carpeta)
         detalle = cls._resumen_de(carpeta, archivos)
         q = (buscar or "").strip().lower()

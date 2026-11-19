@@ -4155,6 +4155,50 @@ class CandidatoService:
         return os.getenv("CV_STORAGE_DIR", "/data/cv")
 
     @staticmethod
+    def problema_acceso_cv_storage(subcarpeta: Optional[str] = None) -> Optional[str]:
+        """Motivo por el que el backend no puede leer, listar y escribir la carpeta de CV (la raíz o `subcarpeta`), o
+        None si puede. Una carpeta que todavía no existe está bien si se puede crear en la primera escritura."""
+        import os
+
+        raiz = CandidatoService._raiz_cv_storage()
+        ruta = os.path.join(raiz, subcarpeta) if subcarpeta else raiz
+        uid = getattr(os, "getuid", lambda: "?")()
+        if os.path.isdir(ruta):
+            if os.access(ruta, os.R_OK | os.W_OK | os.X_OK):
+                return None
+            return f"{ruta} no tiene permisos de lectura, escritura y listado para el usuario del backend (uid {uid})"
+        if os.path.exists(ruta):
+            return f"{ruta} existe pero no es una carpeta"
+        ancestro = os.path.dirname(os.path.normpath(ruta))
+        while not os.path.exists(ancestro) and os.path.dirname(ancestro) != ancestro:
+            ancestro = os.path.dirname(ancestro)
+        if os.path.isdir(ancestro) and os.access(ancestro, os.W_OK | os.X_OK):
+            return None
+        return f"{ruta} no existe y no se puede crear: {ancestro} no tiene permisos de escritura para el usuario del backend (uid {uid})"
+
+    @staticmethod
+    def preparar_cv_storage() -> Optional[str]:
+        """Arranque: crea las tres carpetas de archivado si faltan y verifica que el backend pueda leerlas, listarlas y
+        escribirlas. Nunca lanza: devuelve el problema (y lo deja en el log) o None."""
+        import os
+
+        logger = logging.getLogger(__name__)
+        for subcarpeta in (
+            CandidatoService.CARPETA_CV_OK,
+            CandidatoService.CARPETA_CV_DUPLICADOS,
+            CandidatoService.CARPETA_CV_ERRORES,
+        ):
+            try:
+                os.makedirs(os.path.join(CandidatoService._raiz_cv_storage(), subcarpeta), exist_ok=True)
+            except OSError:
+                pass  # el diagnóstico de abajo explica por qué
+            problema = CandidatoService.problema_acceso_cv_storage(subcarpeta)
+            if problema:
+                logger.error(f"Almacenamiento de CV no disponible: {problema}. Los CV no se van a archivar.")
+                return problema
+        return None
+
+    @staticmethod
     def _nombre_base_ext_cv(nombre_archivo: str) -> Tuple[str, str]:
         """Nombre saneado (base, extension) con el que se guarda un CV archivado."""
         import os

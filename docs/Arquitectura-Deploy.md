@@ -63,6 +63,7 @@ producción. Se prueba en un ambiente de test con una copia de la base de produc
 |----------|--------|------------|------------|-------------|
 | postgresql | postgres:16.15-alpine | 5432 | sin publicar (6000 en desarrollo) | pg_isready |
 | migraciones | la del backend, `alembic upgrade head` | — | — | corre y termina |
+| cv-storage-init | postgres:16.15-alpine, como root | — | — | corre y termina: crea `./data/cv/{cv_procesados_ok,cv_duplicados,cv_errores}` y les da el uid 1000 del backend |
 | backend | python:3.14.9-slim + `backend/uv.lock` | 6001 | 6001 | curl /health |
 | scheduler | la del backend, `CRON_ENABLED=true`, un worker | 6001 | sin publicar | curl /health |
 | frontend | python:3.14.9-slim + `frontend/uv.lock` | 80 | 80 | curl /health |
@@ -102,7 +103,7 @@ de `.env.template`.
 | ./data/files | bind | /data/files | Archivos subidos |
 | ./data/nomina/fotos | bind | /data/nomina/fotos | Fotos de empleados |
 | ./data/llm | bind | /data/llm | Logs raw de LLM |
-| ./data/cv | bind | /data/cv | CV archivados de Recruiting (carga masiva e individual) |
+| ./data/cv | bind | /data/cv | CV archivados de Recruiting (carga masiva e individual); `CV_STORAGE_DIR=/data/cv` fijo en backend y scheduler. Dueño uid 1000: lo asegura `cv-storage-init` en cada `up` (Docker crea como root la carpeta de un bind mount que no existe y el backend no podría escribir) |
 | ./data/innovacion/certificados | bind | /data/innovacion/certificados | Banners og:image de certificados |
 | ./secrets/sheets-lectura.json | bind (ro) | /app/secrets/sheets-service-account.json | Service account de solo lectura de Sheets. GCS no lleva JSON: usa la identidad de la VM (F06-P04) |
 | ./secrets/oidc | bind (ro) | /app/secrets/oidc | Claves de firma del proveedor OpenID Connect; dueño uid 1000 ([OIDC.md](OIDC.md)) |
@@ -158,9 +159,9 @@ docker compose restart frontend
 ```
 postgresql (healthcheck: pg_isready)
     ↓
-migraciones (depends_on: postgresql healthy; alembic upgrade head y termina)
-    ↓
-backend (depends_on: migraciones completed successfully)
+migraciones (depends_on: postgresql healthy; alembic upgrade head y termina)   cv-storage-init (mkdir + chown de ./data/cv y termina)
+    ↓                                                                           ↓
+backend y scheduler (depends_on: migraciones y cv-storage-init completed successfully)
     ↓
 frontend (depends_on: backend healthy)
 ```

@@ -1802,6 +1802,7 @@ async def eliminar_ciudad(ciudad_id: int, db: Session = Depends(get_db)):
     "/parametros/archivos-cv",
     response_model=List[CarpetaCVResumen],
     operation_id="recruiting_parametros_archivos_cv_resumen",
+    responses=responde(503),
     dependencies=[acceso_parametros],
 )
 def listar_carpetas_cv():
@@ -1928,7 +1929,7 @@ def descartar_importacion_recruiting(importacion_id: str, current_user: Usuario 
     "/parametros/archivos-cv/{carpeta}",
     response_model=CarpetaCVDetalle,
     operation_id="recruiting_parametros_archivos_cv_listar",
-    responses=responde(404),
+    responses=responde(404, 503),
     dependencies=[acceso_parametros],
 )
 def listar_archivos_cv(

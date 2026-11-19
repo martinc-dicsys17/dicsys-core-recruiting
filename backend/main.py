@@ -90,6 +90,13 @@ async def lifespan(app: FastAPI):
     init_llm_directories()
     print("📁 Directorios de archivos inicializados")
 
+    # Carpetas de archivado de CV de Recruiting (CV_STORAGE_DIR): se crean si faltan y, si el backend no puede escribir
+    # en ellas (por ejemplo, el bind mount quedó de root), se avisa acá en lugar de fallar en silencio en cada carga.
+    from backend.modules.recruiting.services import CandidatoService
+
+    problema_cv = CandidatoService.preparar_cv_storage()
+    print(f"⚠️ Almacenamiento de CV no disponible: {problema_cv}" if problema_cv else "📁 Almacenamiento de CV listo")
+
     # Recuperación de una restauración de backup de Recruiting que quedó a medias por una caída o un reinicio: devuelve
     # las carpetas y el storage originales (o confirma lo ya confirmado) y libera el bloqueo. Un fallo no frena el arranque.
     _recuperar_restauraciones_de_recruiting()

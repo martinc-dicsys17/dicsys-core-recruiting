@@ -45,8 +45,8 @@ WORKDIR /app
 RUN groupadd --gid 1000 appgroup && \
     useradd --uid 1000 --gid appgroup --shell /bin/bash appuser
 
-# Crear directorio para archivos subidos (fuera de /app que es read-only)
-RUN mkdir -p /data/files/profile && chown -R appuser:appgroup /data
+# Crear directorios para archivos subidos y CV archivados (fuera de /app que es read-only)
+RUN mkdir -p /data/files/profile /data/cv && chown -R appuser:appgroup /data
 
 # Instalar solo dependencias de runtime
 # unrar-free: carga masiva de CV en .rar; libreoffice-writer: vista previa de un CV Word en el modal de comparación

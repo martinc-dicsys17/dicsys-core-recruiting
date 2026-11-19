@@ -42,6 +42,8 @@ services:
     volumes:
       - ./backend:/app/backend:ro
       - ./pytest.ini:/app/pytest.ini:ro
+      # lo leen las pruebas de configuración del almacenamiento de CV (test_compose_almacenamiento_cv.py)
+      - ./docker-compose.yml:/app/docker-compose.yml:ro
     command: pytest backend/tests -q -o cache_dir=/tmp/pytest_cache
 
   frontend-tests:

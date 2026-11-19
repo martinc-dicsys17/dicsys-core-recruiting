@@ -45,6 +45,30 @@ services:
     networks:
       - ops_network
 
+  # Carpeta persistente de CV de Recruiting lista para el backend, que corre como uid 1000 (appuser del Dockerfile).
+  # Docker crea como root la carpeta del host de un bind mount que no existe y el backend no puede archivar los CV:
+  # pasó en producción con ./data/cv (Parámetros > Archivos de CV daba 0). Recupera el cv-storage-init de la versión
+  # anterior de Recruiting: corre como root una vez por `up`, antes del backend y del scheduler, crea las tres carpetas
+  # y les da el uid del backend. Solo mkdir -p y chown: no borra ni mueve CV. Reusa la imagen de Postgres (ya está en
+  # el servidor, sin build) y no depende de cómo se publique (desplegar.sh o `docker compose up` a mano).
+  cv-storage-init:
+    image: postgres:16.15-alpine
+    user: "0:0"
+    restart: "no"
+    command:
+      - sh
+      - -euc
+      - |
+        mkdir -p /data/cv/cv_procesados_ok /data/cv/cv_duplicados /data/cv/cv_errores
+        chown -R 1000:1000 /data/cv
+        echo "cv-storage-init: /data/cv lista para el uid 1000"
+    volumes:
+      - ./data/cv:/data/cv
+    # la imagen declara VOLUME en esa ruta: con tmpfs no queda un volumen anónimo por cada contenedor
+    tmpfs:
+      - /var/lib/postgresql/data
+    network_mode: none
+
   # Aplicación FastAPI
   backend:
     build:
@@ -57,6 +81,8 @@ services:
         condition: service_healthy
       migraciones:
         condition: service_completed_successfully
+      cv-storage-init:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
@@ -65,6 +91,7 @@ services:
       ENVIRONMENT: ${ENVIRONMENT}
       PORT: ${BACKEND_PORT}
       OG_CACHE_DIR: /data/innovacion/certificados
+      CV_STORAGE_DIR: /data/cv
       # el programador corre en el servicio scheduler: reiniciar o escalar el backend no arranca tareas (F06-P01)
       CRON_ENABLED: "false"
     ports:
@@ -107,6 +134,8 @@ services:
         condition: service_healthy
       migraciones:
         condition: service_completed_successfully
+      cv-storage-init:
+        condition: service_completed_successfully
     env_file:
       - .env
     environment:
@@ -114,12 +143,15 @@ services:
       ENVIRONMENT: ${ENVIRONMENT}
       PORT: ${BACKEND_PORT}
       OG_CACHE_DIR: /data/innovacion/certificados
+      CV_STORAGE_DIR: /data/cv
       CRON_ENABLED: "true"
     command: ["sh", "-c", "uvicorn backend.main:app --host 0.0.0.0 --port $${PORT} --workers 1"]
     volumes:
       - ./data/files:/data/files
       - ./data/nomina/fotos:/data/nomina/fotos
       - ./data/llm:/data/llm
+      # mismo almacenamiento de CV que el backend: su arranque también revisa las restauraciones de backup de Recruiting
+      - ./data/cv:/data/cv
       - ./data/innovacion/certificados:/data/innovacion/certificados
       - ./secrets/sheets-lectura.json:/app/secrets/sheets-service-account.json:ro
     networks:
