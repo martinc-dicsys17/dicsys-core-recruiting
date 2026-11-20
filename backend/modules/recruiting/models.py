@@ -63,6 +63,10 @@ class Candidato(Base):
     estado = Column(String(50), nullable=False, default="Activo")
     fuente = Column(String(100), nullable=True, default="Portal Propio")
 
+    # Blacklist: situación vigente y fecha del último movimiento (ingreso o salida), no solo la del ingreso
+    is_blacklist = Column(Boolean, nullable=False, default=False, server_default=text("false"))
+    blacklist_date = Column(DateTime, nullable=True)
+
     # Ownership / Alcance de visibilidad
     creador_id = Column(UUID(as_uuid=True), ForeignKey("core_usuarios.id"), nullable=True, index=True)
 
